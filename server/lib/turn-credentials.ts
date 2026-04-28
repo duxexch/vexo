@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { IceServerConfig, IceServersResponse } from "../../shared/socketio-events";
+import { logger } from "./logger";
 
 /**
  * Sign a coturn `time-limited shared secret` username.
@@ -86,4 +87,70 @@ export function buildIceServers(userId: string): IceServersResponse {
     ttlSeconds: hasRelay ? ttlSeconds : 0,
     hasRelay,
   };
+}
+
+const PLACEHOLDER_TURN_SECRETS = new Set([
+  "replace_with_strong_turn_secret",
+  "replace_with_strong_turn_password",
+  "changeme",
+  "change_me",
+]);
+
+/**
+ * Boot-time validation for the canonical TURN credential setup.
+ *
+ * Logs ONE loud, structured warning if the deployment is misconfigured so
+ * operators see the issue in container logs immediately on first boot
+ * instead of debugging silent "no audio" reports from end-users.
+ *
+ * Call once during server startup (after env is loaded).
+ */
+export function validateTurnCredentialsAtBoot(): void {
+  const host = (process.env.TURN_HOST || "").trim();
+  const secret = (process.env.TURN_STATIC_SECRET || "").trim();
+
+  if (!host && !secret) {
+    logger.warn(
+      "[TURN] Neither TURN_HOST nor TURN_STATIC_SECRET is set — voice/video "
+        + "calls will only have public STUN, so users on cellular or "
+        + "symmetric-NAT networks will hear no audio. Configure both in .env "
+        + "and restart, or run prod-auto.sh to auto-generate them.",
+    );
+    return;
+  }
+
+  if (host && !secret) {
+    logger.warn(
+      `[TURN] TURN_HOST=${host} is set but TURN_STATIC_SECRET is empty. `
+        + "/api/rtc/ice-servers will not issue TURN credentials, so the "
+        + "relay path will fail for users behind NAT.",
+    );
+    return;
+  }
+
+  if (!host && secret) {
+    logger.warn(
+      "[TURN] TURN_STATIC_SECRET is set but TURN_HOST is empty. Clients will "
+        + "have no TURN URL to connect to — set TURN_HOST to the public "
+        + "hostname of the coturn server (e.g. turn.vixo.click).",
+    );
+    return;
+  }
+
+  if (PLACEHOLDER_TURN_SECRETS.has(secret) || secret.length < 32) {
+    logger.warn(
+      `[TURN] TURN_STATIC_SECRET looks like a placeholder or is too short `
+        + `(length=${secret.length}). coturn will reject the credentials and `
+        + "voice/video relay will fail. Generate a strong secret with "
+        + "`openssl rand -base64 48 | tr -d '\\n='` and set TURN_STATIC_SECRET "
+        + "(plus the matching value in deploy/coturn/turnserver.conf).",
+    );
+    return;
+  }
+
+  logger.info(
+    `[TURN] Credentials configured (host=${host}, secretLength=${secret.length}, `
+      + `ttl=${process.env.TURN_TTL_SECONDS || 3600}s). `
+      + "/api/rtc/ice-servers will issue ephemeral HMAC-signed credentials.",
+  );
 }

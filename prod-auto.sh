@@ -751,27 +751,69 @@ ensure_voice_env_values() {
   upsert_env TURN_USERNAME "$turn_username"
   upsert_env TURN_PASSWORD "$turn_password"
 
-  local stun_urls turn_urls
-  stun_urls="$(read_env PUBLIC_RTC_STUN_URLS)"
-  turn_urls="$(read_env PUBLIC_RTC_TURN_URLS)"
+  # ----------------------------------------------------------------
+  # CANONICAL: ephemeral HMAC credentials for coturn (use-auth-secret)
+  # ----------------------------------------------------------------
+  # The bundled coturn config (deploy/coturn/turnserver.conf.template)
+  # runs with `use-auth-secret`, which means it ONLY accepts time-limited
+  # HMAC-SHA1 credentials signed by the backend with TURN_STATIC_SECRET.
+  # Without this, in-game voice and friend voice calls cannot establish a
+  # relay path on cellular/symmetric-NAT networks → no audio.
+  local turn_static_secret turn_host
+  turn_static_secret="$(read_env TURN_STATIC_SECRET)"
+  if value_is_placeholder "$turn_static_secret" || [[ ${#turn_static_secret} -lt 32 ]]; then
+    turn_static_secret="$(generate_secret_hex 32)"
+    log_info "Generated TURN_STATIC_SECRET automatically"
+  fi
+  upsert_env TURN_STATIC_SECRET "$turn_static_secret"
 
+  turn_host="$(read_env TURN_HOST)"
+  if value_is_placeholder "$turn_host"; then
+    # Prefer turn.<domain> if a domain is configured; otherwise fall back to IP
+    local app_domain
+    app_domain="$(extract_domain_from_env)"
+    if [[ -n "$app_domain" && "$app_domain" != "localhost" ]]; then
+      turn_host="turn.${app_domain}"
+    else
+      turn_host="$turn_ip"
+    fi
+    log_info "Defaulted TURN_HOST to ${turn_host}"
+  fi
+  upsert_env TURN_HOST "$turn_host"
+
+  # Sensible defaults for ports/TTL (overridable in .env)
+  local turn_port turn_tls_port turn_ttl stun_extra
+  turn_port="$(read_env TURN_PORT)"
+  turn_tls_port="$(read_env TURN_TLS_PORT)"
+  turn_ttl="$(read_env TURN_TTL_SECONDS)"
+  stun_extra="$(read_env STUN_URLS)"
+  [[ -z "$turn_port" || "$turn_port" =~ [^0-9] ]] && turn_port="3478"
+  [[ -z "$turn_tls_port" || "$turn_tls_port" =~ [^0-9] ]] && turn_tls_port="5349"
+  [[ -z "$turn_ttl" || "$turn_ttl" =~ [^0-9] ]] && turn_ttl="3600"
+  if value_is_placeholder "$stun_extra"; then
+    stun_extra="stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+  fi
+  upsert_env TURN_PORT "$turn_port"
+  upsert_env TURN_TLS_PORT "$turn_tls_port"
+  upsert_env TURN_TTL_SECONDS "$turn_ttl"
+  upsert_env STUN_URLS "$stun_extra"
+
+  # ----------------------------------------------------------------
+  # LEGACY: static-credential fallback. Left empty in production by
+  # design — coturn rejects static creds when `use-auth-secret` is on.
+  # ----------------------------------------------------------------
+  local stun_urls
+  stun_urls="$(read_env PUBLIC_RTC_STUN_URLS)"
   if value_is_placeholder "$stun_urls"; then
     stun_urls="stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
   fi
-  if value_is_placeholder "$turn_urls"; then
-    turn_urls="turn:${turn_ip}:3478?transport=udp,turn:${turn_ip}:3478?transport=tcp"
-  fi
-
   upsert_env PUBLIC_RTC_STUN_URLS "$stun_urls"
-  upsert_env PUBLIC_RTC_TURN_URLS "$turn_urls"
-  upsert_env PUBLIC_RTC_TURN_USERNAME "$turn_username"
-  upsert_env PUBLIC_RTC_TURN_CREDENTIAL "$turn_password"
 
   local ice_policy
   ice_policy="$(read_env PUBLIC_RTC_ICE_TRANSPORT_POLICY)"
   ice_policy="${ice_policy,,}"
   if [[ "$ice_policy" != "all" && "$ice_policy" != "relay" ]]; then
-    ice_policy="relay"
+    ice_policy="all"
   fi
   upsert_env PUBLIC_RTC_ICE_TRANSPORT_POLICY "$ice_policy"
 }

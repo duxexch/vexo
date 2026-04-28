@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { useSettings } from "@/lib/settings";
-import { buildRtcConfiguration } from "@/lib/rtc-config";
+import { useIceServers } from "@/hooks/use-ice-servers";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { openMicrophoneSettings } from "@/lib/startup-permissions";
@@ -66,7 +65,7 @@ export function VoiceChat({
   const { token } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
-  const { settings } = useSettings();
+  const { rtcConfiguration, hasRelay } = useIceServers();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   // Tracks the most recent voice_error so the mic-icon tooltip can surface
   // the actual reason (pricing gate vs. not a participant vs. generic) instead
@@ -78,11 +77,6 @@ export function VoiceChat({
   const [peerAudioMuted, setPeerAudioMuted] = useState<Record<string, boolean>>({});
   const isSpectatorRole = role === "spectator";
   const effectivePeerAudioMuted = peerAudioMutedOverride ?? peerAudioMuted;
-
-  const rtcConfiguration = useMemo(
-    () => buildRtcConfiguration(settings?.rtc),
-    [settings?.rtc],
-  );
 
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const makingOfferPeersRef = useRef<Set<string>>(new Set());

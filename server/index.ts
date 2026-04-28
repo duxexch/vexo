@@ -601,6 +601,13 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 (async () => {
   try {
+    // Surface TURN/coturn misconfiguration loudly at boot so silent "no audio"
+    // bugs don't reach end-users. Logs one structured warning if the canonical
+    // ephemeral-credential setup (TURN_HOST + TURN_STATIC_SECRET) is missing
+    // or still at the .env.example placeholder.
+    const { validateTurnCredentialsAtBoot } = await import("./lib/turn-credentials");
+    validateTurnCredentialsAtBoot();
+
     await registerRoutes(httpServer, app);
     registerAdminRoutes(app);
 

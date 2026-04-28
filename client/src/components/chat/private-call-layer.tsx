@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
-import { buildRtcConfiguration } from "@/lib/rtc-config";
+import { useIceServers } from "@/hooks/use-ice-servers";
 import {
   createQueuedEndOperation,
   enqueueChatCallOperation,
@@ -139,7 +139,7 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
   const [minimizedPosition, setMinimizedPosition] = useState<MinimizedPosition | null>(null);
   const [isDraggingMinimized, setIsDraggingMinimized] = useState(false);
 
-  const rtcConfiguration = useMemo(() => buildRtcConfiguration(settings?.rtc), [settings?.rtc]);
+  const { rtcConfiguration } = useIceServers();
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
