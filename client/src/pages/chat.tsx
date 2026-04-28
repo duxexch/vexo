@@ -247,6 +247,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   // pinyin, etc.) so the Mic↔Send toggle reacts the moment the user starts
   // typing instead of waiting for the composition to commit.
   const [isComposingInput, setIsComposingInput] = useState(false);
+  const [inputHasText, setInputHasText] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [langSearchQuery, setLangSearchQuery] = useState("");
   const [directConversationUser, setDirectConversationUser] = useState<DirectConversationUser | null>(null);
@@ -342,11 +343,13 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     [activeConversationPending]
   );
   const hasTypedMessage = normalizeChatDraft(messageInput).length > 0;
-  // While the user is composing in an IME (Arabic Gboard, Chinese pinyin,
-  // Japanese kana), the controlled `messageInput` may stay empty until the
-  // composition commits. Treat any active composition as "user is typing"
-  // so the recording button switches to the send button immediately.
-  const shouldShowSendButton = hasTypedMessage || isComposingInput || !!editingMsg;
+  // The controlled `messageInput` may lag behind the real DOM value while an
+  // IME (Arabic Gboard, Chinese pinyin, Japanese kana) is composing. We track
+  // a separate flag that gets refreshed from the actual <input>.value on
+  // every input/composition event so the Send button toggle reflects the
+  // physical keystrokes the user is making, even before React state catches
+  // up. This is the source of truth for the Send / Mic toggle.
+  const shouldShowSendButton = hasTypedMessage || inputHasText || isComposingInput || !!editingMsg;
   const activeUserProfile = activeUser || (
     activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
       ? directConversationUser
@@ -739,6 +742,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
       }
       setEditingMsg(null);
       setMessageInput("");
+      setInputHasText(false);
       return;
     }
 
@@ -752,6 +756,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
       receiverUser: activeConversationReceiver,
     });
     setMessageInput("");
+    setInputHasText(false);
     setReplyTo(null);
     setTyping(activeConversation, false);
     typingActiveRef.current = false;
@@ -899,6 +904,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
       setReplyTo(null);
       setEditingMsg(null);
       setMessageInput("");
+      setInputHasText(false);
     }
   };
 
@@ -912,6 +918,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     setEditingMsg(msg);
     setReplyTo(null);
     setMessageInput(msg.content || "");
+    setInputHasText(normalizeChatDraft(msg.content || "").length > 0);
     messageInputRef.current?.focus();
   };
 
@@ -1949,7 +1956,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                   </p>
                 </div>
                 <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"
-                  onClick={() => { setReplyTo(null); setEditingMsg(null); setMessageInput(""); }}>
+                  onClick={() => { setReplyTo(null); setEditingMsg(null); setMessageInput(""); setInputHasText(false); }}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -2084,20 +2091,32 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     <Input
                       ref={messageInputRef}
                       value={messageInput}
-                      onChange={(e) => handleInputChange(e.target.value)}
+                      onChange={(e) => {
+                        handleInputChange(e.target.value);
+                        setInputHasText(normalizeChatDraft(e.target.value).length > 0);
+                      }}
                       // Some Android IMEs (notably Gboard with the Arabic
-                      // keyboard) hold all keystrokes inside a composition
-                      // and only fire `change` once the user types a non-
-                      // composed character. Reading from `onInput` directly
-                      // catches the keystrokes the controlled `value` would
-                      // otherwise miss.
+                      // keyboard) hold keystrokes inside a composition and
+                      // only fire `change` after the composition commits.
+                      // Reading from `onInput` directly catches every
+                      // keystroke from the DOM, so the Mic→Send swap fires
+                      // on the very first letter the user types.
                       onInput={(e) => {
                         const v = (e.currentTarget as HTMLInputElement).value;
+                        setInputHasText(normalizeChatDraft(v).length > 0);
                         if (v !== messageInput) handleInputChange(v);
                       }}
                       onCompositionStart={() => {
                         isComposingRef.current = true;
                         setIsComposingInput(true);
+                        setInputHasText(true);
+                      }}
+                      onCompositionUpdate={() => {
+                        // Fires for every change while an Arabic / CJK
+                        // composition is open. The user is actively typing,
+                        // so the Send button must be visible regardless of
+                        // what the controlled value currently shows.
+                        setInputHasText(true);
                       }}
                       onCompositionEnd={(e) => {
                         isComposingRef.current = false;
@@ -2106,6 +2125,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                         // resolves to the right state (Send vs Mic) without
                         // waiting for a follow-up keystroke.
                         const v = (e.currentTarget as HTMLInputElement).value;
+                        setInputHasText(normalizeChatDraft(v).length > 0);
                         if (v !== messageInput) handleInputChange(v);
                       }}
                       onKeyDown={handleKeyPress}
@@ -2117,14 +2137,26 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       data-testid="input-chat-message"
                     />
 
-                    {!shouldShowSendButton && (
+                    {shouldShowSendButton ? (
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!hasTypedMessage && !inputHasText && !editingMsg}
+                        className="min-h-[44px] min-w-[44px] rounded-full shrink-0"
+                        data-testid="button-send-message"
+                        aria-label={t('chat.send') ?? 'Send'}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    ) : (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost" size="icon"
                             onClick={startRecording}
                             disabled={isVoiceUploading || !canSendVoiceMessage}
-                            className="min-h-[44px] min-w-[44px] rounded-full hover:bg-destructive/10 hover:text-destructive"
+                            className="min-h-[44px] min-w-[44px] rounded-full shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                            data-testid="button-record-voice"
+                            aria-label={t('chat.voiceMessage') ?? 'Voice message'}
                           >
                             <Mic className="h-5 w-5" />
                           </Button>
@@ -2132,15 +2164,6 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                         <TooltipContent><p>{t('chat.voiceMessage')}</p></TooltipContent>
                       </Tooltip>
                     )}
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!hasTypedMessage && !editingMsg}
-                      className="min-h-[44px] min-w-[44px] rounded-full"
-                      data-testid="button-send-message"
-                      aria-label={t('chat.send') ?? 'Send'}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
               )}
