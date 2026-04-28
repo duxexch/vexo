@@ -330,8 +330,25 @@ jobs:
             echo "AAB staged: $AAB_DST ($(wc -c < "$AAB_DST") bytes)"
           fi
 
+      # Some `gh` operations against this repo (release create + asset upload
+      # against `latest-android`, which is a moving tag) intermittently
+      # returned 403 when only `GH_TOKEN` was exported. The CLI consults
+      # both env vars but Actions paths that fall back to the underlying
+      # `git push` (e.g. the moving-tag refresh) need git credential helper
+      # wiring, which `gh auth setup-git` configures. Doing both unblocks
+      # the failure mode described in the workflow logs.
+      - name: Configure gh CLI git credential helper
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth setup-git
+
       - name: Create or update GitHub Release (versioned + latest)
         env:
+          # Export BOTH names — `gh` accepts either, but some Actions code
+          # paths and contrib actions check specifically for GITHUB_TOKEN.
+          # Keeping both removes the "wrong-name" class of 403s without
+          # changing any other auth behaviour.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET: ${{ github.event.inputs.target }}
           VERSION: ${{ steps.version.outputs.version }}
