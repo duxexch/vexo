@@ -15,6 +15,17 @@
 #                              --force is passed; idempotent otherwise)
 #   4) verify-vex-deployment.sh
 #                            — sanity-check the live site
+#   5) probe-android-manifest.sh
+#                            — STRICT manifest-vs-disk-vs-public-URL
+#                              reconciliation. Fails the orchestrator hard
+#                              when manifest.json references an APK/AAB
+#                              that is missing on disk OR when the public
+#                              /downloads/<file>.apk URL does not return
+#                              Content-Type: application/vnd.android.package-archive
+#                              with valid ZIP body bytes. This is what
+#                              prevents the "All done" line from being
+#                              printed while users actually get an HTML
+#                              error page from the install URL.
 #
 # Step 2 runs BEFORE step 3 on purpose: the binaries are bind-mounted
 # read-only into the container, so writing them while the container is
@@ -52,8 +63,14 @@
 #   # Force a full rebuild even when git is up-to-date (e.g. after .env edit)
 #   bash scripts/server/update-all.sh --force
 #
-#   # Rebuild without the deep verify (faster CI loop)
+#   # Rebuild without the deep verify (faster CI loop). Note: --skip-verify
+#   # also skips Step 5 (the strict APK manifest probe) — only use this in
+#   # CI loops where you have a separate post-deploy gate.
 #   bash scripts/server/update-all.sh --skip-verify
+#
+#   # Just re-check that the public APK URL still serves the manifest's
+#   # APK with the right MIME (no rebuild, no git pull, no APK refresh):
+#   bash scripts/server/probe-android-manifest.sh
 # -----------------------------------------------------------------------------
 set -Eeuo pipefail
 
@@ -231,9 +248,9 @@ fi
 # Step 4 — post-deploy verification
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_VERIFY" == "true" ]]; then
-  log_step "Step 4/4: post-deploy verification (skipped)"
+  log_step "Step 4/5: post-deploy verification (skipped)"
 else
-  log_step "Step 4/4: post-deploy verification"
+  log_step "Step 4/5: post-deploy verification"
   # verify-vex-deployment.sh uses `set -uo pipefail` (no -e) and prints
   # its own pass/warn/fail summary. We capture its exit code so a
   # verification failure doesn't crash the orchestrator — the operator
@@ -247,6 +264,42 @@ else
   else
     log_ok "Verification passed"
   fi
+fi
+
+# -----------------------------------------------------------------------------
+# Step 5 — STRICT manifest-vs-disk-vs-public-URL reconciliation
+# -----------------------------------------------------------------------------
+# This is the load-bearing check that prevents the orchestrator from
+# printing "All done" while the public APK URL actually serves an HTML
+# error page (the silent-failure mode that wasted hours on the
+# HTML-instead-of-APK incident).
+#
+# Unlike Step 4, a failure HERE aborts the orchestrator with a non-zero
+# exit code so the operator can never walk away thinking the deploy
+# succeeded when /downloads/<file>.apk would 404 or return text/html.
+#
+# The probe script also prints the recovery command
+# (refresh-android-binaries.sh) directly in its failure output, so the
+# operator doesn't need to remember which sub-script to re-run.
+if [[ "$SKIP_VERIFY" == "true" ]]; then
+  log_step "Step 5/5: manifest ↔ disk ↔ public URL probe (skipped via --skip-verify)"
+else
+  log_step "Step 5/5: manifest ↔ disk ↔ public URL probe (strict)"
+  # Run the probe inline. It uses `set -uo pipefail` (no -e) and exits
+  # non-zero with a detailed report on any mismatch — we propagate that
+  # exit code straight back to the operator via the ERR trap.
+  set +e
+  bash scripts/server/probe-android-manifest.sh
+  PROBE_EXIT=$?
+  set -e
+  if [[ $PROBE_EXIT -ne 0 ]]; then
+    log_error "APK manifest probe FAILED (exit code $PROBE_EXIT)"
+    log_error "DO NOT announce this deploy — the public APK is not installable."
+    log_error "Recovery: bash scripts/server/refresh-android-binaries.sh"
+    log_error "Then re-run: bash scripts/server/update-all.sh --skip-pull --skip-deploy"
+    exit $PROBE_EXIT
+  fi
+  log_ok "APK manifest, disk binaries, and public URL all agree"
 fi
 
 # -----------------------------------------------------------------------------
