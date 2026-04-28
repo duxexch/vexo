@@ -3,19 +3,16 @@ import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import {
   Users, Gamepad2, DollarSign, AlertTriangle,
   TrendingUp, TrendingDown, Activity, Clock,
-  Wallet, Eye, EyeOff, ArrowUpRight, ArrowDownRight, Trophy, Gift,
-  Flame, Target, Swords, Crown, Star, ChevronRight
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { financialQueryOptions } from "@/lib/queryClient";
 import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
+import StadiumHome from "@/components/home/stadium-home";
 
 interface DashboardStats {
   totalUsers: number;
@@ -38,6 +35,7 @@ interface DepositConfigForDashboard {
 function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: string }) {
   const { t, language } = useI18n();
   const headers = useAuthHeaders();
+  const [, navigate] = useLocation();
   const [isInsightsReady, setIsInsightsReady] = useState(false);
   const [isBalanceHidden, setIsBalanceHidden] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -149,224 +147,122 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
     usdRateByCurrency: depositConfig?.usdRateByCurrency,
     currencySymbolByCode: depositConfig?.currencySymbolByCode,
   }, { withCode: true });
+const ownerInitials = (() => {
+      const source = String(user?.nickname || user?.username || "VX").trim();
+      if (!source) return "VX";
+      const parts = source.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return source.slice(0, 2).toUpperCase();
+    })();
 
-  const quickActions = [
-    { title: t('nav.wallet'), url: "/wallet", icon: Wallet, color: "bg-primary/10 text-primary" },
-    { title: t('nav.multiplayer'), url: "/multiplayer", icon: Gamepad2, color: "bg-blue-500/10 text-blue-500" },
-    { title: t('nav.challenges'), url: "/challenges", icon: Trophy, color: "bg-orange-500/10 text-orange-500" },
-    { title: t('nav.tournaments'), url: "/tournaments", icon: Crown, color: "bg-amber-500/10 text-amber-500" },
-    { title: t('nav.free'), url: "/free", icon: Gift, color: "bg-purple-500/10 text-purple-500" },
-    { title: t('nav.games'), url: "/games", icon: Gamepad2, color: "bg-indigo-500/10 text-indigo-500" },
-  ];
+    const vipLevelRaw = Number(user?.vipLevel ?? 0);
+    const vipLevel = Number.isFinite(vipLevelRaw) && vipLevelRaw >= 0 ? Math.floor(vipLevelRaw) : 0;
+    const ownerLocation = (() => {
+      const cityRaw = typeof user?.city === "string" ? user.city.trim() : "";
+      const countryRaw = typeof user?.country === "string" ? user.country.trim() : "";
+      const joined = [cityRaw, countryRaw].filter(Boolean).join("، ");
+      return joined || undefined;
+    })();
+    const lossesToday = Math.max(0, gamesPlayed - gamesWon);
+    const xpPercent = Math.min(100, Math.max(0, Number.isFinite(winRate) ? winRate : 0));
+    const safeWinStreak = Number.isFinite(currentStreak) && currentStreak >= 0 ? currentStreak : 0;
+    const xpCurrent = Math.max(0, gamesWon);
+    const xpTarget = Math.max(gamesPlayed, gamesWon + 1, 1);
+    const walletDisplay = isBalanceHidden
+      ? "******"
+      : formatWalletAmountFromUsd(balance, {
+          balanceCurrency: depositConfig?.balanceCurrency || userCurrency,
+          usdRateByCurrency: depositConfig?.usdRateByCurrency,
+          currencySymbolByCode: depositConfig?.currencySymbolByCode,
+        }, { withCode: false });
+    const avatarUrl = (() => {
+      const candidates = [
+        (user as Record<string, unknown>)?.avatarUrl,
+        (user as Record<string, unknown>)?.profilePicture,
+        (user as Record<string, unknown>)?.profilePictureUrl,
+        (user as Record<string, unknown>)?.avatar,
+      ];
+      for (const c of candidates) {
+        if (typeof c === "string" && c.trim().length > 0) return c.trim();
+      }
+      return undefined;
+    })();
+    const displayName = String(user?.nickname || user?.username || "VEX Player");
+    const usernameStr = String(user?.username || "vex");
+    const rankPrefix = language === "ar" ? "VIP" : "VIP";
+    void formatCurrency;
 
-  const welcomeName = String(user?.nickname || user?.username || '');
-
-  return (
-    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-6" dir={dir}>
-      {/* Online Status Bar */}
-      {platformStats && (
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>
-              {platformStats.onlinePlayers} {t('dashboard.onlinePlayers')}
-            </span>
-          </div>
-          {platformStats.activeGames > 0 && (
-            <div className="flex items-center gap-1.5">
-              <Activity className="h-3 w-3" />
-              <span>
-                {platformStats.activeGames} {t('dashboard.activeGames')}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      <h1 className="text-xl sm:text-2xl font-bold break-words">{t('dashboard.welcome')}, {welcomeName}</h1>
-
-      {/* Balance & Account Summary */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2 text-xs">
-          <CardTitle className="text-lg">{t('dashboard.accountSummary')}</CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="min-h-[44px] min-w-[44px]"
-            onClick={toggleBalanceVisibility}
-            aria-label={isBalanceHidden ? t('dashboard.showBalance') : t('dashboard.hideBalance')}
-            data-testid="button-toggle-dashboard-balance"
-          >
-            {isBalanceHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        <CardContent className="p-3 sm:p-6 pt-0 space-y-4 text-xs font-medium">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span className="text-muted-foreground">{t('common.balance')}</span>
-            <span className="text-2xl sm:text-3xl font-bold text-primary balance-glow break-all" data-testid="text-dashboard-balance">
-              {isBalanceHidden ? '******' : formatCurrency(balance)}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                <ArrowDownRight className="h-3 w-3 text-primary" />
-                {t('dashboard.deposited')}
-              </div>
-              <p className="font-semibold" data-testid="text-total-deposited">
-                {isBalanceHidden ? '***' : formatCurrency(totalDeposited)}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                <ArrowUpRight className="h-3 w-3 text-red-500" />
-                {t('dashboard.withdrawn')}
-              </div>
-              <p className="font-semibold" data-testid="text-total-withdrawn">
-                {isBalanceHidden ? '***' : formatCurrency(totalWithdrawn)}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                <Gamepad2 className="h-3 w-3 text-blue-500" />
-                {t('dashboard.wagered')}
-              </div>
-              <p className="font-semibold" data-testid="text-total-wagered">
-                {isBalanceHidden ? '***' : formatCurrency(totalWagered)}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                <Trophy className="h-3 w-3 text-orange-500" />
-                {t('dashboard.won')}
-              </div>
-              <p className="font-semibold" data-testid="text-total-won">
-                {isBalanceHidden ? '***' : formatCurrency(totalWon)}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Game Performance Stats */}
-      {isInsightsReady ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-full bg-blue-500/10">
-                  <Swords className="h-4 w-4 text-blue-500" />
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {t('dashboard.gamesPlayed')}
+    return (
+      <div dir={dir}>
+        <div className="px-3 sm:px-6 pt-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-muted-foreground">
+            {platformStats ? (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  {platformStats.onlinePlayers} {t('dashboard.onlinePlayers')}
                 </span>
-              </div>
-              <p className="text-2xl font-bold">{gamesPlayed}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-full bg-primary/10">
-                  <Star className="h-4 w-4 text-primary" />
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {t('dashboard.wins')}
-                </span>
-              </div>
-              <p className="text-2xl font-bold">{gamesWon}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-full bg-emerald-500/10">
-                  <Target className="h-4 w-4 text-emerald-500" />
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {t('dashboard.winRate')}
-                </span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold">{winRate}%</p>
-                <Progress value={winRate} className="h-1.5" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-full bg-orange-500/10">
-                  <Flame className="h-4 w-4 text-orange-500" />
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {t('dashboard.winStreak')}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold">{currentStreak}</p>
-                {bestStreak > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {t('dashboard.best')}: {bestStreak}
+                {platformStats.activeGames > 0 ? (
+                  <span className="flex items-center gap-1.5">
+                    <Activity className="h-3 w-3" />
+                    {platformStats.activeGames} {t('dashboard.activeGames')}
                   </span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={toggleBalanceVisibility}
+            className="text-muted-foreground hover:text-foreground transition-colors text-xs"
+            data-testid="button-toggle-dashboard-balance"
+            aria-label={isBalanceHidden ? t('dashboard.showBalance') : t('dashboard.hideBalance')}
+          >
+            {isBalanceHidden ? t('dashboard.showBalance') : t('dashboard.hideBalance')}
+          </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" aria-hidden="true">
-          {[0, 1, 2, 3].map((slot) => (
-            <Skeleton key={slot} className="h-28" />
-          ))}
-        </div>
-      )}
 
-      {/* Active Challenges Banner */}
-      {activeChallengesCount > 0 && (
-        <Link href="/challenges">
-          <Card className="hover-elevate cursor-pointer border-orange-500/30 bg-orange-500/5">
-            <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-orange-500/10">
-                  <Trophy className="h-5 w-5 text-orange-500" />
-                </div>
-                <div>
-                  <p className="font-semibold">
-                    {activeChallengesCount} {t('dashboard.activeChallenges')}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {t('dashboard.tapToViewAccept')}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-      )}
+        <StadiumHome
+          owner={{
+            avatarUrl,
+            initials: ownerInitials,
+            level: vipLevel,
+            displayName,
+            username: usernameStr,
+            rankLabel: rankPrefix + " " + vipLevel,
+            location: ownerLocation,
+            walletValue: walletDisplay,
+            walletCurrency: depositConfig?.balanceCurrency || userCurrency,
+            winsToday: gamesWon,
+            lossesToday,
+            winStreak: safeWinStreak,
+            xpPercent,
+            xpCurrent,
+            xpTarget,
+            nextRankLabel: rankPrefix + " " + (vipLevel + 1),
+            challengeLabel: t('nav.challenges'),
+            depositLabel: t('common.deposit'),
+            onChallengeFriend: () => navigate("/challenges"),
+            onDeposit: () => navigate("/wallet"),
+          }}
+        />
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {quickActions.map((action) => (
-          <Link key={action.url} href={action.url}>
-            <Card className="hover-elevate cursor-pointer">
-              <CardContent className="p-3 sm:p-4 min-h-[112px] flex flex-col items-center justify-center gap-2 text-center">
-                <div className={`p-3 rounded-full ${action.color}`}>
-                  <action.icon className="h-6 w-6" />
-                </div>
-                <span className="font-medium text-sm">{action.title}</span>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {activeChallengesCount > 0 ? (
+          <div className="sr-only" aria-live="polite">
+            {activeChallengesCount} {t('dashboard.activeChallenges')}
+          </div>
+        ) : null}
+
+        {!isInsightsReady ? (
+          <div className="sr-only">{t('common.loading')}</div>
+        ) : (
+          <div className="sr-only">
+            {bestStreak > 0 ? `${t('dashboard.best')}: ${bestStreak}` : ""}
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 export default function DashboardPage() {
   const { user } = useAuth();

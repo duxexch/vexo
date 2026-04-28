@@ -65,6 +65,12 @@ VEX is built on a modern, distributed architecture designed for scalability and 
 - **Consistent Visuals:** Utilizes Tailwind CSS and shadcn/ui for a cohesive and modern design language. Shared components like `GameCardBackground.tsx` and `GameLayout.tsx` promote visual uniformity.
 - **Accessibility:** Implementation of `data-testid` attributes for improved testability and potentially accessibility.
 
+**Player home page (Stadium):**
+- The non-admin landing route (`/`) is rendered by `client/src/components/home/stadium-home.tsx` (1xbet-inspired stadium layout: 3D-tilted live-tournament hero carousel, owner stat bar, horizontal rails for live tournaments / team games / solo games / active challenges, and a continuously-loading activity timeline). Source images live under `client/public/images/home-stadium/`.
+- `StadiumHome` accepts an `owner` prop only; real user data (avatar, nickname, VIP, wallet from `formatWalletAmountFromUsd`, wins/losses/streak from `/api/me/stats`) is wired from `PlayerDashboard` in `client/src/pages/dashboard.tsx`. The deposit and challenge buttons navigate to `/wallet` and `/challenges`.
+- The rails (TOURNAMENTS / TEAM_GAMES / SOLO_GAMES / CHALLENGES / ACTIVITY) currently use static decorative datasets defined inside `stadium-home.tsx`. They are intentionally isolated and trigger no transactional side effects — wiring them to live `/api/tournaments/*`, `/api/games`, and `/api/challenges/available` is tracked as a phase-2 follow-up.
+- The original three exploration variants (Stadium / Holographic / LiveFeed) remain in `artifacts/mockup-sandbox/src/components/mockups/vex-home/` for future reference.
+
 ## External Dependencies
 
 - **PostgreSQL 15:** Primary database for persistent data storage.
