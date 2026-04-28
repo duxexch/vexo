@@ -59,6 +59,10 @@ async function supportFetch(url: string, options: RequestInit = {}) {
 export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = true }: { isLoggedIn?: boolean; showFloatingTrigger?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
+  // Render-driven IME composition flag — same fix as the in-chat composer:
+  // Arabic Gboard on Android keeps keystrokes inside an open composition,
+  // so we treat any active composition as "user is typing" to enable Send.
+  const [isComposingMessage, setIsComposingMessage] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; type: string; name: string; file: File } | null>(null);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -525,7 +529,18 @@ export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = tr
                     ref={inputRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
+                    onInput={(e) => {
+                      const v = (e.currentTarget as HTMLInputElement).value;
+                      if (v !== message) setMessage(v);
+                    }}
+                    onCompositionStart={() => setIsComposingMessage(true)}
+                    onCompositionEnd={(e) => {
+                      setIsComposingMessage(false);
+                      const v = (e.currentTarget as HTMLInputElement).value;
+                      if (v !== message) setMessage(v);
+                    }}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing || e.key === "Process") return;
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleSend();
@@ -533,6 +548,7 @@ export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = tr
                     }}
                     placeholder={t('support.typeMessage')}
                     className="flex-1 rounded-full text-sm h-9"
+                    dir="auto"
                     maxLength={2000}
                     disabled={sendMutation.isPending || uploading}
                   />
@@ -540,7 +556,7 @@ export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = tr
                     size="icon"
                     className="rounded-full h-9 w-9 shrink-0"
                     onClick={handleSend}
-                    disabled={(!message.trim() && !mediaPreview) || sendMutation.isPending || uploading}
+                    disabled={(!message.trim() && !mediaPreview && !isComposingMessage) || sendMutation.isPending || uploading}
                   >
                     {sendMutation.isPending || uploading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

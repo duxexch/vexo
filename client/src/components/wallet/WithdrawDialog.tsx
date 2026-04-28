@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -264,9 +265,8 @@ export function WithdrawDialog({
                 effectiveWithdrawCurrency,
               )}
             </Label>
-            <Input
+            <MoneyInput
               ref={amountInputRef}
-              type="number"
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               onKeyDown={(e) => {
@@ -278,7 +278,6 @@ export function WithdrawDialog({
                 "{{example}}",
                 `100.00 ${effectiveWithdrawCurrency}`,
               )}
-              inputMode="decimal"
               enterKeyHint="next"
               className="mt-2"
               data-testid="input-withdraw-amount"

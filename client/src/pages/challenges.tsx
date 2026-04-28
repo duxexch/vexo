@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1508,9 +1509,8 @@ export default function ChallengesPage() {
                 <div className="mt-2 flex items-center gap-2">
                   <div className="relative flex-1">
                     <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
+                    <MoneyInput
                       ref={stakeInputRef}
-                      type="number"
                       value={betAmount}
                       onChange={(e) => setBetAmount(e.target.value)}
                       onKeyDown={(e) => {
@@ -1523,7 +1523,6 @@ export default function ChallengesPage() {
                         queueFocus(createChallengeButtonRef.current);
                       }}
                       placeholder="10.00"
-                      inputMode="decimal"
                       enterKeyHint={opponentType === 'friend' ? 'next' : 'done'}
                       className="ps-10"
                       disabled={isSam9FriendlyFixedFee}
@@ -1622,10 +1621,7 @@ export default function ChallengesPage() {
                       : `Min conversion: $${minConvertAmount.toFixed(2)} - Max: $${maxConvertAmount.toFixed(2)}`}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min="1"
-                      step="0.01"
+                    <MoneyInput
                       value={quickConvertAmount}
                       onChange={(e) => setQuickConvertAmount(e.target.value)}
                     />

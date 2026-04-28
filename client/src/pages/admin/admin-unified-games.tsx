@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -881,7 +882,7 @@ function GameForm({
                 <FormItem>
                   <FormLabel>{language === "ar" ? "الحد الأدنى (USD)" : "Min Entry (USD)"}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" step="0.01" data-testid="input-min-stake" />
+                    <MoneyInput {...field} data-testid="input-min-stake" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -895,7 +896,7 @@ function GameForm({
                 <FormItem>
                   <FormLabel>{language === "ar" ? "الحد الأقصى (USD)" : "Max Entry (USD)"}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" step="0.01" data-testid="input-max-stake" />
+                    <MoneyInput {...field} data-testid="input-max-stake" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -909,7 +910,7 @@ function GameForm({
                 <FormItem>
                   <FormLabel>{language === "ar" ? "عمولة المنصة" : "House Fee"}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" step="0.01" placeholder="0.05" data-testid="input-house-fee" />
+                    <MoneyInput {...field} placeholder="0.05" data-testid="input-house-fee" />
                   </FormControl>
                   <FormDescription>5% = 0.05</FormDescription>
                   <FormMessage />
@@ -928,7 +929,7 @@ function GameForm({
                   {language === "ar" ? "السعر بـ VEX" : "Price in VEX"}
                 </FormLabel>
                 <FormControl>
-                  <Input {...field} type="number" step="0.01" placeholder="0" data-testid="input-price-vex" />
+                  <MoneyInput {...field} placeholder="0" data-testid="input-price-vex" />
                 </FormControl>
                 <FormDescription>
                   {language === "ar" ? "السعر بعملة التطبيق (VEX Coins)" : "Price in app currency (VEX Coins)"}
@@ -953,7 +954,7 @@ function GameForm({
                 <FormItem>
                   <FormLabel>{language === "ar" ? "عدد المرات المجانية" : "Free Play Limit"}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" min="0" data-testid="input-free-play-limit" />
+                    <MoneyInput {...field} allowDecimal={false} data-testid="input-free-play-limit" />
                   </FormControl>
                   <FormDescription>
                     {language === "ar" ? "0 يعني بدون لعب مجاني" : "0 means no free plays"}
@@ -1005,7 +1006,7 @@ function GameForm({
               <FormItem>
                 <FormLabel>{language === "ar" ? "الحد الأدنى للاعبين" : "Min Players"}</FormLabel>
                 <FormControl>
-                  <Input {...field} type="number" min="1" data-testid="input-min-players" />
+                  <MoneyInput {...field} allowDecimal={false} data-testid="input-min-players" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -1019,7 +1020,7 @@ function GameForm({
               <FormItem>
                 <FormLabel>{language === "ar" ? "الحد الأقصى للاعبين" : "Max Players"}</FormLabel>
                 <FormControl>
-                  <Input {...field} type="number" min="1" data-testid="input-max-players" />
+                  <MoneyInput {...field} allowDecimal={false} data-testid="input-max-players" />
                 </FormControl>
                 <FormMessage />
               </FormItem>

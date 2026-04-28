@@ -99,6 +99,11 @@ export function GameChat({
 }: GameChatProps) {
   const [messageInput, setMessageInput] = useState("");
   const [showQuickPanel, setShowQuickPanel] = useState(false);
+  // Mirrors `isComposingRef` in render-driven state — needed so the Send
+  // button enables itself the moment the user starts composing in an Arabic
+  // IME on Android, where the controlled `value` may stay empty until the
+  // composition commits.
+  const [isComposingInput, setIsComposingInput] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -448,17 +453,26 @@ export function GameChat({
             ref={inputRef}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
+            onInput={(e) => {
+              // Catch keystrokes that the controlled `value` would miss
+              // while the Arabic Gboard composition is open.
+              const v = (e.currentTarget as HTMLInputElement).value;
+              if (v !== messageInput) setMessageInput(v);
+            }}
             onCompositionStart={() => {
               isComposingRef.current = true;
+              setIsComposingInput(true);
             }}
-            onCompositionEnd={() => {
+            onCompositionEnd={(e) => {
               isComposingRef.current = false;
+              setIsComposingInput(false);
+              const v = (e.currentTarget as HTMLInputElement).value;
+              if (v !== messageInput) setMessageInput(v);
             }}
             onKeyDown={handleKeyPress}
             placeholder={t("chat.typeMessage")}
             className="h-10 flex-1 text-sm"
             dir="auto"
-            lang="auto"
             inputMode="text"
             enterKeyHint="send"
             disabled={disabled}
@@ -481,7 +495,7 @@ export function GameChat({
             size="icon"
             className="h-10 w-10"
             onClick={handleSend}
-            disabled={!hasSendableDraft(messageInput) || disabled}
+            disabled={(!hasSendableDraft(messageInput) && !isComposingInput) || disabled}
             data-testid="button-send-game-chat"
           >
             <Send className="h-4 w-4" />

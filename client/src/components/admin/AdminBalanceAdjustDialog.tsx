@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -183,8 +184,7 @@ export function AdminBalanceAdjustDialog({
 
           <div className="space-y-2">
             <Label>Amount {amountSuffix}</Label>
-            <Input
-              type="number"
+            <MoneyInput
               placeholder="Enter amount"
               value={actionAmount}
               onChange={(e) => setActionAmount(e.target.value)}

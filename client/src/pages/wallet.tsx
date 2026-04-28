@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1210,9 +1211,8 @@ export default function WalletPage() {
           <div className="space-y-4 pb-1">
             <div>
               <Label>{t('wallet.amountInCurrency').replace('{{currency}}', depositCurrency || 'USD')}</Label>
-              <Input
+              <MoneyInput
                 ref={depositAmountInputRef}
-                type="number"
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 onKeyDown={(e) => {
@@ -1221,7 +1221,6 @@ export default function WalletPage() {
                   queueFocus(depositCurrencyTriggerRef.current);
                 }}
                 placeholder={t('wallet.amountPlaceholder').replace('{{example}}', `100.00 ${depositCurrency || 'USD'}`)}
-                inputMode="decimal"
                 enterKeyHint="next"
                 className="mt-2"
                 data-testid="input-deposit-amount"
@@ -1527,12 +1526,8 @@ export default function WalletPage() {
               </div>
               <div>
                 <Label>Amount ({walletCurrencyCode})</Label>
-                <Input
+                <MoneyInput
                   ref={convertAmountInputRef}
-                  type="number"
-                  step="0.01"
-                  min={convertMinWalletAmount > 0 ? convertMinWalletAmount : undefined}
-                  max={convertMaxWalletAmount > 0 ? convertMaxWalletAmount : undefined}
                   value={convertAmount}
                   onChange={(e) => setConvertAmount(e.target.value)}
                   onKeyDown={(e) => {
@@ -1541,7 +1536,6 @@ export default function WalletPage() {
                     queueFocus(convertConfirmButtonRef.current);
                   }}
                   placeholder={`Min: ${walletCurrencySymbol}${convertMinWalletAmount.toFixed(2)} ${walletCurrencyCode}`}
-                  inputMode="decimal"
                   enterKeyHint="done"
                   className="mt-2"
                   data-testid="input-convert-amount"
@@ -1700,11 +1694,8 @@ export default function WalletPage() {
 
                 <div>
                   <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} ({walletConvertFrom})</Label>
-                  <Input
+                  <MoneyInput
                     ref={walletConvertAmountInputRef}
-                    type="number"
-                    step="0.01"
-                    min="0"
                     value={walletConvertAmount}
                     onChange={(e) => setWalletConvertAmount(e.target.value)}
                     onKeyDown={(e) => {
@@ -1713,7 +1704,6 @@ export default function WalletPage() {
                       queueFocus(walletConvertConfirmButtonRef.current);
                     }}
                     placeholder="0.00"
-                    inputMode="decimal"
                     enterKeyHint="done"
                     className="mt-2"
                     data-testid="input-wallet-convert-amount"

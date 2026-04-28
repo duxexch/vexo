@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1095,11 +1096,7 @@ function TradeOfferDialog({
                   />
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      max={String(MAX_NEGOTIATED_ADMIN_FEE_RATE)}
+                    <MoneyInput
                       value={proposalAdminFeePercentage}
                       onChange={(event) => setProposalAdminFeePercentage(event.target.value)}
                       placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
@@ -1167,13 +1164,9 @@ function TradeOfferDialog({
 
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
-              <Input
-                type="number"
+              <MoneyInput
                 value={tradeAmount}
                 onChange={(e) => setTradeAmount(e.target.value)}
-                min={offer?.minLimit || undefined}
-                max={offer?.maxLimit || undefined}
-                step="0.01"
                 placeholder={offer?.minLimit || "0"}
                 data-testid="input-trade-amount"
               />
@@ -1683,10 +1676,9 @@ function MarketplaceTab() {
               </Select>
             </div>
 
-            <Input
+            <MoneyInput
               value={amountFilter}
               onChange={(event) => setAmountFilter(event.target.value)}
-              type="number"
               placeholder={t('common.amount')}
               className="min-w-[8.75rem] border-slate-700 bg-slate-900 text-slate-100"
               data-testid="input-amount-filter"
@@ -2821,12 +2813,8 @@ function MyOffersTab() {
                                 <FormItem>
                                   <FormLabel>{t('wallet.commission')}</FormLabel>
                                   <FormControl>
-                                    <Input
+                                    <MoneyInput
                                       {...field}
-                                      type="number"
-                                      step="0.0001"
-                                      min="0"
-                                      max={String(MAX_NEGOTIATED_ADMIN_FEE_RATE)}
                                       placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
                                       data-testid="input-offer-requested-admin-fee"
                                     />
@@ -2958,11 +2946,9 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('common.amount')}</FormLabel>
                               <FormControl>
-                                <Input
+                                <MoneyInput
                                   {...field}
-                                  type="number"
                                   placeholder="100"
-                                  max={selectedOfferType === "sell" ? String(sellAvailableBalance || "") : undefined}
                                   data-testid="input-offer-amount"
                                 />
                               </FormControl>
@@ -3012,7 +2998,7 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('p2p.price')} ({selectedFiatCurrency || "USD"})</FormLabel>
                               <FormControl>
-                                <Input {...field} type="number" step="0.01" placeholder="1.00" data-testid="input-offer-price" />
+                                <MoneyInput {...field} placeholder="1.00" data-testid="input-offer-price" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -3028,11 +3014,8 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('p2p.minLimit')}</FormLabel>
                               <FormControl>
-                                <Input
+                                <MoneyInput
                                   {...field}
-                                  type="number"
-                                  min={adminMinTradeAmount}
-                                  max={adminMaxTradeAmount}
                                   placeholder={adminMinTradeAmount}
                                   data-testid="input-offer-min"
                                 />
@@ -3048,11 +3031,8 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('p2p.maxLimit')}</FormLabel>
                               <FormControl>
-                                <Input
+                                <MoneyInput
                                   {...field}
-                                  type="number"
-                                  min={adminMinTradeAmount}
-                                  max={adminMaxTradeAmount}
                                   placeholder={adminMaxTradeAmount}
                                   data-testid="input-offer-max"
                                 />

@@ -139,6 +139,9 @@ export function SpectatorPanel({
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [pointsAmount, setPointsAmount] = useState("");
   const [chatDraft, setChatDraft] = useState("");
+  // Render-driven mirror of `isComposingRef` so the Send button enables
+  // itself the instant an Arabic IME composition starts on Android.
+  const [isComposingChat, setIsComposingChat] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
@@ -543,11 +546,21 @@ export function SpectatorPanel({
                 <Input
                   value={chatDraft}
                   onChange={(e) => setChatDraft(e.target.value)}
+                  onInput={(e) => {
+                    // Catch Arabic Gboard keystrokes that the controlled
+                    // value would otherwise miss while a composition is open.
+                    const v = (e.currentTarget as HTMLInputElement).value;
+                    if (v !== chatDraft) setChatDraft(v);
+                  }}
                   onCompositionStart={() => {
                     isComposingRef.current = true;
+                    setIsComposingChat(true);
                   }}
-                  onCompositionEnd={() => {
+                  onCompositionEnd={(e) => {
                     isComposingRef.current = false;
+                    setIsComposingChat(false);
+                    const v = (e.currentTarget as HTMLInputElement).value;
+                    if (v !== chatDraft) setChatDraft(v);
                   }}
                   onKeyDown={(e) => {
                     const isComposing = isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process";
@@ -565,7 +578,10 @@ export function SpectatorPanel({
                   dir="auto"
                   disabled={!canSendChat}
                 />
-                <Button onClick={handleSendChat} disabled={!canSendChat || !hasSendableDraft(chatDraft)}>
+                <Button
+                  onClick={handleSendChat}
+                  disabled={!canSendChat || (!hasSendableDraft(chatDraft) && !isComposingChat)}
+                >
                   {language === "ar" ? "إرسال" : "Send"}
                 </Button>
               </div>

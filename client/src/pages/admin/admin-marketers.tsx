@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -418,7 +419,7 @@ export default function AdminMarketersPage() {
                                             <Switch checked={cpaEnabled} onCheckedChange={setCpaEnabled} />
                                         </div>
                                     </div>
-                                    <div className="space-y-1.5"><Label>CPA Amount</Label><Input type="number" min="0" step="0.01" value={cpaAmount} onChange={(e) => setCpaAmount(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>CPA Amount</Label><MoneyInput value={cpaAmount} onChange={(e) => setCpaAmount(e.target.value)} /></div>
                                     <div className="space-y-1.5">
                                         <Label>RevShare Enabled</Label>
                                         <div className="h-10 rounded border px-3 flex items-center justify-between">
@@ -426,14 +427,14 @@ export default function AdminMarketersPage() {
                                             <Switch checked={revshareEnabled} onCheckedChange={setRevshareEnabled} />
                                         </div>
                                     </div>
-                                    <div className="space-y-1.5"><Label>RevShare %</Label><Input type="number" min="0" max="100" step="0.01" value={revshareRate} onChange={(e) => setRevshareRate(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>RevShare %</Label><MoneyInput value={revshareRate} onChange={(e) => setRevshareRate(e.target.value)} /></div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                    <div className="space-y-1.5"><Label>Hold Days</Label><Input type="number" min="0" max="120" value={holdDays} onChange={(e) => setHoldDays(e.target.value)} /></div>
-                                    <div className="space-y-1.5"><Label>Min Deposit</Label><Input type="number" min="0" step="0.01" value={minDeposit} onChange={(e) => setMinDeposit(e.target.value)} /></div>
-                                    <div className="space-y-1.5"><Label>Min Wagered</Label><Input type="number" min="0" step="0.01" value={minWagered} onChange={(e) => setMinWagered(e.target.value)} /></div>
-                                    <div className="space-y-1.5"><Label>Min Games</Label><Input type="number" min="0" step="1" value={minGames} onChange={(e) => setMinGames(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>Hold Days</Label><MoneyInput allowDecimal={false} value={holdDays} onChange={(e) => setHoldDays(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>Min Deposit</Label><MoneyInput value={minDeposit} onChange={(e) => setMinDeposit(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>Min Wagered</Label><MoneyInput value={minWagered} onChange={(e) => setMinWagered(e.target.value)} /></div>
+                                    <div className="space-y-1.5"><Label>Min Games</Label><MoneyInput allowDecimal={false} value={minGames} onChange={(e) => setMinGames(e.target.value)} /></div>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2 justify-end">

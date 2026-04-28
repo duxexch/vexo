@@ -243,6 +243,10 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  // Tracks IME composition (Android Gboard with Arabic keyboard, Chinese
+  // pinyin, etc.) so the Mic↔Send toggle reacts the moment the user starts
+  // typing instead of waiting for the composition to commit.
+  const [isComposingInput, setIsComposingInput] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [langSearchQuery, setLangSearchQuery] = useState("");
   const [directConversationUser, setDirectConversationUser] = useState<DirectConversationUser | null>(null);
@@ -338,6 +342,11 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     [activeConversationPending]
   );
   const hasTypedMessage = normalizeChatDraft(messageInput).length > 0;
+  // While the user is composing in an IME (Arabic Gboard, Chinese pinyin,
+  // Japanese kana), the controlled `messageInput` may stay empty until the
+  // composition commits. Treat any active composition as "user is typing"
+  // so the recording button switches to the send button immediately.
+  const shouldShowSendButton = hasTypedMessage || isComposingInput || !!editingMsg;
   const activeUserProfile = activeUser || (
     activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
       ? directConversationUser
@@ -2076,23 +2085,39 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       ref={messageInputRef}
                       value={messageInput}
                       onChange={(e) => handleInputChange(e.target.value)}
+                      // Some Android IMEs (notably Gboard with the Arabic
+                      // keyboard) hold all keystrokes inside a composition
+                      // and only fire `change` once the user types a non-
+                      // composed character. Reading from `onInput` directly
+                      // catches the keystrokes the controlled `value` would
+                      // otherwise miss.
+                      onInput={(e) => {
+                        const v = (e.currentTarget as HTMLInputElement).value;
+                        if (v !== messageInput) handleInputChange(v);
+                      }}
                       onCompositionStart={() => {
                         isComposingRef.current = true;
+                        setIsComposingInput(true);
                       }}
-                      onCompositionEnd={() => {
+                      onCompositionEnd={(e) => {
                         isComposingRef.current = false;
+                        setIsComposingInput(false);
+                        // Flush the committed text immediately so the toggle
+                        // resolves to the right state (Send vs Mic) without
+                        // waiting for a follow-up keystroke.
+                        const v = (e.currentTarget as HTMLInputElement).value;
+                        if (v !== messageInput) handleInputChange(v);
                       }}
                       onKeyDown={handleKeyPress}
                       placeholder={editingMsg ? t('chat.editMessagePlaceholder') : replyTo ? t('chat.replyPlaceholder') : t("chat.typeMessage")}
                       className="min-w-0 flex-1 min-h-[44px] rounded-full px-4"
                       dir="auto"
-                      lang="auto"
                       inputMode="text"
                       enterKeyHint="send"
                       data-testid="input-chat-message"
                     />
 
-                    {hasTypedMessage || editingMsg ? (
+                    {shouldShowSendButton ? (
                       <Button
                         onClick={handleSendMessage}
                         disabled={!hasTypedMessage && !editingMsg}
