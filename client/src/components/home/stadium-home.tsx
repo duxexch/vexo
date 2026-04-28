@@ -28,6 +28,12 @@ import {
   Activity,
   Globe,
   PlayCircle,
+  Megaphone,
+  Gift,
+  Star,
+  Medal,
+  Pin,
+  ArrowLeft,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -75,6 +81,52 @@ type ApiChallenge = {
   createdAt: string;
 };
 
+type ApiLeaderboardEntry = {
+  rank: number;
+  id: string;
+  username: string;
+  nickname?: string | null;
+  profilePicture?: string | null;
+  vipLevel: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  gamesLost: number;
+  totalEarnings: string | number;
+  currentWinStreak: number;
+  longestWinStreak: number;
+  country?: string | null;
+  gameWon?: number;
+  winRate: number;
+};
+
+type ApiAnnouncement = {
+  id: string;
+  title: string;
+  titleAr?: string | null;
+  content: string;
+  contentAr?: string | null;
+  type: string;
+  priority: string;
+  isPinned: boolean;
+  createdAt: string;
+};
+
+type ApiPlatformStats = {
+  onlinePlayers: number;
+  activeGames: number;
+  totalUsers: number;
+  totalGamesPlayed: number;
+};
+
+type ApiDailyRewardStatus = {
+  claimedToday: boolean;
+  currentStreak: number;
+  nextDay: number;
+  nextRewardAmount: string | null;
+  schedule: { day: number; amount: string }[];
+  totalEarned: string;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,6 +168,32 @@ function RailEmpty({ icon, label }: { icon: React.ReactNode; label: string }) {
           {icon}
         </span>
         <span>{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function RailError({ label, onRetry }: { label: string; onRetry?: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="w-full px-4 md:px-6 pb-4">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-300/50 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/[0.06] py-4 px-4 text-sm text-rose-700 dark:text-rose-300">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="grid place-items-center w-9 h-9 rounded-md bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 shrink-0">
+            <CircleDot className="w-4 h-4" />
+          </span>
+          <span className="truncate">{label}</span>
+        </div>
+        {onRetry && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-rose-300/60 dark:border-rose-500/40 bg-white/40 dark:bg-rose-500/10 text-rose-700 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-xs shrink-0"
+            onClick={onRetry}
+          >
+            {t("home.retry") || "إعادة المحاولة"}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -776,6 +854,414 @@ function ChallengeCard({ c, gamesMap }: { c: ApiChallenge; gamesMap: Map<string,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Live platform stats ticker — drives the heartbeat above the rails
+// ─────────────────────────────────────────────────────────────────────────────
+function PlatformStatsTicker() {
+  const { t } = useI18n();
+  const { data, isLoading } = useQuery<ApiPlatformStats>({
+    queryKey: ["/api/platform/stats"],
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+  const items = [
+    {
+      label: t("home.onlinePlayers") || "متصلون الآن",
+      value: data?.onlinePlayers ?? 0,
+      icon: <Users className="w-3.5 h-3.5" />,
+      tone: "text-emerald-400",
+      pulse: true,
+    },
+    {
+      label: t("home.activeGames") || "ألعاب نشطة",
+      value: data?.activeGames ?? 0,
+      icon: <Gamepad2 className="w-3.5 h-3.5" />,
+      tone: "text-[#1e88ff]",
+    },
+    {
+      label: t("home.totalUsers") || "إجمالي اللاعبين",
+      value: data?.totalUsers ?? 0,
+      icon: <Star className="w-3.5 h-3.5" />,
+      tone: "text-[#ffb627]",
+    },
+    {
+      label: t("home.totalGames") || "ألعاب على المنصة",
+      value: data?.totalGamesPlayed ?? 0,
+      icon: <Trophy className="w-3.5 h-3.5" />,
+      tone: "text-rose-400",
+    },
+  ];
+
+  return (
+    <div className="px-4 md:px-6 -mt-4 mb-2">
+      <div className="rounded-xl border border-slate-300/70 dark:border-white/10 bg-gradient-to-l from-slate-100 via-white to-slate-100 dark:from-[#0f1730] dark:via-[#0a0e1a] dark:to-[#0f1730] backdrop-blur-sm overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-300/60 dark:divide-white/10 [direction:ltr]">
+          {items.map((it) => (
+            <div
+              key={it.label}
+              className="px-4 py-3 flex items-center justify-between gap-3"
+              dir="rtl"
+            >
+              <div className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-400 min-w-0">
+                <span className={`grid place-items-center w-6 h-6 rounded-md bg-slate-200 dark:bg-white/5 ${it.tone}`}>
+                  {it.icon}
+                </span>
+                <span className="truncate">{it.label}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {it.pulse && (
+                  <span className="relative flex w-1.5 h-1.5">
+                    <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                    <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  </span>
+                )}
+                <span className={`font-mono font-black text-sm ${it.tone}`}>
+                  {isLoading ? "—" : it.value.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-player card (used in Top Players rail)
+// ─────────────────────────────────────────────────────────────────────────────
+function TopPlayerCard({ p }: { p: ApiLeaderboardEntry }) {
+  const earnings = Number(p.totalEarnings || 0);
+  const initials = (p.nickname || p.username || "?").charAt(0).toUpperCase();
+  const rankAccent =
+    p.rank === 1
+      ? "from-[#ffb627] to-[#ff8a00]"
+      : p.rank === 2
+      ? "from-slate-300 to-slate-500"
+      : p.rank === 3
+      ? "from-amber-700 to-amber-900"
+      : "from-slate-500 to-slate-700";
+  return (
+    <Card className="group relative shrink-0 w-[220px] overflow-hidden border-white/10 bg-gradient-to-b from-[#10172a] to-[#0a0e1a] text-white p-4 rounded-xl transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_-10px_rgba(255,182,39,0.4)]">
+      <Link href={`/profile/${p.id}`} className="block">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Avatar className="w-14 h-14 ring-2 ring-[#ffb627]/60">
+              <AvatarImage src={p.profilePicture || ""} alt={p.nickname || p.username} />
+              <AvatarFallback className="bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white font-black">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <span
+              className={`absolute -bottom-1 -left-1 grid place-items-center w-6 h-6 rounded-full bg-gradient-to-br ${rankAccent} text-black border-2 border-[#0a0e1a] text-[10px] font-black`}
+            >
+              {p.rank}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-white truncate">{p.nickname || p.username}</div>
+            <div className="text-[11px] text-slate-400 truncate flex items-center gap-1">
+              {p.country && <Globe className="w-3 h-3" />}
+              {p.country || "—"}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-md bg-white/[0.04] border border-white/10 p-2 text-center">
+            <div className="text-[10px] text-slate-500">أرباح</div>
+            <div className="font-mono font-black text-sm text-[#ffb627]">
+              {fmtMoney(earnings)}
+            </div>
+          </div>
+          <div className="rounded-md bg-white/[0.04] border border-white/10 p-2 text-center">
+            <div className="text-[10px] text-slate-500">نسبة الفوز</div>
+            <div className="font-mono font-black text-sm text-emerald-400">
+              {p.winRate}%
+            </div>
+          </div>
+        </div>
+      </Link>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Most-played card (used in Most Played rail)
+// ─────────────────────────────────────────────────────────────────────────────
+function MostPlayedCard({ g }: { g: ApiGame }) {
+  const cover = g.thumbnailUrl || g.imageUrl;
+  const initial = g.name.trim().charAt(0).toUpperCase();
+  return (
+    <Card className="group relative shrink-0 w-[200px] overflow-hidden border-white/10 bg-gradient-to-b from-[#10172a] to-[#0a0e1a] text-white p-0 rounded-xl transition-all hover:-translate-y-1 hover:shadow-[0_15px_40px_-10px_rgba(30,136,255,0.45)]">
+      <Link href={`/games/${g.id}`} className="block">
+        <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center">
+          {cover ? (
+            <img
+              src={cover}
+              alt={g.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            />
+          ) : (
+            <span className="font-['Bebas_Neue'] text-5xl tracking-wider text-white/95 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]">
+              {initial}
+            </span>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
+          <Badge className="absolute top-2 right-2 bg-rose-500/90 hover:bg-rose-500 text-white rounded-sm px-1.5 py-0 text-[10px] font-bold flex items-center gap-1">
+            <Flame className="w-3 h-3" />
+            HOT
+          </Badge>
+        </div>
+        <div className="p-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="font-bold text-white text-sm truncate">{g.name}</div>
+            <div className="text-[10px] text-slate-400 truncate">{g.category}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] text-slate-500">جولات</div>
+            <div className="font-mono font-black text-sm text-[#1e88ff]">
+              {fmtMoney(g.playCount)}
+            </div>
+          </div>
+        </div>
+      </Link>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Player of the Week sidebar card (uses leaderboard top)
+// ─────────────────────────────────────────────────────────────────────────────
+function PlayerOfWeekCard({ p }: { p: ApiLeaderboardEntry | null }) {
+  const { t } = useI18n();
+  if (!p) {
+    return (
+      <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
+        <div className="flex items-center gap-2 text-[#ffb627] text-xs font-bold tracking-widest mb-2">
+          <Crown className="w-4 h-4" />
+          {t("home.playerOfWeek") || "لاعب الأسبوع"}
+        </div>
+        <div className="text-sm text-slate-400">
+          {t("home.noLeaderboardYet") || "لا توجد بيانات لاعبين كافية بعد"}
+        </div>
+      </Card>
+    );
+  }
+  const initials = (p.nickname || p.username || "?").charAt(0).toUpperCase();
+  const earnings = Number(p.totalEarnings || 0);
+  return (
+    <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
+      <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#ffb627]/30 blur-3xl" />
+      <div className="relative">
+        <div className="flex items-center gap-2 text-[#ffb627] text-xs font-bold tracking-widest mb-3">
+          <Crown className="w-4 h-4" />
+          {t("home.playerOfWeek") || "لاعب الأسبوع"}
+        </div>
+        <Link href={`/profile/${p.id}`} className="flex items-center gap-3 group">
+          <Avatar className="w-14 h-14 ring-2 ring-[#ffb627]">
+            <AvatarImage src={p.profilePicture || ""} alt={p.nickname || p.username} />
+            <AvatarFallback className="bg-gradient-to-br from-[#ffb627] to-[#a86b00] text-black font-black">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="font-['Bebas_Neue'] text-2xl tracking-wider leading-none truncate group-hover:text-[#ffb627] transition-colors">
+              {p.nickname || p.username}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {p.gamesWon} {t("home.wins") || "فوز"} · {fmtMoney(earnings)} {t("home.earnings") || "أرباح"}
+            </div>
+          </div>
+        </Link>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <MiniStat label={t("home.wins") || "فوز"} value={String(p.gamesWon)} tone="text-emerald-400" />
+          <MiniStat label={t("home.losses") || "هزيمة"} value={String(p.gamesLost)} tone="text-rose-400" />
+          <MiniStat label={t("home.winRatePct") || "نسبة"} value={`${p.winRate}%`} tone="text-[#ffb627]" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="rounded-md bg-white/[0.04] border border-white/10 py-2">
+      <div className={`font-['Bebas_Neue'] text-xl tracking-wider ${tone}`}>{value}</div>
+      <div className="text-[10px] text-slate-400 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily reward sidebar card (uses /api/daily-rewards/status)
+// ─────────────────────────────────────────────────────────────────────────────
+function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
+  const { t } = useI18n();
+  if (!s) {
+    return (
+      <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
+        <div className="flex items-center gap-2 text-[#1e88ff] text-xs font-bold tracking-widest mb-3">
+          <Gift className="w-4 h-4" />
+          {t("home.dailyReward") || "مكافأتك اليومية"}
+        </div>
+        <Skeleton className="h-16 w-full rounded-md bg-white/5" />
+      </Card>
+    );
+  }
+  const days = s.schedule.slice(0, 7);
+  return (
+    <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-[#1e88ff] text-xs font-bold tracking-widest">
+          <Gift className="w-4 h-4" />
+          {t("home.dailyReward") || "مكافأتك اليومية"}
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-[#ffb627] font-bold">
+          <Flame className="w-3 h-3" />
+          {s.currentStreak} {t("home.streakDays") || "أيام متتالية"}
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d) => {
+          const isCurrent = d.day === s.nextDay;
+          const isPassed = d.day < s.nextDay || (d.day === s.nextDay && s.claimedToday);
+          return (
+            <div
+              key={d.day}
+              className={`relative aspect-square rounded-md grid place-items-center text-[10px] border ${
+                isPassed
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                  : isCurrent
+                  ? "bg-[#ffb627]/15 border-[#ffb627] text-[#ffb627] shadow-[0_0_20px_-5px_#ffb627]"
+                  : "bg-white/[0.03] border-white/10 text-slate-500"
+              }`}
+            >
+              <div className="font-['Bebas_Neue'] text-xs leading-none">D{d.day}</div>
+              <div className="font-mono text-[9px] mt-0.5">+{d.amount}</div>
+              {isCurrent && !s.claimedToday && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#ffb627] animate-ping" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <Button
+        asChild
+        size="sm"
+        className="w-full mt-3 h-9 bg-gradient-to-l from-[#1e88ff] to-[#0a4d9c] text-white text-xs font-bold rounded-md hover:brightness-110"
+      >
+        <Link href="/rewards">
+          {s.claimedToday
+            ? t("home.viewAllRewards") || "عرض كل المكافآت"
+            : `${t("home.claimReward") || "احصل عليها"} +${s.nextRewardAmount || days[s.nextDay - 1]?.amount || "0"}`}
+          <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+        </Link>
+      </Button>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Announcement sidebar card
+// ─────────────────────────────────────────────────────────────────────────────
+function AnnouncementCard({ a, lang }: { a: ApiAnnouncement | null; lang: string }) {
+  const { t } = useI18n();
+  if (!a) return null;
+  const title = pickName(a.title, a.titleAr, lang);
+  const content = pickName(a.content, a.contentAr, lang);
+  const tone =
+    a.priority === "urgent"
+      ? "text-rose-400"
+      : a.priority === "high"
+      ? "text-[#ffb627]"
+      : "text-emerald-400";
+  return (
+    <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
+      <div className="flex items-center justify-between mb-3">
+        <div className={`flex items-center gap-2 ${tone} text-xs font-bold tracking-widest`}>
+          <Megaphone className="w-4 h-4" />
+          {t("home.announcement") || "إعلان رسمي"}
+        </div>
+        {a.isPinned && <Pin className="w-3.5 h-3.5 text-[#ffb627]" />}
+      </div>
+      <div className="font-bold text-white mb-1.5 truncate">{title}</div>
+      <div className="text-sm text-slate-300 leading-relaxed line-clamp-3">{content}</div>
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className="w-full mt-3 h-9 bg-white/5 border-white/15 text-white hover:bg-white/10 text-xs"
+      >
+        <Link href="/announcements">
+          {t("home.viewAllAnnouncements") || "كل الإعلانات"}
+        </Link>
+      </Button>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Highlights section — combines Player of Week + Daily Reward + Announcement
+// ─────────────────────────────────────────────────────────────────────────────
+function HighlightsSection({
+  topPlayer,
+  reward,
+  announcement,
+  lang,
+  isLoadingPlayer,
+}: {
+  topPlayer: ApiLeaderboardEntry | null;
+  reward: ApiDailyRewardStatus | null;
+  announcement: ApiAnnouncement | null;
+  lang: string;
+  isLoadingPlayer: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <section className="px-4 md:px-6">
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_0_30px_-5px_#1e88ff]">
+            <Activity className="w-4 h-4" />
+          </span>
+          <div>
+            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none">
+              {t("home.highlights") || "أبرز ما يحدث الآن"}
+            </h2>
+            <p className="text-xs text-slate-700 dark:text-slate-400 mt-1">
+              {t("home.highlightsKicker") || "لاعب الأسبوع، مكافأتك، وإعلانات المنصة"}
+            </p>
+          </div>
+        </div>
+        <div className="hidden md:flex items-center gap-1 text-[11px] text-slate-700 dark:text-slate-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          {t("home.liveUpdating") || "يُحدَّث تلقائياً"}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        {isLoadingPlayer ? (
+          <Skeleton className="h-44 rounded-xl bg-slate-200/70 dark:bg-white/5" />
+        ) : (
+          <PlayerOfWeekCard p={topPlayer} />
+        )}
+        <DailyRewardCard s={reward} />
+        {announcement ? (
+          <AnnouncementCard a={announcement} lang={lang} />
+        ) : (
+          <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white grid place-items-center text-sm text-slate-400 min-h-[140px]">
+            <div className="text-center">
+              <Megaphone className="w-6 h-6 mx-auto mb-2 opacity-50" />
+              {t("home.noAnnouncements") || "لا توجد إعلانات حالياً"}
+            </div>
+          </Card>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Skeletons
 // ─────────────────────────────────────────────────────────────────────────────
 function RailSkeleton({ width = 260 }: { width?: number }) {
@@ -809,14 +1295,45 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
     staleTime: 5 * 60_000,
   });
 
+  const mostPlayedQ = useQuery<ApiGame[]>({
+    queryKey: ["/api/games/most-played"],
+    staleTime: 5 * 60_000,
+  });
+
   const challengesQ = useQuery<ApiChallenge[]>({
     queryKey: ["/api/challenges/public"],
     staleTime: 30_000,
   });
 
+  const topPlayersQ = useQuery<ApiLeaderboardEntry[]>({
+    queryKey: ["/api/leaderboard?sortBy=earnings&period=weekly&limit=10"],
+    staleTime: 60_000,
+  });
+
+  const announcementsQ = useQuery<ApiAnnouncement[]>({
+    queryKey: ["/api/announcements"],
+    staleTime: 60_000,
+  });
+
+  const dailyRewardQ = useQuery<ApiDailyRewardStatus>({
+    queryKey: ["/api/daily-rewards/status"],
+    staleTime: 60_000,
+  });
+
   const tournaments = tournamentsQ.data ?? [];
   const games = gamesQ.data ?? [];
+  const mostPlayed = (mostPlayedQ.data ?? []).slice(0, 10);
   const challenges = challengesQ.data ?? [];
+  const topPlayers = topPlayersQ.data ?? [];
+  const topPlayer = topPlayers[0] ?? null;
+  const topAnnouncement =
+    (announcementsQ.data ?? [])
+      .slice()
+      .sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })[0] ?? null;
+  const dailyReward = dailyRewardQ.data ?? null;
 
   const teamGames = useMemo(
     () => games.filter((g) => g.gameType === "multiplayer" || g.category === "multiplayer"),
@@ -841,6 +1358,8 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
         <HeroCarousel tournaments={tournaments} lang={lang} />
       </div>
 
+      <PlatformStatsTicker />
+
       <div className="space-y-8 py-6">
         <Rail
           title={t("home.tournaments") || "البطولات"}
@@ -851,6 +1370,11 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
         >
           {tournamentsQ.isLoading ? (
             <RailSkeleton width={300} />
+          ) : tournamentsQ.isError ? (
+            <RailError
+              label={t("home.tournamentsError") || "تعذّر تحميل البطولات"}
+              onRetry={() => tournamentsQ.refetch()}
+            />
           ) : tournaments.length === 0 ? (
             <RailEmpty
               icon={<Trophy className="w-4 h-4" />}
@@ -858,6 +1382,30 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
             />
           ) : (
             tournaments.map((tn) => <TournamentCard key={tn.id} t={tn} lang={lang} />)
+          )}
+        </Rail>
+
+        <Rail
+          title={t("home.topPlayers") || "أبطال الأسبوع"}
+          kicker={t("home.topPlayersKicker") || "أعلى الأرباح خلال الأسبوع"}
+          icon={<Medal className="w-4 h-4" />}
+          href="/leaderboard"
+          accent="gold"
+        >
+          {topPlayersQ.isLoading ? (
+            <RailSkeleton width={220} />
+          ) : topPlayersQ.isError ? (
+            <RailError
+              label={t("home.topPlayersError") || "تعذّر تحميل قائمة الأبطال"}
+              onRetry={() => topPlayersQ.refetch()}
+            />
+          ) : topPlayers.length === 0 ? (
+            <RailEmpty
+              icon={<Medal className="w-4 h-4" />}
+              label={t("home.noTopPlayers") || "لا توجد بيانات لاعبين بعد"}
+            />
+          ) : (
+            topPlayers.map((p) => <TopPlayerCard key={p.id} p={p} />)
           )}
         </Rail>
 
@@ -870,6 +1418,11 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
         >
           {gamesQ.isLoading ? (
             <RailSkeleton width={200} />
+          ) : gamesQ.isError ? (
+            <RailError
+              label={t("home.teamGamesError") || "تعذّر تحميل ألعاب الفِرَق"}
+              onRetry={() => gamesQ.refetch()}
+            />
           ) : teamGames.length === 0 ? (
             <RailEmpty
               icon={<Users className="w-4 h-4" />}
@@ -889,6 +1442,11 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
         >
           {gamesQ.isLoading ? (
             <RailSkeleton width={200} />
+          ) : gamesQ.isError ? (
+            <RailError
+              label={t("home.soloGamesError") || "تعذّر تحميل ألعاب الفرد"}
+              onRetry={() => gamesQ.refetch()}
+            />
           ) : soloGames.length === 0 ? (
             <RailEmpty
               icon={<Gamepad2 className="w-4 h-4" />}
@@ -896,6 +1454,30 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
             />
           ) : (
             soloGames.map((g) => <GameTileCard key={g.id} g={g} lang={lang} />)
+          )}
+        </Rail>
+
+        <Rail
+          title={t("home.mostPlayed") || "الأكثر لعباً"}
+          kicker={t("home.mostPlayedKicker") || "الألعاب الأعلى نشاطاً على المنصة"}
+          icon={<Flame className="w-4 h-4" />}
+          href="/games"
+          accent="red"
+        >
+          {mostPlayedQ.isLoading ? (
+            <RailSkeleton width={200} />
+          ) : mostPlayedQ.isError ? (
+            <RailError
+              label={t("home.mostPlayedError") || "تعذّر تحميل الألعاب الأكثر لعباً"}
+              onRetry={() => mostPlayedQ.refetch()}
+            />
+          ) : mostPlayed.length === 0 ? (
+            <RailEmpty
+              icon={<Flame className="w-4 h-4" />}
+              label={t("home.noMostPlayed") || "لا توجد إحصائيات ألعاب بعد"}
+            />
+          ) : (
+            mostPlayed.map((g) => <MostPlayedCard key={g.id} g={g} />)
           )}
         </Rail>
 
@@ -908,6 +1490,11 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
         >
           {challengesQ.isLoading ? (
             <RailSkeleton width={260} />
+          ) : challengesQ.isError ? (
+            <RailError
+              label={t("home.challengesError") || "تعذّر تحميل التحديات المباشرة"}
+              onRetry={() => challengesQ.refetch()}
+            />
           ) : challenges.length === 0 ? (
             <RailEmpty
               icon={<Target className="w-4 h-4" />}
@@ -917,6 +1504,14 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
             challenges.map((c) => <ChallengeCard key={c.id} c={c} gamesMap={gamesMap} />)
           )}
         </Rail>
+
+        <HighlightsSection
+          topPlayer={topPlayer}
+          reward={dailyReward}
+          announcement={topAnnouncement}
+          lang={lang}
+          isLoadingPlayer={topPlayersQ.isLoading}
+        />
       </div>
     </div>
   );
