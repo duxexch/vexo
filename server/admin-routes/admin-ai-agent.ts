@@ -1,4 +1,7 @@
 import type { Express, Response } from "express";
+import { desc, eq } from "drizzle-orm";
+import { db } from "../db";
+import { sam9MatchRecords, sam9PlayerProfiles, users } from "@shared/schema";
 import { generateAdaptiveAiReport } from "../lib/adaptive-ai";
 import {
     chatWithAiAgentAdmin,
@@ -327,6 +330,83 @@ export function registerAdminAiAgentRoutes(app: Express) {
                     totalTrackedMoves: localReport.summary.totalTrackedMoves,
                     gamesCoverage: localReport.summary.gamesCoverage,
                 },
+            });
+        } catch (error: unknown) {
+            res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    /**
+     * Sam9 v2: Player Engagement panel data.
+     * Returns the most-recently-refreshed player profiles + their last
+     * 5 match records (so the admin can see what plan Sam9 chose, and
+     * what the outcome was). Read-only.
+     */
+    app.get("/api/admin/ai-agent/engagement", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+        try {
+            const profiles = await db
+                .select({
+                    userId: sam9PlayerProfiles.userId,
+                    skillTier: sam9PlayerProfiles.skillTier,
+                    masteryScore: sam9PlayerProfiles.masteryScore,
+                    vsSam9Played: sam9PlayerProfiles.vsSam9Played,
+                    vsSam9Won: sam9PlayerProfiles.vsSam9Won,
+                    vsSam9Lost: sam9PlayerProfiles.vsSam9Lost,
+                    vsSam9Draw: sam9PlayerProfiles.vsSam9Draw,
+                    recentForm: sam9PlayerProfiles.recentForm,
+                    engagementScore: sam9PlayerProfiles.engagementScore,
+                    lastEngagementPlan: sam9PlayerProfiles.lastEngagementPlan,
+                    isNewbie: sam9PlayerProfiles.isNewbie,
+                    vipLevel: sam9PlayerProfiles.vipLevel,
+                    refreshedAt: sam9PlayerProfiles.refreshedAt,
+                    username: users.username,
+                })
+                .from(sam9PlayerProfiles)
+                .leftJoin(users, eq(users.id, sam9PlayerProfiles.userId))
+                .orderBy(desc(sam9PlayerProfiles.refreshedAt))
+                .limit(25);
+
+            const recentMatches = await db
+                .select({
+                    id: sam9MatchRecords.id,
+                    sessionId: sam9MatchRecords.sessionId,
+                    humanUserId: sam9MatchRecords.humanUserId,
+                    gameType: sam9MatchRecords.gameType,
+                    baseDifficulty: sam9MatchRecords.baseDifficulty,
+                    effectiveDifficulty: sam9MatchRecords.effectiveDifficulty,
+                    outcome: sam9MatchRecords.outcome,
+                    avgConfidence: sam9MatchRecords.avgConfidence,
+                    totalMoves: sam9MatchRecords.totalMoves,
+                    startedAt: sam9MatchRecords.startedAt,
+                    endedAt: sam9MatchRecords.endedAt,
+                    username: users.username,
+                })
+                .from(sam9MatchRecords)
+                .leftJoin(users, eq(users.id, sam9MatchRecords.humanUserId))
+                .orderBy(desc(sam9MatchRecords.startedAt))
+                .limit(40);
+
+            const aggregate = profiles.reduce(
+                (acc, p) => {
+                    acc.totalProfiles += 1;
+                    acc.totalMatches += p.vsSam9Played || 0;
+                    acc.totalPlayerWins += p.vsSam9Won || 0;
+                    acc.totalPlayerLosses += p.vsSam9Lost || 0;
+                    acc.totalDraws += p.vsSam9Draw || 0;
+                    return acc;
+                },
+                { totalProfiles: 0, totalMatches: 0, totalPlayerWins: 0, totalPlayerLosses: 0, totalDraws: 0 },
+            );
+
+            const playerWinRate = aggregate.totalMatches > 0
+                ? aggregate.totalPlayerWins / aggregate.totalMatches
+                : null;
+
+            res.json({
+                generatedAt: new Date().toISOString(),
+                aggregate: { ...aggregate, playerWinRate },
+                profiles,
+                recentMatches,
             });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });

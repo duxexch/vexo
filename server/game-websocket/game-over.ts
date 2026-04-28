@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { settleSpectatorSupports } from '../lib/support-settler';
 import { broadcastNotification } from '../websocket';
 import { logger } from '../lib/logger';
+import { finalizeMatchRecordIfOpen } from '../lib/sam9-match-records';
 import type { GameRoom } from './types';
 import type { GameStatus } from '../game-engines/types';
 import { broadcastToRoom } from './utils';
@@ -245,6 +246,17 @@ export async function handleGameOver(room: GameRoom, status: GameStatus) {
       }
     } else if (isPaidGame && !statsUpdatedInPayout) {
       console.error(`[WS] Stats not updated for paid game ${room.sessionId} due to payout failure`);
+    }
+
+    // Sam9 v2: close the per-match record (if one is open) and emit the
+    // engagement-on-finish banter line. Done BEFORE the `game_over`
+    // broadcast so the closing chat line lands in the room while the
+    // result panel is animating in. Idempotent — no-op for non-Sam9
+    // sessions or already-finalised matches.
+    try {
+      await finalizeMatchRecordIfOpen(room, status);
+    } catch (sam9Error) {
+      logger.warn(`[WS] Sam9 finalize error for ${room.sessionId}: ${(sam9Error as Error).message}`);
     }
 
     // Post-payout: broadcast and notifications (these don't need atomicity)

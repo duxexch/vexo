@@ -7,7 +7,9 @@ import { users } from '@shared/schema';
 import type { GameEngine, GameStatus, MoveData } from '../game-engines/types';
 import { logger } from './logger';
 import { aiMonitor } from './ai-monitor';
-import { chooseMoveFromAiAgent, sendAiAgentLearningEvent } from './ai-agent-client';
+import { chooseMoveFromAiAgent, sendAiAgentLearningEvent, type AiAgentOpponentSnapshot } from './ai-agent-client';
+import { getPlayerProfile, recordLastEngagementPlan, type Sam9PlayerProfile } from './sam9-player-profile';
+import { computeEngagementPlan, type Sam9EngagementPlan } from './sam9-engagement';
 
 export type AdaptiveDifficultyLevel = 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -678,9 +680,42 @@ export async function chooseAdaptiveAIMove(params: {
         return null;
     }
 
+    // ── Sam9 v2: per-opponent engagement plan ─────────────────────────
+    // Pick the primary human opponent (first id in the session config).
+    // For team games we still optimise for the first human; the engine
+    // is biased toward keeping that player engaged, which empirically
+    // benefits team-mates too.
+    const primaryHumanId = (humanPlayerIds && humanPlayerIds[0]) || null;
+    let primaryProfile: Sam9PlayerProfile | null = null;
+    if (primaryHumanId) {
+        try {
+            primaryProfile = await getPlayerProfile(primaryHumanId);
+        } catch (error) {
+            aiMonitor.recordError('profile_error', {
+                message: `getPlayerProfile failed: ${toErrorMessage(error)}`,
+                gameType,
+                severity: 'warning',
+            });
+        }
+    }
+    const engagementPlan: Sam9EngagementPlan = computeEngagementPlan(primaryProfile, difficultyLevel);
+    // The plan can shift difficulty (e.g. expert player gets bumped from
+    // medium to hard, struggling player gets dropped from hard to medium).
+    const effectiveDifficulty = engagementPlan.effectiveDifficulty;
+    if (primaryHumanId && primaryProfile) {
+        // Persist the chosen plan in the background — admin reads from it.
+        void recordLastEngagementPlan(primaryHumanId, {
+            ...engagementPlan,
+            sessionId: sessionId || null,
+            gameType,
+            baseDifficulty: difficultyLevel,
+            decidedAt: nowIso(),
+        });
+    }
+
     const model = await loadModel();
-    const key = bucketKey(gameType, difficultyLevel);
-    const bucket = model.buckets[key] || defaultModelBucket(gameType, difficultyLevel);
+    const key = bucketKey(gameType, effectiveDifficulty);
+    const bucket = model.buckets[key] || defaultModelBucket(gameType, effectiveDifficulty);
 
     // Load human player profile to counter their patterns (counter-strategy)
     let humanMoveWeights: Record<string, number> = {};
@@ -709,12 +744,25 @@ export async function chooseAdaptiveAIMove(params: {
     const humanAggressionWeight = (humanMoveWeights['move'] || 0) + (humanMoveWeights['play'] || 0) + (humanMoveWeights['playCard'] || 0);
     const humanAggressionRate = totalHumanMoves > 0 ? humanAggressionWeight / totalHumanMoves : 0;
 
+    const opponentSnapshot: AiAgentOpponentSnapshot | undefined = primaryProfile
+        ? {
+            skillTier: primaryProfile.skillTier,
+            masteryScore: primaryProfile.masteryScore,
+            isNewbie: primaryProfile.isNewbie,
+            vsSam9RecentWinRate: primaryProfile.vsSam9.recentWinRate,
+            engagementScore: primaryProfile.engagementScore,
+            mistakeBias: engagementPlan.mistakeBias,
+            thinkTimeMultiplier: engagementPlan.thinkTimeMultiplier,
+        }
+        : undefined;
+
     const externalDecision = await chooseMoveFromAiAgent({
         sessionId: sessionId || `fallback-${gameType}-${Date.now()}`,
         gameType,
-        difficultyLevel,
+        difficultyLevel: effectiveDifficulty,
         validMoves,
         humanAggressionRate,
+        opponentSnapshot,
     });
 
     if (externalDecision) {
@@ -725,9 +773,10 @@ export async function chooseAdaptiveAIMove(params: {
             // honour the agent-supplied thinkMs, with a 120ms floor so
             // trivial decisions stay responsive and a 6s ceiling.
             const externalThinkMs = Math.floor(toNumber(externalDecision.thinkMs, 700));
+            const profileAdjusted = Math.floor(externalThinkMs * clamp(engagementPlan.thinkTimeMultiplier, 0.7, 1.5));
             const thinkMs = validMoves.length <= 1
-                ? clamp(Math.min(externalThinkMs, 220), 120, 320)
-                : clamp(externalThinkMs, 120, 6000);
+                ? clamp(Math.min(profileAdjusted, 220), 120, 320)
+                : clamp(profileAdjusted, 120, 6000);
             return {
                 move: externalDecision.move,
                 thinkMs,
@@ -770,7 +819,7 @@ export async function chooseAdaptiveAIMove(params: {
 
     scoredMoves.sort((a, b) => b.score - a.score);
 
-    const topWindow = Math.max(1, Math.ceil(scoredMoves.length * topWindowByDifficulty(difficultyLevel)));
+    const topWindow = Math.max(1, Math.ceil(scoredMoves.length * topWindowByDifficulty(effectiveDifficulty)));
     const explorationBias = clamp(bucket.explorationBias, 0.05, 0.75);
 
     let pickIndex = 0;
@@ -780,13 +829,29 @@ export async function chooseAdaptiveAIMove(params: {
         pickIndex = randomBetween(0, topWindow - 1);
     }
 
-    const mistakeRate = mistakeRateByDifficulty(difficultyLevel);
+    // Apply the per-opponent mistake bias so engagement-saving plans
+    // (player on a 4-loss streak) make Sam9 misplay more often, and
+    // tightening plans (player dominating) make it misplay less.
+    const mistakeRate = clamp(
+        mistakeRateByDifficulty(effectiveDifficulty) * clamp(engagementPlan.mistakeBias, 0.4, 2.2),
+        0.01,
+        0.6,
+    );
     if (Math.random() < mistakeRate && scoredMoves.length > 2) {
         pickIndex = clamp(pickIndex + randomBetween(1, Math.floor(scoredMoves.length / 2)), 0, scoredMoves.length - 1);
     }
 
+    // "Allow deliberate loss" — when the player is on a long losing
+    // streak the engagement plan permits Sam9 to step one more rung down
+    // the ranked moves so the player can find a winning line. We only
+    // do this in well-populated move sets so it never throws a 1- or
+    // 2-move forced position.
+    if (engagementPlan.allowDeliberateLoss && scoredMoves.length > 4 && Math.random() < 0.35) {
+        pickIndex = clamp(pickIndex + randomBetween(1, 2), 0, scoredMoves.length - 1);
+    }
+
     const selected = scoredMoves[pickIndex] || scoredMoves[0];
-    const range = thinkRangeByDifficulty(difficultyLevel);
+    const range = thinkRangeByDifficulty(effectiveDifficulty);
     // When there's only one legal move, the bot has nothing to "decide" —
     // collapse the artificial delay to a small, snappy value so the player
     // isn't waiting on a forced play. For richer positions we keep the
@@ -795,9 +860,10 @@ export async function chooseAdaptiveAIMove(params: {
     // tarneeb, language duel) — the snappy floor lives here so the
     // server-side think behavior stays consistent with the client-side
     // Game Speed picker.
+    const profileThinkMult = clamp(engagementPlan.thinkTimeMultiplier, 0.7, 1.5);
     if (validMoves.length <= 1) {
         const trivialThink = clamp(
-            Math.floor(range.min * 0.35 * clamp(bucket.humanDelayFactor, 0.75, 1.45)),
+            Math.floor(range.min * 0.35 * clamp(bucket.humanDelayFactor, 0.75, 1.45) * profileThinkMult),
             120,
             320,
         );
@@ -810,7 +876,7 @@ export async function chooseAdaptiveAIMove(params: {
     }
     const complexity = clamp(validMoves.length / 12, 0.6, 1.8);
     const rawThink = randomBetween(range.min, range.max);
-    const thinkMs = Math.floor(rawThink * complexity * clamp(bucket.humanDelayFactor, 0.75, 1.45));
+    const thinkMs = Math.floor(rawThink * complexity * clamp(bucket.humanDelayFactor, 0.75, 1.45) * profileThinkMult);
 
     return {
         move: selected.move,

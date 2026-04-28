@@ -106,6 +106,52 @@ interface AiAgentDataQueryPayload {
   } | null;
 }
 
+interface Sam9EngagementProfile {
+  userId: string;
+  username?: string | null;
+  skillTier: string;
+  masteryScore: string | number;
+  vsSam9Played: number;
+  vsSam9Won: number;
+  vsSam9Lost: number;
+  vsSam9Draw: number;
+  recentForm: string[];
+  engagementScore: string | number;
+  lastEngagementPlan: Record<string, unknown> | null;
+  isNewbie: boolean;
+  vipLevel: number;
+  refreshedAt: string;
+}
+
+interface Sam9MatchRow {
+  id: string;
+  sessionId: string;
+  humanUserId: string;
+  username?: string | null;
+  gameType: string;
+  baseDifficulty: string;
+  effectiveDifficulty: string;
+  outcome: string | null;
+  avgConfidence: string | number | null;
+  totalMoves: number;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+interface Sam9EngagementPayload {
+  generatedAt?: string;
+  aggregate?: {
+    totalProfiles?: number;
+    totalMatches?: number;
+    totalPlayerWins?: number;
+    totalPlayerLosses?: number;
+    totalDraws?: number;
+    playerWinRate?: number | null;
+  };
+  profiles?: Sam9EngagementProfile[];
+  recentMatches?: Sam9MatchRow[];
+}
+
 interface AiAgentConversationMessage {
   id: string;
   role: "admin" | "agent";
@@ -297,6 +343,16 @@ export default function AdminSam9Page() {
     queryKey: ["admin-ai-agent-runtime"],
     queryFn: () => adminFetch("/api/admin/ai-agent/runtime"),
     refetchInterval: 10000,
+  });
+
+  const {
+    data: sam9Engagement,
+    refetch: refetchSam9Engagement,
+    isFetching: sam9EngagementLoading,
+  } = useQuery<Sam9EngagementPayload>({
+    queryKey: ["admin-sam9-engagement"],
+    queryFn: () => adminFetch("/api/admin/ai-agent/engagement"),
+    refetchInterval: 30000,
   });
 
   const aiAgentChatMutation = useMutation({
@@ -1092,6 +1148,164 @@ export default function AdminSam9Page() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className={DATA_CARD_CLASS}>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              Sam9 — Player Engagement
+            </CardTitle>
+            <CardDescription>
+              ملفات اللاعبين الذين لعبوا ضد Sam9 مؤخراً، ومعدل فوز اللاعب، والخطة الأخيرة التي اختارها Sam9 لكل واحد منهم.
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => refetchSam9Engagement()}
+            disabled={sam9EngagementLoading}
+          >
+            {sam9EngagementLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            تحديث
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+              <p className="text-muted-foreground">عدد اللاعبين المتتبَّعين</p>
+              <p className="text-lg font-semibold">{sam9Engagement?.aggregate?.totalProfiles ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+              <p className="text-muted-foreground">إجمالي مباريات Sam9</p>
+              <p className="text-lg font-semibold">{sam9Engagement?.aggregate?.totalMatches ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+              <p className="text-muted-foreground">معدل فوز اللاعب</p>
+              <p className="text-lg font-semibold">
+                {typeof sam9Engagement?.aggregate?.playerWinRate === "number"
+                  ? `${(sam9Engagement.aggregate.playerWinRate * 100).toFixed(1)}%`
+                  : "—"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+              <p className="text-muted-foreground">انتصار/خسارة/تعادل</p>
+              <p className="text-sm font-semibold">
+                {(sam9Engagement?.aggregate?.totalPlayerWins ?? 0)} / {(sam9Engagement?.aggregate?.totalPlayerLosses ?? 0)} / {(sam9Engagement?.aggregate?.totalDraws ?? 0)}
+              </p>
+            </div>
+          </div>
+
+          <ScrollArea className="h-[280px] rounded-2xl border border-slate-200/80 bg-slate-50/40 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+            <div className="space-y-2">
+              {(sam9Engagement?.profiles ?? []).length === 0 && (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">لا يوجد لاعبون مسجلون بعد.</p>
+              )}
+              {(sam9Engagement?.profiles ?? []).map((profile) => {
+                const winRate = profile.vsSam9Played > 0
+                  ? profile.vsSam9Won / profile.vsSam9Played
+                  : null;
+                const plan = profile.lastEngagementPlan || {};
+                const mood = String((plan as Record<string, unknown>).banterMood || "—");
+                const effective = String((plan as Record<string, unknown>).effectiveDifficulty || "—");
+                const mistakeBias = (plan as Record<string, unknown>).mistakeBias;
+                const mistakeBiasNum = typeof mistakeBias === "number" ? mistakeBias : Number(mistakeBias);
+                return (
+                  <div
+                    key={profile.userId}
+                    className="rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-xs shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">
+                          {profile.username || profile.userId.slice(0, 8)}
+                        </span>
+                        <Badge variant="secondary" className="text-[10px]">{profile.skillTier}</Badge>
+                        {profile.isNewbie && <Badge className="text-[10px] bg-emerald-500">جديد</Badge>}
+                        {profile.vipLevel > 0 && (
+                          <Badge variant="outline" className="text-[10px]">VIP {profile.vipLevel}</Badge>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {profile.refreshedAt ? new Date(profile.refreshedAt).toLocaleString("ar-EG") : "—"}
+                      </div>
+                    </div>
+                    <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] sm:grid-cols-4">
+                      <span>
+                        فوز اللاعب:{" "}
+                        <strong>{winRate !== null ? `${(winRate * 100).toFixed(0)}%` : "—"}</strong>{" "}
+                        ({profile.vsSam9Won}/{profile.vsSam9Played})
+                      </span>
+                      <span>إتقان: <strong>{Number(profile.masteryScore).toFixed(2)}</strong></span>
+                      <span>تفاعل: <strong>{Number(profile.engagementScore).toFixed(0)}</strong></span>
+                      <span>صعوبة فعلية: <strong>{effective}</strong></span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      مزاج المحادثة: <strong>{mood}</strong>
+                      {Number.isFinite(mistakeBiasNum) && (
+                        <span className="ms-2">انحياز الخطأ: <strong>{mistakeBiasNum.toFixed(2)}×</strong></span>
+                      )}
+                      {Array.isArray(profile.recentForm) && profile.recentForm.length > 0 && (
+                        <span className="ms-2">الشكل الأخير: <strong>{profile.recentForm.slice(0, 8).join(" ")}</strong></span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+
+          <Separator />
+
+          <div>
+            <p className="mb-2 text-sm font-medium">آخر المباريات ضد Sam9</p>
+            <ScrollArea className="h-[220px] rounded-2xl border border-slate-200/80 bg-slate-50/40 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+              <div className="space-y-1.5">
+                {(sam9Engagement?.recentMatches ?? []).length === 0 && (
+                  <p className="px-2 py-6 text-center text-sm text-muted-foreground">لا توجد مباريات مسجلة بعد.</p>
+                )}
+                {(sam9Engagement?.recentMatches ?? []).map((match) => {
+                  const conf = match.avgConfidence !== null && match.avgConfidence !== undefined
+                    ? Number(match.avgConfidence)
+                    : null;
+                  const outcomeBadge = match.outcome === "win"
+                    ? "bg-emerald-500"
+                    : match.outcome === "loss"
+                      ? "bg-rose-500"
+                      : match.outcome === "draw"
+                        ? "bg-amber-500"
+                        : "bg-slate-400";
+                  return (
+                    <div
+                      key={match.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge className={cn("text-[10px]", outcomeBadge)}>{match.outcome || "—"}</Badge>
+                        <span className="font-medium text-xs">{match.username || match.humanUserId.slice(0, 8)}</span>
+                        <Badge variant="outline" className="text-[10px]">{match.gameType}</Badge>
+                        <span className="text-muted-foreground">
+                          صعوبة: {match.baseDifficulty} → {match.effectiveDifficulty}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground">
+                        حركات: {match.totalMoves}
+                        {conf !== null && Number.isFinite(conf) && (
+                          <span className="ms-2">ثقة: {(conf * 100).toFixed(0)}%</span>
+                        )}
+                        <span className="ms-2">
+                          {new Date(match.startedAt).toLocaleString("ar-EG")}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

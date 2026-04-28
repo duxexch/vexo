@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { storage } from '../storage';
-import { gameMoves, liveGameSessions } from '@shared/schema';
+import { gameMoves, liveGameSessions, users } from '@shared/schema';
 import { getGameEngine } from '../game-engines';
-import type { MoveData } from '../game-engines/types';
+import type { MoveData, GameStatus } from '../game-engines/types';
 import { logger } from '../lib/logger';
 import { aiMonitor } from '../lib/ai-monitor';
 import {
@@ -14,6 +14,16 @@ import {
     recordAdaptiveGameResult,
     resolveCurrentPlayerFromState,
 } from '../lib/adaptive-ai';
+import { getPlayerProfile } from '../lib/sam9-player-profile';
+import { computeEngagementPlan } from '../lib/sam9-engagement';
+import {
+    ensureMatchRecordOpen,
+    recordBotMoveStat,
+} from '../lib/sam9-match-records';
+import {
+    dispatchMidGameBanter,
+    dispatchOpeningBanter,
+} from '../lib/sam9-banter-dispatcher';
 import type { GameRoom } from './types';
 import { getEffectiveAiSpeedMultiplier } from './speed-mode';
 import { send } from './utils';
@@ -93,6 +103,21 @@ async function broadcastAiUpdate(room: GameRoom, newState: string, events: unkno
     }
 }
 
+const botUsernameCache = new Map<string, string>();
+
+async function resolveBotUsername(botUserId: string): Promise<string> {
+    const cached = botUsernameCache.get(botUserId);
+    if (cached) return cached;
+    try {
+        const [row] = await db.select({ username: users.username }).from(users).where(eq(users.id, botUserId)).limit(1);
+        const name = row?.username || "Sam9";
+        botUsernameCache.set(botUserId, name);
+        return name;
+    } catch {
+        return "Sam9";
+    }
+}
+
 export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom): Promise<void> {
     if (aiProcessingLocks.has(sessionId)) {
         return;
@@ -109,6 +134,58 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
         const engine = getGameEngine(room.gameType);
         if (!engine) {
             return;
+        }
+
+        // ── Sam9 v2: per-session opponent context ─────────────────────────
+        // Pick the primary human opponent + bot identity. We compute the
+        // engagement plan once per match (not per move) so the banter mood
+        // is stable across the session even if profile data updates mid-game.
+        const primaryHumanId = aiConfig.humanPlayerIds[0] || null;
+        const primaryBotId = aiConfig.botPlayerIds[0];
+        const enableBanter = Boolean(primaryHumanId && primaryBotId);
+        let openedMatchRecord = false;
+        let cachedMood: ReturnType<typeof computeEngagementPlan>["banterMood"] = "professional";
+        let cachedBotUsername = "Sam9";
+
+        if (enableBanter && primaryHumanId) {
+            try {
+                cachedBotUsername = await resolveBotUsername(primaryBotId);
+                const profile = await getPlayerProfile(primaryHumanId);
+                const plan = computeEngagementPlan(profile, aiConfig.difficultyLevel);
+                cachedMood = plan.banterMood;
+
+                // Open the match record now and emit the opening line.
+                const openResult = await ensureMatchRecordOpen({
+                    sessionId,
+                    humanUserId: primaryHumanId,
+                    botUserId: primaryBotId,
+                    botUserIds: aiConfig.botPlayerIds,
+                    botUsername: cachedBotUsername,
+                    gameType: room.gameType,
+                    profile,
+                    plan,
+                    baseDifficulty: aiConfig.difficultyLevel,
+                });
+                openedMatchRecord = !!openResult;
+
+                // Opening banter — emit ONCE per session. `wasCreated` is
+                // false on subsequent invocations of `processAdaptiveAiTurns`
+                // (which fires every AI turn), so the opening line never
+                // repeats mid-match.
+                if (openResult?.wasCreated) {
+                    void dispatchOpeningBanter({
+                        room,
+                        sessionId,
+                        botUserId: primaryBotId,
+                        botUsername: cachedBotUsername,
+                        humanUserId: primaryHumanId,
+                        trigger: "opening",
+                        mood: cachedMood,
+                    });
+                }
+            } catch (error) {
+                logger.warn?.(`[ai-turns] Sam9 v2 setup skipped: ${(error as Error).message}`);
+            }
         }
 
         let loopCount = 0;
@@ -258,6 +335,24 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
 
             await broadcastAiUpdate(room, turnResult.newState, turnResult.events, turnResult.turnNumber);
 
+            // Sam9 v2: track per-match move stats and (rate-limited) banter.
+            if (enableBanter && primaryHumanId && openedMatchRecord) {
+                recordBotMoveStat(sessionId, turnResult.confidence);
+                // High-confidence moves → "good_own_move", low → "good_player_move"
+                // (a humble nod toward the human's pressure). The cadence gate
+                // inside the dispatcher ensures we only emit ~1 line / 5 moves.
+                const trigger = turnResult.confidence >= 0.6 ? "good_own_move" : "good_player_move";
+                void dispatchMidGameBanter({
+                    room,
+                    sessionId,
+                    botUserId: primaryBotId,
+                    botUsername: cachedBotUsername,
+                    humanUserId: primaryHumanId,
+                    trigger,
+                    mood: cachedMood,
+                });
+            }
+
             const gameStatus = engine.getGameStatus(turnResult.newState);
             if (gameStatus.isOver) {
                 clearTurnTimer(sessionId);
@@ -267,6 +362,10 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
                     status: gameStatus,
                     stateJson: turnResult.newState,
                 });
+                // Sam9 v2: per-match record close + engagement-on-finish
+                // banter is centralised inside `handleGameOver` so every
+                // game-over path (AI loop, timeout, resignation, disconnect)
+                // closes cleanly without duplication.
                 await handleGameOver(room, gameStatus);
                 return;
             }

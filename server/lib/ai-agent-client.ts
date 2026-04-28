@@ -305,26 +305,54 @@ export interface AiAgentMoveDecision {
     confidence: number;
 }
 
+/**
+ * Compact opponent snapshot the bot uses to bias its move choice.
+ * Anonymised by the caller — never carries a raw user id over the wire.
+ */
+export interface AiAgentOpponentSnapshot {
+    skillTier: string;
+    masteryScore: number;
+    isNewbie: boolean;
+    vsSam9RecentWinRate: number;
+    engagementScore: number;
+    /** Multiplier (0.4..2.2) on the agent's mistake rate for engagement balancing. */
+    mistakeBias: number;
+    /** Multiplier (0.7..1.5) on the agent's think delay for human-feel pacing. */
+    thinkTimeMultiplier: number;
+}
+
 export async function chooseMoveFromAiAgent(params: {
     sessionId: string;
     gameType: string;
     difficultyLevel: string;
     validMoves: MoveData[];
     humanAggressionRate?: number;
+    /**
+     * Optional opponent snapshot — when present, ai-service can apply a
+     * profile-aware policy. When absent, behaviour is identical to the
+     * pre-Sam9-v2 callers (full back-compat).
+     */
+    opponentSnapshot?: AiAgentOpponentSnapshot;
 }): Promise<AiAgentMoveDecision | null> {
     const anonymizedSessionId = anonymizeIdentifier(params.sessionId);
+
+    const requestBody: Record<string, unknown> = {
+        sessionId: anonymizedSessionId,
+        gameType: params.gameType,
+        difficultyLevel: params.difficultyLevel,
+        validMoves: params.validMoves,
+        humanAggressionRate: clamp(toNumber(params.humanAggressionRate, 0), 0, 1),
+    };
+    if (params.opponentSnapshot) {
+        // Send the snapshot — ai-service may ignore unknown fields safely.
+        requestBody.opponentSnapshot = params.opponentSnapshot;
+    }
 
     const response = await requestAiAgentJson<{ decision?: { move?: MoveData; thinkMs?: number; confidence?: number } }>(
         '/v1/bot/choose-move',
         {
             method: 'POST',
-            body: JSON.stringify({
-                sessionId: anonymizedSessionId,
-                gameType: params.gameType,
-                difficultyLevel: params.difficultyLevel,
-                validMoves: params.validMoves,
-                humanAggressionRate: clamp(toNumber(params.humanAggressionRate, 0), 0, 1),
-            }),
+            body: JSON.stringify(requestBody),
         },
     );
 

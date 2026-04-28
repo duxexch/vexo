@@ -2699,6 +2699,110 @@ export const gameMatchesRelations = relations(gameMatches, ({ one }) => ({
   winner: one(users, { fields: [gameMatches.winnerId], references: [users.id] }),
 }));
 
+// ==================== SAM9 LEARNING TABLES ====================
+// Persistent storage for the Sam9 AI agent: per-player skill profiles,
+// per-match outcome records, and in-game banter dedup log. Lets Sam9
+// remember every customer it has played with and learn over time.
+
+export const sam9PlayerProfiles = pgTable("sam9_player_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  // Computed skill tier (newbie | casual | regular | strong | expert).
+  skillTier: text("skill_tier").notNull().default("casual"),
+  // 0..1 estimated mastery aggregated across games this player touches.
+  masteryScore: decimal("mastery_score", { precision: 4, scale: 3 }).notNull().default("0.500"),
+  // Per-game mastery breakdown stored as JSON: { domino: 0.4, chess: 0.7, ... }
+  gameMastery: jsonb("game_mastery").notNull().default(sql`'{}'::jsonb`),
+  // Aggregated win-rate vs Sam9 specifically (across all games).
+  vsSam9Played: integer("vs_sam9_played").notNull().default(0),
+  vsSam9Won: integer("vs_sam9_won").notNull().default(0),
+  vsSam9Lost: integer("vs_sam9_lost").notNull().default(0),
+  vsSam9Draw: integer("vs_sam9_draw").notNull().default(0),
+  // Last 10 outcomes vs Sam9 — drives engagement balancing decisions.
+  recentForm: text("recent_form").array().notNull().default(sql`'{}'::text[]`),
+  // Computed engagement score 0..100 — high means player keeps coming back.
+  engagementScore: decimal("engagement_score", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  // Latest engagement plan Sam9 chose (e.g. for the admin readout).
+  lastEngagementPlan: jsonb("last_engagement_plan").notNull().default(sql`'{}'::jsonb`),
+  // Account-derived facts at last refresh (cheap snapshot to avoid join on hot path).
+  vipLevel: integer("vip_level").notNull().default(0),
+  accountAgeDays: integer("account_age_days").notNull().default(0),
+  isNewbie: boolean("is_newbie").notNull().default(true),
+  // Cached preferred game type (Sam9 picks banter flavor from this).
+  preferredGameType: text("preferred_game_type"),
+  // When the snapshot was last refreshed from `users` + `sam9_match_records`.
+  refreshedAt: timestamp("refreshed_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_sam9_profiles_user_id").on(table.userId),
+  index("idx_sam9_profiles_skill_tier").on(table.skillTier),
+  index("idx_sam9_profiles_engagement").on(table.engagementScore),
+  index("idx_sam9_profiles_refreshed_at").on(table.refreshedAt),
+]);
+
+export const sam9MatchRecords = pgTable("sam9_match_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // The live game session id (varchar) — kept as plain text since session
+  // lifetimes are managed elsewhere and we don't want CASCADE coupling.
+  sessionId: varchar("session_id").notNull(),
+  humanUserId: varchar("human_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  botUserId: varchar("bot_user_id").notNull().references(() => users.id),
+  gameType: text("game_type").notNull(),
+  // Snapshot of player profile at match start (JSON), so we can replay
+  // Sam9's reasoning later if a customer complains.
+  profileSnapshot: jsonb("profile_snapshot").notNull().default(sql`'{}'::jsonb`),
+  baseDifficulty: text("base_difficulty").notNull(),
+  effectiveDifficulty: text("effective_difficulty").notNull(),
+  // Engagement plan applied to this match (mistake bias, think-time mult, banter mood).
+  engagementPlan: jsonb("engagement_plan").notNull().default(sql`'{}'::jsonb`),
+  // 'win' | 'loss' | 'draw' | 'abandon' (from the human player's perspective).
+  outcome: text("outcome"),
+  // Sam9's average decision confidence across the match (0..1).
+  avgConfidence: decimal("avg_confidence", { precision: 4, scale: 3 }),
+  totalMoves: integer("total_moves").notNull().default(0),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  endedAt: timestamp("ended_at"),
+}, (table) => [
+  index("idx_sam9_matches_human_user_id").on(table.humanUserId),
+  index("idx_sam9_matches_bot_user_id").on(table.botUserId),
+  index("idx_sam9_matches_session_id").on(table.sessionId),
+  index("idx_sam9_matches_game_type").on(table.gameType),
+  index("idx_sam9_matches_started_at").on(table.startedAt),
+]);
+
+export const sam9BanterLog = pgTable("sam9_banter_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  humanUserId: varchar("human_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // The phrase key Sam9 used (avoids picking the same phrase twice in the
+  // same session and same player streak).
+  phraseKey: text("phrase_key").notNull(),
+  // The trigger context: 'opening' | 'good_player_move' | 'good_own_move'
+  // | 'losing' | 'winning' | 'on_player_win' | 'on_player_loss' | 'draw'.
+  triggerContext: text("trigger_context").notNull(),
+  // The actual rendered Arabic text emitted (for audit / dedup display).
+  renderedText: text("rendered_text").notNull(),
+  emittedAt: timestamp("emitted_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_sam9_banter_session_id").on(table.sessionId),
+  index("idx_sam9_banter_user_id").on(table.humanUserId),
+  index("idx_sam9_banter_emitted_at").on(table.emittedAt),
+]);
+
+export const sam9PlayerProfilesRelations = relations(sam9PlayerProfiles, ({ one }) => ({
+  user: one(users, { fields: [sam9PlayerProfiles.userId], references: [users.id] }),
+}));
+
+export const sam9MatchRecordsRelations = relations(sam9MatchRecords, ({ one }) => ({
+  human: one(users, { fields: [sam9MatchRecords.humanUserId], references: [users.id] }),
+  bot: one(users, { fields: [sam9MatchRecords.botUserId], references: [users.id] }),
+}));
+
+export const sam9BanterLogRelations = relations(sam9BanterLog, ({ one }) => ({
+  human: one(users, { fields: [sam9BanterLog.humanUserId], references: [users.id] }),
+}));
+
 // ==================== INSERT SCHEMAS ====================
 
 export const insertMatchmakingQueueSchema = createInsertSchema(matchmakingQueue).omit({ id: true, createdAt: true });
