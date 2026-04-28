@@ -34,8 +34,34 @@
 # -----------------------------------------------------------------------------
 set -uo pipefail
 
+# -----------------------------------------------------------------------------
+# Argument parsing
+# -----------------------------------------------------------------------------
+# --public-only      Run ONLY section 5 (public download URL + deep byte
+#                    probe). Skips disk-presence, signature, package-name,
+#                    and DB checks. Used by the regression test
+#                    `scripts/server/test-verify-deep-probe.sh` to point
+#                    the verifier at a local broken-APK simulator without
+#                    needing a real APK / signing key / Postgres.
+# -----------------------------------------------------------------------------
+PUBLIC_ONLY="false"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --public-only) PUBLIC_ONLY="true"; shift ;;
+    -h|--help)
+      sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$1" >&2
+      printf 'Run with --help for usage.\n' >&2
+      exit 2
+      ;;
+  esac
+done
+
 REPO_ROOT="${REPO_ROOT:-$(pwd)}"
-DOWNLOADS_DIR="${REPO_ROOT}/client/public/downloads"
+DOWNLOADS_DIR="${VEX_DOWNLOADS_DIR:-${REPO_ROOT}/client/public/downloads}"
 MANIFEST_PATH="${DOWNLOADS_DIR}/manifest.json"
 PUBLIC_URL="${VEX_PUBLIC_URL:-https://vixo.click}"
 EXPECTED_PACKAGE="click.vixo.app"
@@ -117,6 +143,15 @@ fail()  { printf '  %s✗%s %s\n' "$C_RED" "$C_RESET" "$*"; FAIL_COUNT=$((FAIL_C
 warn()  { printf '  %s!%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; WARN_COUNT=$((WARN_COUNT + 1)); }
 info()  { printf '  %s·%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }
 header(){ printf '\n%s== %s ==%s\n' "$C_BOLD" "$*" "$C_RESET"; }
+
+# ============================================================================
+# Sections 1-4 inspect the binaries on disk. They are skipped under
+# --public-only, which is the mode the regression test
+# `scripts/server/test-verify-deep-probe.sh` runs in (it points the
+# verifier at a local broken-APK simulator and only cares about the
+# public-URL deep probe behaviour).
+# ============================================================================
+if [ "$PUBLIC_ONLY" = "false" ]; then
 
 # ============================================================================
 # 1) BINARY PRESENCE & SIZE
@@ -230,10 +265,22 @@ else
   warn "aapt/aapt2 not installed — cannot read package name from APK"
 fi
 
+fi  # end of `if [ "$PUBLIC_ONLY" = "false" ]` — sections 1-4 wrap
+
 # ============================================================================
 # 5) PUBLIC DOWNLOAD URL  — this is the symptom the user reported. We hit
 #    the live https://vixo.click/downloads/app.apk URL the same way a real
 #    visitor's browser does and confirm the response is a real APK.
+#
+# Section 5a does the historical HEAD probe (still useful — produces a fast
+# snapshot of headers / Content-Length / Content-Disposition for the
+# operator's report). Section 5b then does the LOAD-BEARING ranged GET that
+# actually opens the APK byte-by-byte: HEAD trusted the proxy headers and
+# missed the chmod-000 / EACCES case where every real GET returned a 500
+# body that some intermediates rewrote to HTML. The byte-level probe is
+# what closes that gap and makes the verifier exit non-zero on body
+# corruption — see scripts/server/test-verify-deep-probe.sh for the
+# regression test that exercises this exact failure mode end-to-end.
 # ============================================================================
 header "5. Public download URL reachability (root cause of \"تعذر التنزيل\")"
 if ! command -v curl >/dev/null 2>&1; then
@@ -295,7 +342,112 @@ else
   else
     fail "AAB returned HTTP ${aab_code} publicly — must be 404. Public AAB exposure is a Play Store policy violation."
   fi
+
+  # ==========================================================================
+  # 5b) DEEP BYTE PROBE  — fetch the first 64 KB of the APK with a ranged GET
+  #     and confirm the bytes start with the ZIP magic 'PK' (0x50 0x4B). HEAD
+  #     alone is not sufficient: in the production incident the HEAD response
+  #     was perfect (Content-Type: application/vnd.android.package-archive
+  #     with the right Content-Length) yet every real GET returned a 500
+  #     because the file was chmod 600 and the container couldn't read it.
+  #     Some intermediates rewrote that 500 to a 200 with an HTML body, so
+  #     the user downloaded an HTML page named VEX-1.0.0.apk and the install
+  #     failed with "There was a problem parsing the package".
+  #
+  #     This probe opens the actual bytes the way a phone would, which is
+  #     the only way to catch the EACCES / proxy-rewrite class of failure.
+  # ==========================================================================
+  header "5b. APK byte-level integrity (ranged GET — opens the file the way a phone does)"
+  if [ "$http_code" = "200" ] || [ "$http_code" = "206" ]; then
+    range_tmp="$(mktemp -t vex-apk-range.XXXXXX 2>/dev/null || mktemp)"
+    # Ask for the first 64 KiB. Servers that honour ranges return 206 with
+    # exactly that slice; servers that don't support ranges return 200 with
+    # the full file — both are acceptable since we only inspect the first
+    # 4 magic bytes and (when applicable) the body length.
+    # We need BOTH the curl exit code AND the -w summary. The classic
+    # `$(curl ...)` form throws away the exit code from inside command
+    # substitution; the trailing `; echo` form replaces the exit code
+    # with echo's. Solution: write -w output to a separate temp file so
+    # the parent shell can read curl's real $? directly.
+    #
+    # Why this matters: curl exit 18 ("transfer closed with N bytes
+    # remaining") is the canonical signal of the production-incident
+    # proxy-rewrite scenario — the server advertises a 6 MB APK via
+    # Content-Length but only delivers a few hundred HTML bytes. Without
+    # capturing the real exit code we can't surface that diagnostic.
+    # Note: the script header is `set -uo pipefail` — no `set -e`. Do NOT
+    # toggle errexit here. An earlier version called `set +e` and then
+    # `set -e ...` "to restore", which actually ENABLED errexit and made
+    # any subsequent grep no-match silently exit the whole script with no
+    # diagnostic. We rely on the absence of -e plus defensive `|| echo ""`
+    # parsing so every probe outcome reaches the summary block.
+    range_meta_tmp="$(mktemp -t vex-apk-range-meta.XXXXXX 2>/dev/null || mktemp)"
+    curl -L -s -o "$range_tmp" \
+      -w 'http_code=%{http_code} size=%{size_download} content_type=%{content_type}' \
+      -m 60 -r 0-65535 "$download_url" >"$range_meta_tmp" 2>/dev/null
+    range_curl_exit=$?
+    range_summary="$(cat "$range_meta_tmp" 2>/dev/null || echo "")"
+    rm -f "$range_meta_tmp"
+
+    # Parse the -w summary defensively: `grep -oE` exits 1 on no-match,
+    # which under `set -o pipefail` would propagate up the pipeline. The
+    # `|| echo ""` keeps each assignment well-defined (empty string) so a
+    # malformed proxy response can never abort the verifier mid-section.
+    range_code=$( (echo "$range_summary" | grep -oE 'http_code=[0-9]+' | head -1 | cut -d= -f2) 2>/dev/null || echo "" )
+    range_size=$( (echo "$range_summary" | grep -oE 'size=[0-9]+'      | head -1 | cut -d= -f2) 2>/dev/null || echo "" )
+    range_type=$( (echo "$range_summary" | grep -oE 'content_type=[^ ]+' | head -1 \
+                    | cut -d= -f2 | tr '[:upper:]' '[:lower:]') 2>/dev/null || echo "" )
+
+    # Hard fail on transport-level errors that mean the server could not
+    # complete the body. We let curl exit 0 and 18 fall through to the
+    # body-content checks below: 0 is normal, and 18 is the truncated-
+    # transfer case where we still want to inspect whatever bytes did
+    # arrive (so the operator sees magic bytes + body preview, not just
+    # "curl exited 18"). Every other non-zero exit is fatal for 5b.
+    if [ "$range_curl_exit" -ne 0 ] && [ "$range_curl_exit" -ne 18 ]; then
+      fail "Ranged GET to ${download_url} aborted at the transport layer (curl exit ${range_curl_exit}, http_code=${range_code:-none}). The server cannot serve the bytes the way a phone would download them. Offending file: ${APK_PATH}. Run: curl -v -r 0-65535 ${download_url} for full diagnostics."
+    elif [ "$range_curl_exit" -eq 18 ]; then
+      # Truncated transfer is itself a failure mode we must surface, even
+      # though we still want the body preview that follows. Report it as
+      # an info line first so the operator sees the upstream signal even
+      # if a later check happens to pass.
+      info "curl exited 18 (truncated transfer) — server delivered ${range_size:-0} bytes but Content-Length promised more"
+    fi
+
+    if [ "$range_code" != "200" ] && [ "$range_code" != "206" ]; then
+      fail "Ranged GET returned HTTP ${range_code:-???} — the URL serves headers but cannot serve the body. Offending file on disk (check perms / inode / bind-mount): ${APK_PATH}"
+    elif [ "${range_size:-0}" -lt 4 ]; then
+      # An empty/short body with a 200/206 status is the EACCES/chmod-000
+      # silent-failure mode in its purest form. The headers say "here is a
+      # 40 MB APK", the body says "here are 0 bytes" — and HEAD never
+      # noticed because HEAD never asks for the body.
+      fail "Ranged GET returned only ${range_size:-0} body bytes despite HTTP ${range_code} — the file on disk is unreadable to the container (typical chmod-000 / EACCES). Offending file: ${APK_PATH}"
+    else
+      magic=$(od -An -tx1 -N4 "$range_tmp" | tr -d ' \n')
+      magic_pk="${magic:0:4}"
+      if [ "$magic_pk" != "504b" ]; then
+        # Body-Content-Type may also be useful to surface — many proxies
+        # rewrite the body to text/html on internal errors.
+        body_preview=$(LC_ALL=C tr -cd '[:print:]\n' < "$range_tmp" \
+                       | head -c 80 | tr '\n' ' ')
+        fail "Ranged GET body is NOT a ZIP/APK (first 4 bytes 0x${magic_pk:-empty}, expected 0x504b/PK; body content-type=${range_type:-unknown}). The server is returning headers that look right but the body is something else — typically HTML rewritten on top of a 500 from chmod-000 / EACCES. Offending file: ${APK_PATH}. Body preview: ${body_preview:-<empty>}"
+      elif [ -n "$content_length" ] && [ "$range_code" = "200" ] \
+           && [ "${range_size:-0}" -ne "${content_length:-0}" ]; then
+        # Server didn't honour the range and gave us a full GET, but the
+        # number of bytes we received doesn't match the advertised
+        # Content-Length. Truncated transfer or proxy mid-flight rewrite.
+        fail "Body length mismatch on full GET: server advertised ${content_length} bytes via Content-Length but only ${range_size} bytes arrived. Offending file: ${APK_PATH}"
+      else
+        ok "Ranged GET returned ${range_size} bytes with valid ZIP magic (PK) — the body is a real APK that Android will accept"
+      fi
+    fi
+    rm -f "$range_tmp"
+  else
+    info "Skipping byte probe — HEAD already established URL is unreachable (HTTP ${http_code:-???})"
+  fi
 fi
+
+if [ "$PUBLIC_ONLY" = "false" ]; then
 
 # ============================================================================
 # 6) DATABASE INTEGRITY  — orphaned rows, broken FKs, basic table health.
@@ -398,6 +550,8 @@ SQL
     fi
   fi
 fi
+
+fi  # end of `if [ "$PUBLIC_ONLY" = "false" ]` — section 6 wrap
 
 # ============================================================================
 # 7) FINAL SUMMARY

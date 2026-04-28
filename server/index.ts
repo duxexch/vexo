@@ -227,6 +227,68 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
       }
     }
   }));
+
+  // -----------------------------------------------------------------------
+  // Surface filesystem errors that express.static would otherwise swallow.
+  //
+  // The production incident this catches: an operator (or a stale rsync, or
+  // a container rebuild) leaves the APK at chmod 600. express.static opens
+  // the file with the container user (`vexuser`), gets EACCES, and forwards
+  // the error to the next middleware. Without this handler, Express's
+  // default error renderer returns a generic 500 with no indication of
+  // which file failed — the operator has to dig through container logs to
+  // find the offending path. With this handler, the error is logged with
+  // the FULL on-disk path AND the HTTP response itself names the file, so
+  // the byte-level probe in scripts/server/verify-vex-deployment.sh (and
+  // any human reading the response in a browser) can tell at a glance
+  // exactly which file is broken.
+  //
+  // Only file-read errors for /downloads paths are intercepted — any other
+  // error class falls through to the default Express handler so we don't
+  // accidentally hide unrelated bugs behind a generic message.
+  // -----------------------------------------------------------------------
+  app.use(
+    "/downloads",
+    (err: NodeJS.ErrnoException, req: Request, res: Response, next: NextFunction) => {
+      if (!err || !err.code) {
+        return next(err);
+      }
+      const fsErrorCodes = new Set([
+        "EACCES",      // chmod 000 / unreadable to container user
+        "EPERM",       // SELinux / capability denial
+        "ENOENT",      // file deleted between manifest write and request
+        "EISDIR",      // path is a directory (corrupted layout)
+        "ENOTDIR",     // intermediate path component is a file
+      ]);
+      if (!fsErrorCodes.has(err.code)) {
+        return next(err);
+      }
+      // err.path is set by express.static / send for filesystem errors;
+      // fall back to req.path joined onto downloadsDir if that's missing
+      // (some Node versions strip it on EACCES).
+      const offendingPath =
+        err.path || path.join(downloadsDir, req.path.replace(/^\/+/, ""));
+      // Log with enough context for the operator to act immediately. This
+      // line is what verify-vex-deployment.sh's byte probe will point at
+      // when it fails ("Offending file: ${APK_PATH}").
+      console.error(
+        `[downloads] ${err.code} serving ${req.method} ${req.originalUrl} — ` +
+          `cannot read ${offendingPath}. Run: ls -l ${offendingPath} (expect 0644 owned by vexuser). ` +
+          `Recovery: bash scripts/server/refresh-android-binaries.sh`,
+      );
+      // 503 Service Unavailable is more accurate than 500 here: the file
+      // exists in the manifest but is temporarily unservable. Some CDNs
+      // will retry on 503 but cache 500 — picking 503 keeps a transient
+      // permission glitch from being baked into the edge cache.
+      if (res.headersSent) {
+        return next(err);
+      }
+      res.status(503).type("text/plain").send(
+        `Download unavailable: ${err.code} on ${path.basename(offendingPath)}. ` +
+          `Operator: re-run refresh-android-binaries.sh and verify file mode is 0644.`,
+      );
+    },
+  );
 }
 
 // Trust proxy for rate limiting behind nginx/load balancers
