@@ -52,6 +52,27 @@ android {
                 keyAlias      = keyAliasEnv
                 keyPassword   = keyPasswordEnv
             }
+
+            // Explicitly enable every signature scheme. Without these the
+            // Android Gradle Plugin's defaults sign only v1+v2, and the CI
+            // verifier (.github/workflows/android-build.yml) hard-fails
+            // because Android 12+ (API 31+) requires v3 for trusted
+            // installation: an APK without a v3 signature still installs
+            // but Android treats it as untrusted, breaks key rotation, and
+            // surfaces "There was a problem parsing the package" on a
+            // subset of devices when the package manager promotes the
+            // signing block.
+            //
+            //   v1 — JAR signing (legacy installers, Android < 7.0)
+            //   v2 — APK Signature Scheme v2 (Android 7.0+)
+            //   v3 — APK Signature Scheme v3 (Android 9.0+, REQUIRED for
+            //        trusted install on Android 12+ and for key rotation)
+            //   v4 — APK Signature Scheme v4 (Android 11+, enables
+            //        ADB Incremental install; harmless on older OSes)
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = true
         }
     }
 
