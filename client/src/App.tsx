@@ -22,6 +22,7 @@ const LoginPage = lazy(() => import("@/pages/login"));
 const SelectUsernamePage = lazy(() => import("@/pages/select-username"));
 const ChallengesPage = lazy(() => import("@/pages/challenges"));
 const TournamentsPage = lazy(() => import("@/pages/tournaments"));
+const ChallengeWatchPage = lazy(() => import("@/pages/challenge-watch"));
 const SeoGameLandingPage = lazy(() => import("@/pages/seo/game-landing"));
 const SeoCategoryHubPage = lazy(() => import("@/pages/seo/category-hub"));
 const SeoPlayerProfilePage = lazy(() => import("@/pages/seo/player-profile-public"));
@@ -212,6 +213,22 @@ function Router() {
                             <Route path="/match/:id" component={SeoMatchRecapPage} />
                             <Route path="/leaderboard/:game" component={SeoLeaderboardGamePage} />
                         </Switch>
+                    </ErrorBoundary>
+                </Suspense>
+            </PublicLayout>
+        );
+    }
+
+    // Public read-only spectator view for challenges. Anonymous visitors see
+    // the live match in view-only mode; logged-in users get the full panel
+    // (chat, gifts, stake actions) handled inside the page component.
+    const isPublicChallengeWatch = /^\/challenge\/[A-Za-z0-9_-]+\/watch\/?$/.test(location);
+    if (isPublicChallengeWatch && !isAuthenticated && !isLoading) {
+        return (
+            <PublicLayout>
+                <Suspense fallback={<PageLoader />}>
+                    <ErrorBoundary>
+                        <Route path="/challenge/:id/watch" component={ChallengeWatchPage} />
                     </ErrorBoundary>
                 </Suspense>
             </PublicLayout>

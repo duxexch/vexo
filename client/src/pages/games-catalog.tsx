@@ -326,6 +326,19 @@ export default function GamesCatalogPage() {
             {t('catalog.heroDesc')}
           </p>
 
+          <div className="flex justify-center mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation("/share-links")}
+              data-testid="button-share-links"
+              className="gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              {t('catalog.shareLinks') ?? 'Share game links'}
+            </Button>
+          </div>
+
           <div className="flex justify-center gap-6 flex-wrap">
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card/50 backdrop-blur-sm border">
               <Users className="w-5 h-5 text-primary" />

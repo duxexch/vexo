@@ -16,6 +16,7 @@ import os from "os";
 import { fileURLToPath } from "url";
 import { getRedisClient, redisHealthCheck, closeRedis, trackUserOnline, getOnlineUserCount } from "./lib/redis";
 import { createPrerenderMiddleware } from "./lib/prerender-middleware";
+import { createSocialShareMiddleware } from "./lib/social-share-middleware";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -472,6 +473,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   next();
 });
+
+// Social share preview (Open Graph + Twitter card + og:video) for link
+// previews on Facebook/WhatsApp/Twitter/Telegram/Discord/Slack/etc.
+// Runs before Prerender so we always emit rich tags for tournaments,
+// challenges, and game landing pages even when no Prerender token is set.
+app.use(createSocialShareMiddleware());
 
 // Prerender.io integration for crawler HTML requests.
 // Keep this before body parsing/routes so crawler requests are intercepted early.

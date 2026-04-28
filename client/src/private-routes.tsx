@@ -91,6 +91,7 @@ const PlayerProfilePage = lazy(() => import("@/pages/player-profile"));
 const LeaderboardPage = lazy(() => import("@/pages/leaderboard"));
 const SeasonalLeaderboardPage = lazy(() => import("@/pages/seasonal-leaderboard"));
 const GamesCatalogPage = lazy(() => import("@/pages/games-catalog"));
+const ShareLinksPage = lazy(() => import("@/pages/share-links"));
 const GameHistoryPage = lazy(() => import("@/pages/game-history"));
 const TournamentsPage = lazy(() => import("@/pages/tournaments"));
 const DailyRewardsPage = lazy(() => import("@/pages/daily-rewards"));
@@ -1155,6 +1156,7 @@ export default function PrivateRoutes() {
                         <Route path="/">{() => <ErrorBoundary><DashboardPage /></ErrorBoundary>}</Route>
                         <Route path="/games">{() => <ErrorBoundary><GamesCatalogPage /></ErrorBoundary>}</Route>
                         <Route path="/games/history">{() => <ErrorBoundary><GameHistoryPage /></ErrorBoundary>}</Route>
+                        <Route path="/share-links">{() => <ErrorBoundary><ShareLinksPage /></ErrorBoundary>}</Route>
                         <Route path="/play/:slug">{() => <ErrorBoundary><GamePlayerPage /></ErrorBoundary>}</Route>
                         <Route path="/challenges">{() => <ErrorBoundary><ChallengesPage /></ErrorBoundary>}</Route>
                         <Route path="/lobby">{() => <ErrorBoundary><GameLobbyPage /></ErrorBoundary>}</Route>

@@ -3,11 +3,11 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { challenges as challengesTable } from "@shared/schema";
-import { authMiddleware, AuthRequest } from "../middleware";
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware";
 import { getChallengeReadAccess, getErrorMessage } from "./helpers";
 
 export function registerDetailsRoutes(app: Express) {
-  app.get("/api/challenges/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+  app.get("/api/challenges/:id", optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const challengeId = req.params.id;
 
@@ -18,9 +18,19 @@ export function registerDetailsRoutes(app: Express) {
         return res.status(404).json({ error: "Challenge not found" });
       }
 
-      const access = getChallengeReadAccess(dbChallenge, req.user!.id);
-      if (!access.allowed) {
-        return res.status(access.status).json({ error: access.error });
+      // Anonymous spectators may view PUBLIC challenges read-only.
+      // Private challenges still require a participant or authenticated check.
+      const visibility = String(dbChallenge.visibility || "public").toLowerCase();
+      const isAnonymous = !req.user;
+      if (isAnonymous) {
+        if (visibility === "private") {
+          return res.status(403).json({ error: "Sign in to view this private challenge" });
+        }
+      } else {
+        const access = getChallengeReadAccess(dbChallenge, req.user!.id);
+        if (!access.allowed) {
+          return res.status(access.status).json({ error: access.error });
+        }
       }
 
       // Fetch player details
