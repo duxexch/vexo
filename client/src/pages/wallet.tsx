@@ -1332,8 +1332,8 @@ export default function WalletPage() {
               </div>
 
               {selectedDepositMethod && (
-                <div className="mt-3 rounded-lg border bg-muted/35 p-3 space-y-2" data-testid="deposit-method-details">
-                  <div className="flex items-center gap-2 pb-1">
+                <div className="mt-3 rounded-lg border bg-muted/30 p-2 space-y-1.5" data-testid="deposit-method-details">
+                  <div className="flex items-center gap-2 px-1 pb-1">
                     <PaymentMethodIcon
                       iconUrl={selectedDepositMethod.iconUrl}
                       type={selectedDepositMethod.type}
@@ -1344,85 +1344,103 @@ export default function WalletPage() {
                       {selectedDepositMethod.name}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
+
+                  <div className="rounded-md bg-background/70 border border-border/50 p-2.5">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'اسم الوسيلة' : 'Method Name'}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => copyPaymentMethodValue(selectedDepositMethod.name, language === 'ar' ? 'اسم الوسيلة' : 'method name')}
-                    >
-                      <Copy className="h-3.5 w-3.5 me-1" />
-                      {language === 'ar' ? 'نسخ' : 'Copy'}
-                    </Button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate min-w-0 flex-1" title={selectedDepositMethod.name}>
+                        {selectedDepositMethod.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => copyPaymentMethodValue(selectedDepositMethod.name, language === 'ar' ? 'اسم الوسيلة' : 'method name')}
+                        data-testid="button-copy-method-name"
+                      >
+                        <Copy className="h-3.5 w-3.5 me-1" />
+                        {language === 'ar' ? 'نسخ' : 'Copy'}
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm font-medium truncate" title={selectedDepositMethod.name}>{selectedDepositMethod.name}</p>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
+                  <div className="rounded-md bg-muted/60 border border-border/50 p-2.5">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'رقم الوسيلة' : 'Method Number'}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => copyPaymentMethodValue(selectedDepositMethod.methodNumber || '', language === 'ar' ? 'رقم الوسيلة' : 'method number')}
-                    >
-                      <Copy className="h-3.5 w-3.5 me-1" />
-                      {language === 'ar' ? 'نسخ' : 'Copy'}
-                    </Button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className="text-sm font-mono font-medium truncate min-w-0 flex-1 select-all"
+                        title={selectedDepositMethod.methodNumber || ''}
+                      >
+                        {selectedDepositMethod.methodNumber || '-'}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => copyPaymentMethodValue(selectedDepositMethod.methodNumber || '', language === 'ar' ? 'رقم الوسيلة' : 'method number')}
+                        data-testid="button-copy-method-number"
+                      >
+                        <Copy className="h-3.5 w-3.5 me-1" />
+                        {language === 'ar' ? 'نسخ' : 'Copy'}
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm font-medium truncate" title={selectedDepositMethod.methodNumber || ''}>{selectedDepositMethod.methodNumber || '-'}</p>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
+                  <div className="rounded-md bg-background/70 border border-border/50 p-2.5">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'البيانات كاملة' : 'Full Payment Data'}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => copyPaymentMethodValue(`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`, language === 'ar' ? 'البيانات كاملة' : 'full payment data')}
-                    >
-                      <Copy className="h-3.5 w-3.5 me-1" />
-                      {language === 'ar' ? 'نسخ الكل' : 'Copy All'}
-                    </Button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className="text-xs text-muted-foreground truncate min-w-0 flex-1"
+                        title={`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`}
+                      >
+                        {selectedDepositMethod.name} | {selectedDepositMethod.methodNumber || '-'}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => copyPaymentMethodValue(`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`, language === 'ar' ? 'البيانات كاملة' : 'full payment data')}
+                        data-testid="button-copy-full-payment"
+                      >
+                        <Copy className="h-3.5 w-3.5 me-1" />
+                        {language === 'ar' ? 'نسخ الكل' : 'Copy All'}
+                      </Button>
+                    </div>
                   </div>
-                  <p
-                    className="text-xs text-muted-foreground truncate"
-                    title={`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`}
-                  >
-                    {selectedDepositMethod.name} | {selectedDepositMethod.methodNumber || '-'}
-                  </p>
 
                   {selectedDepositMethod.instructions?.trim() ? (
-                    <div className="rounded-md border bg-background/70 p-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground">
+                    <div className="rounded-md bg-muted/60 border border-border/50 p-2.5">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           {language === 'ar' ? 'إرشادات التحويل' : 'Transfer Instructions'}
-                        </span>
+                        </div>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-8"
+                          className="h-8 shrink-0"
                           onClick={() => copyPaymentMethodValue(selectedDepositMethod.instructions || '', language === 'ar' ? 'الإرشادات' : 'instructions')}
+                          data-testid="button-copy-instructions"
                         >
                           <Copy className="h-3.5 w-3.5 me-1" />
                           {language === 'ar' ? 'نسخ' : 'Copy'}
                         </Button>
                       </div>
-                      <p className="mt-2 text-xs whitespace-pre-wrap break-words line-clamp-3" title={selectedDepositMethod.instructions || ''}>
+                      <p className="text-xs whitespace-pre-wrap break-words line-clamp-3" title={selectedDepositMethod.instructions || ''}>
                         {selectedDepositMethod.instructions}
                       </p>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="px-1 text-xs text-muted-foreground">
                       {language === 'ar' ? 'لا توجد إرشادات إضافية لهذه الوسيلة.' : 'No additional instructions for this method.'}
                     </p>
                   )}
@@ -1435,6 +1453,12 @@ export default function WalletPage() {
                 ref={paymentReferenceInputRef}
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
+                onFocus={(e) => {
+                  const target = e.currentTarget;
+                  window.setTimeout(() => {
+                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+                  }, 250);
+                }}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
                   e.preventDefault();
@@ -1455,6 +1479,12 @@ export default function WalletPage() {
                 ref={walletNumberInputRef}
                 value={walletNumber}
                 onChange={(e) => setWalletNumber(e.target.value)}
+                onFocus={(e) => {
+                  const target = e.currentTarget;
+                  window.setTimeout(() => {
+                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+                  }, 250);
+                }}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
                   e.preventDefault();
@@ -1466,7 +1496,7 @@ export default function WalletPage() {
               />
             </div>
           </div>
-          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.35)]">
             <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
             <Button
               ref={depositConfirmButtonRef}
