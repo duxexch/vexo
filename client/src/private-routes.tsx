@@ -902,21 +902,21 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                                         className="hidden sm:block h-6 w-px bg-border/70 mx-0.5"
                                     />
 
-                                    {/* Tools cluster — uniform ghost icon buttons */}
+                                    {/* Tools cluster — wallet emphasised with subtle accent */}
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <Button
                                                 asChild
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-9 w-9"
+                                                className="h-9 w-9 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
                                             >
                                                 <Link
                                                     href="/wallet"
                                                     aria-label={t("nav.wallet") || "Wallet"}
                                                     data-testid="button-header-wallet"
                                                 >
-                                                    <Wallet className="h-5 w-5" />
+                                                    <Wallet className="h-[18px] w-[18px]" />
                                                 </Link>
                                             </Button>
                                         </TooltipTrigger>

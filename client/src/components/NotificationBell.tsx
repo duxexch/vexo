@@ -159,26 +159,30 @@ export function NotificationBell() {
             <Button
               variant="ghost"
               size="icon"
-              className="relative overflow-visible"
+              className={`relative overflow-visible h-9 w-9 rounded-full border transition-colors ${
+                hasUnread
+                  ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15'
+                  : 'border-border/60 bg-background hover:bg-accent'
+              }`}
               aria-label={notificationsLabel}
               data-testid="button-notification-bell"
             >
               {hasUnread ? (
-                <BellRing className={`h-5 w-5 ${hasNewPulse ? 'animate-bounce text-primary' : ''}`} />
+                <BellRing className={`h-[18px] w-[18px] ${hasNewPulse ? 'animate-bounce' : ''}`} />
               ) : (
-                <Bell className="h-5 w-5" />
+                <Bell className="h-[18px] w-[18px]" />
               )}
               {hasUnread && (
                 <Badge
                   variant="destructive"
-                  className={`absolute top-0.5 end-0.5 z-10 h-5 min-w-5 px-1 py-0 flex items-center justify-center text-xs leading-none no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
+                  className={`absolute -top-1 -end-1 z-10 h-[18px] min-w-[18px] px-1 py-0 flex items-center justify-center text-[10px] font-bold leading-none rounded-full ring-2 ring-background no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
                   data-testid="badge-unread-count"
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </Badge>
               )}
               {hasNewPulse && hasUnread && (
-                <span className="absolute top-0.5 end-0.5 h-5 w-5 rounded-full bg-destructive/40 animate-ping pointer-events-none" />
+                <span className="absolute -top-1 -end-1 h-[18px] w-[18px] rounded-full bg-destructive/40 animate-ping pointer-events-none" />
               )}
             </Button>
           </TooltipTrigger>

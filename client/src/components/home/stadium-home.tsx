@@ -266,30 +266,30 @@ function Rail({
             {icon}
           </span>
           <div>
-            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-white leading-none">
+            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none">
               {title}
             </h2>
             {kicker && (
-              <p className="text-xs text-slate-400 mt-1">{kicker}</p>
+              <p className="text-xs text-slate-700 dark:text-slate-400 mt-1">{kicker}</p>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => scroll(1)}
-            className="w-9 h-9 grid place-items-center rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10"
+            className="w-9 h-9 grid place-items-center rounded-md bg-slate-200/60 dark:bg-white/5 hover:bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-300/70 dark:border-white/10"
             aria-label="السابق"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => scroll(-1)}
-            className="w-9 h-9 grid place-items-center rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10"
+            className="w-9 h-9 grid place-items-center rounded-md bg-slate-200/60 dark:bg-white/5 hover:bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-300/70 dark:border-white/10"
             aria-label="التالي"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button className="hidden md:inline-flex h-9 px-3 items-center gap-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs">
+          <button className="hidden md:inline-flex h-9 px-3 items-center gap-1 rounded-md bg-slate-200/60 dark:bg-white/5 hover:bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-300/70 dark:border-white/10 text-xs">
             عرض الكل
           </button>
         </div>
@@ -329,7 +329,7 @@ function HeroCarousel() {
           alt="Stadium"
           className="w-full h-full object-cover opacity-50"
         />
-        <div className="absolute inset-0 bg-gradient-to-l from-[#0a0e1a] via-[#0a0e1a]/40 to-[#0a0e1a]" />
+        <div className="absolute inset-0 bg-gradient-to-l from-slate-100/80 dark:from-[#0a0e1a] via-transparent dark:via-[#0a0e1a]/40 to-slate-100/80 dark:to-[#0a0e1a]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(30,136,255,0.18),_transparent_60%)]" />
       </div>
 
@@ -352,7 +352,7 @@ function HeroCarousel() {
               {active.game} · جائزة {fmtMoney(active.prize)} USDT
             </span>
           </h1>
-          <p className="text-slate-300 mt-4 max-w-lg leading-relaxed">
+          <p className="text-slate-700 dark:text-slate-300 mt-4 max-w-lg leading-relaxed">
             البطولة الكبرى للأسبوع — تأهّل من خانتك، تجاوز كل الجولات، وارفع الكأس على المنصة الذهبية. كل المباريات بثّ مباشر مع تعليق عربي.
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-6">
@@ -362,20 +362,20 @@ function HeroCarousel() {
             </Button>
             <Button
               variant="outline"
-              className="h-12 px-6 bg-white/5 border-white/15 text-white hover:bg-white/10"
+              className="h-12 px-6 bg-white/15 dark:bg-white/5 border-white/30 dark:border-white/15 text-white hover:bg-white/25 dark:hover:bg-white/10 backdrop-blur-sm"
             >
               <PlayCircle className="w-5 h-5 ml-2" />
               شاهد البث
             </Button>
-            <div className="flex items-center gap-2 text-sm text-slate-300">
+            <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <Users className="w-4 h-4 text-[#1e88ff]" />
-              <span className="font-bold text-white">{active.registered}</span>
-              <span className="text-slate-500">/ {active.capacity}</span>
-              <span className="text-slate-500">مسجّل</span>
+              <span className="font-bold text-slate-900 dark:text-white">{active.registered}</span>
+              <span className="text-slate-500 dark:text-slate-500">/ {active.capacity}</span>
+              <span className="text-slate-500 dark:text-slate-500">مسجّل</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Timer className="w-4 h-4 text-[#ffb627]" />
-              <span className="font-mono font-black text-white tracking-wider">
+              <span className="font-mono font-black text-slate-900 dark:text-white tracking-wider">
                 {active.countdown}
               </span>
             </div>
@@ -400,7 +400,7 @@ function HeroCarousel() {
           style={{ transformStyle: "preserve-3d" }}
         >
           <div
-            className="relative aspect-[4/5] max-h-[460px] mx-auto rounded-2xl overflow-hidden border border-white/10 shadow-[0_30px_80px_-20px_rgba(30,136,255,0.55)]"
+            className="relative aspect-[4/5] max-h-[460px] mx-auto rounded-2xl overflow-hidden border border-slate-300/70 dark:border-white/10 shadow-[0_30px_80px_-20px_rgba(30,136,255,0.55)]"
             style={{
               transform: "rotateX(8deg) rotateY(-10deg)",
               transformStyle: "preserve-3d",
@@ -411,7 +411,7 @@ function HeroCarousel() {
               alt={active.title}
               className="absolute inset-0 w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-100 dark:from-[#0a0e1a] via-transparent to-transparent" />
 
             <div
               className="absolute top-4 right-4 left-4 flex items-center justify-between"
@@ -434,17 +434,17 @@ function HeroCarousel() {
                 <Trophy className="w-4 h-4" />
                 جائزة الكبرى
               </div>
-              <div className="font-['Bebas_Neue'] text-5xl text-white leading-none">
+              <div className="font-['Bebas_Neue'] text-5xl text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] leading-none">
                 {active.prize.toLocaleString()}{" "}
                 <span className="text-[#ffb627]">USDT</span>
               </div>
-              <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
+              <div className="mt-3 h-2 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-l from-[#ffb627] to-[#ff8a00]"
                   style={{ width: `${(active.registered / active.capacity) * 100}%` }}
                 />
               </div>
-              <div className="mt-2 flex justify-between text-xs text-slate-300">
+              <div className="mt-2 flex justify-between text-xs text-slate-700 dark:text-slate-300">
                 <span>{active.registered} مسجّل</span>
                 <span>{active.capacity - active.registered} مقعد متبقي</span>
               </div>
@@ -506,27 +506,27 @@ function OwnerBar(props: OwnerBarProps) {
   } = props;
 
   return (
-    <div className="relative border-b border-white/10 bg-[linear-gradient(to_left,_#0a0e1a_0%,_#10172a_50%,_#0a0e1a_100%)]">
+    <div className="relative border-b border-slate-300/70 dark:border-white/10 bg-gradient-to-l from-slate-100 via-white to-slate-100 dark:from-[#0a0e1a] dark:via-[#10172a] dark:to-[#0a0e1a]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,_rgba(30,136,255,0.18),_transparent_60%)] pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_50%,_rgba(255,182,39,0.12),_transparent_60%)] pointer-events-none" />
 
       <div className="relative px-4 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 items-center">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar className="w-16 h-16 ring-2 ring-[#ffb627] ring-offset-2 ring-offset-[#0a0e1a]">
+            <Avatar className="w-16 h-16 ring-2 ring-[#ffb627] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0a0e1a]">
               <AvatarImage src={avatarUrl || ""} alt={displayName} />
               <AvatarFallback className="bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white font-black text-xl">
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <span className="absolute -bottom-1 -left-1 grid place-items-center w-7 h-7 rounded-full bg-[#ffb627] border-2 border-[#0a0e1a] text-black font-black text-xs">
+            <span className="absolute -bottom-1 -left-1 grid place-items-center w-7 h-7 rounded-full bg-[#ffb627] border-2 border-slate-100 dark:border-[#0a0e1a] text-black font-black text-xs">
               {level}
             </span>
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0a0e1a]" />
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-100 dark:border-[#0a0e1a]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-['Bebas_Neue'] text-2xl text-white tracking-wider leading-none">
+              <h3 className="font-['Bebas_Neue'] text-2xl text-slate-900 dark:text-white tracking-wider leading-none">
                 {displayName}
               </h3>
               <Crown className="w-4 h-4 text-[#ffb627]" />
@@ -535,11 +535,11 @@ function OwnerBar(props: OwnerBarProps) {
               <Badge className="bg-gradient-to-l from-[#ffb627] to-[#ff8a00] text-black hover:bg-[#ffb627] rounded-sm text-[10px] py-0 px-1.5 font-black">
                 {rankLabel}
               </Badge>
-              <span className="text-xs text-slate-400">@{username}</span>
+              <span className="text-xs text-slate-700 dark:text-slate-400">@{username}</span>
               {location ? (
                 <>
-                  <span className="text-xs text-slate-500">·</span>
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                  <span className="text-xs text-slate-500 dark:text-slate-500">·</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-400 flex items-center gap-1">
                     <Globe className="w-3 h-3" />
                     {location}
                   </span>
@@ -578,19 +578,19 @@ function OwnerBar(props: OwnerBarProps) {
             sub="متتالية"
             accent="orange"
           />
-          <div className="col-span-2 md:col-span-1 rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="col-span-2 md:col-span-1 rounded-lg border border-slate-300/70 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-2.5">
+            <div className="flex items-center justify-between text-[11px] text-slate-700 dark:text-slate-400">
               <span className="flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-[#1e88ff]" />
                 XP الأسبوع
               </span>
-              <span className="text-white font-bold">{Math.round(xpPercent)}%</span>
+              <span className="text-slate-900 dark:text-white font-bold">{Math.round(xpPercent)}%</span>
             </div>
             <Progress
               value={xpPercent}
-              className="h-1.5 mt-2 bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-[#1e88ff] [&>div]:to-[#0a4d9c]"
+              className="h-1.5 mt-2 bg-slate-200/80 dark:bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-[#1e88ff] [&>div]:to-[#0a4d9c]"
             />
-            <div className="text-[10px] text-slate-500 mt-1">
+            <div className="text-[10px] text-slate-500 dark:text-slate-500 mt-1">
               {xpCurrent.toLocaleString("ar-EG")} / {xpTarget.toLocaleString("ar-EG")} لرتبة{" "}
               <span className="text-[#ffb627] font-bold">{nextRankLabel}</span>
             </div>
@@ -611,7 +611,7 @@ function OwnerBar(props: OwnerBarProps) {
             type="button"
             onClick={onDeposit}
             variant="outline"
-            className="h-11 px-3 bg-white/5 border-white/15 text-white hover:bg-white/10"
+            className="h-11 px-3 bg-slate-200/60 dark:bg-white/5 border-slate-300/80 dark:border-white/15 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-white/10"
             data-testid="button-stadium-deposit"
           >
             <Plus className="w-4 h-4 ml-2" />
@@ -644,8 +644,8 @@ function StatCell({
     blue: "text-[#1e88ff]",
   }[accent];
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-      <div className={`flex items-center gap-1 text-[11px] text-slate-400`}>
+    <div className="rounded-lg border border-slate-300/70 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-2.5">
+      <div className={`flex items-center gap-1 text-[11px] text-slate-700 dark:text-slate-400`}>
         <span className={tone}>{icon}</span>
         <span>{label}</span>
       </div>
@@ -653,7 +653,7 @@ function StatCell({
         <span className={`font-['Bebas_Neue'] text-2xl tracking-wider ${tone}`}>
           {value}
         </span>
-        <span className="text-[10px] text-slate-500">{sub}</span>
+        <span className="text-[10px] text-slate-500 dark:text-slate-500">{sub}</span>
       </div>
     </div>
   );
@@ -661,13 +661,13 @@ function StatCell({
 
 function TopBar() {
   return (
-    <div className="sticky top-0 z-40 bg-[#0a0e1a]/85 backdrop-blur-xl border-b border-white/10">
+    <div className="sticky top-0 z-40 bg-white/85 dark:bg-[#0a0e1a]/85 backdrop-blur-xl border-b border-slate-300/70 dark:border-white/10">
       <div className="px-4 md:px-6 h-14 flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_0_20px_-2px_#1e88ff]">
             <Rocket className="w-5 h-5" />
           </div>
-          <span className="font-['Bebas_Neue'] text-2xl tracking-[0.2em] text-white">
+          <span className="font-['Bebas_Neue'] text-2xl tracking-[0.2em] text-slate-900 dark:text-white">
             VEX
           </span>
           <Badge className="bg-[#ffb627] text-black rounded-sm px-1.5 py-0 text-[9px] font-black">
@@ -675,12 +675,12 @@ function TopBar() {
           </Badge>
         </div>
 
-        <nav className="hidden md:flex items-center gap-1 text-sm text-slate-300">
+        <nav className="hidden md:flex items-center gap-1 text-sm text-slate-700 dark:text-slate-300">
           {["الرئيسية", "البطولات", "الألعاب", "التحدّيات", "السوق", "السجل"].map((n, i) => (
             <a
               key={n}
-              className={`px-3 py-2 rounded-md hover:bg-white/5 ${
-                i === 0 ? "bg-white/5 text-white" : ""
+              className={`px-3 py-2 rounded-md hover:bg-slate-200/60 dark:bg-white/5 ${
+                i === 0 ? "bg-slate-200/60 dark:bg-white/5 text-slate-900 dark:text-white" : ""
               }`}
               href="#"
             >
@@ -691,37 +691,37 @@ function TopBar() {
 
         <div className="flex-1" />
 
-        <div className="hidden md:flex items-center gap-2 bg-white/5 border border-white/10 rounded-md px-3 h-9 w-72">
-          <Search className="w-4 h-4 text-slate-400" />
+        <div className="hidden md:flex items-center gap-2 bg-slate-200/60 dark:bg-white/5 border border-slate-300/70 dark:border-white/10 rounded-md px-3 h-9 w-72">
+          <Search className="w-4 h-4 text-slate-700 dark:text-slate-400" />
           <input
             placeholder="ابحث عن لاعب أو بطولة..."
-            className="bg-transparent outline-none text-sm text-white placeholder:text-slate-500 flex-1"
+            className="bg-transparent outline-none text-sm text-white placeholder:text-slate-500 dark:text-slate-500 flex-1"
           />
-          <kbd className="text-[10px] text-slate-500 border border-white/10 px-1 rounded">
+          <kbd className="text-[10px] text-slate-500 dark:text-slate-500 border border-slate-300/70 dark:border-white/10 px-1 rounded">
             /
           </kbd>
         </div>
 
-        <button className="relative w-9 h-9 grid place-items-center rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10">
+        <button className="relative w-9 h-9 grid place-items-center rounded-md bg-slate-200/60 dark:bg-white/5 hover:bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-300/70 dark:border-white/10">
           <Bell className="w-4 h-4" />
           <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#0a0e1a]" />
         </button>
 
         <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-md bg-gradient-to-l from-[#ffb627]/20 to-transparent border border-[#ffb627]/40">
           <Coins className="w-4 h-4 text-[#ffb627]" />
-          <span className="font-bold text-white text-sm">2,418.50</span>
+          <span className="font-bold text-slate-900 dark:text-white text-sm">2,418.50</span>
           <span className="text-[10px] text-[#ffb627] font-bold">USDT</span>
         </div>
       </div>
 
-      <div className="relative h-8 overflow-hidden border-t border-white/10 bg-black/30">
-        <div className="absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-[#0a0e1a] to-transparent" />
-        <div className="absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-[#0a0e1a] to-transparent" />
+      <div className="relative h-8 overflow-hidden border-t border-slate-300/70 dark:border-white/10 bg-black/30">
+        <div className="absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-slate-100 dark:from-[#0a0e1a] to-transparent" />
+        <div className="absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-slate-100 dark:from-[#0a0e1a] to-transparent" />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 text-[10px] font-black tracking-widest text-rose-400">
           <Radio className="w-3 h-3 animate-pulse" />
           مباشر
         </div>
-        <div className="absolute inset-y-0 flex items-center gap-10 whitespace-nowrap animate-[marquee_45s_linear_infinite] text-xs text-slate-300 pl-24 pr-24">
+        <div className="absolute inset-y-0 flex items-center gap-10 whitespace-nowrap animate-[marquee_45s_linear_infinite] text-xs text-slate-700 dark:text-slate-300 pl-24 pr-24">
           {[...TICKER, ...TICKER].map((t, i) => (
             <span key={i} className="flex items-center gap-2">
               <span className="w-1 h-1 rounded-full bg-[#ffb627]" />
@@ -746,7 +746,7 @@ function TournamentCard({ t }: { t: Tournament }) {
           alt={t.title}
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-[#0a0e1a]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-100 dark:from-[#0a0e1a] via-[#0a0e1a]/40 to-transparent" />
         <div className="absolute top-3 right-3 left-3 flex items-center justify-between">
           {t.live ? (
             <Badge className="bg-rose-500 hover:bg-rose-500 text-white rounded-sm px-2 py-0.5 text-[10px] font-bold flex items-center gap-1.5">
@@ -766,7 +766,7 @@ function TournamentCard({ t }: { t: Tournament }) {
           <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider leading-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
             {t.title}
           </h3>
-          <p className="text-xs text-slate-300 mt-1 flex items-center gap-1.5">
+          <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 flex items-center gap-1.5">
             <Globe className="w-3 h-3" />
             {t.region}
           </p>
@@ -776,7 +776,7 @@ function TournamentCard({ t }: { t: Tournament }) {
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-widest">
+            <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase tracking-widest">
               جائزة كبرى
             </div>
             <div className="font-['Bebas_Neue'] text-3xl text-[#ffb627] leading-none">
@@ -785,7 +785,7 @@ function TournamentCard({ t }: { t: Tournament }) {
             </div>
           </div>
           <div className="text-left">
-            <div className="text-[10px] text-slate-400 uppercase tracking-widest">
+            <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase tracking-widest">
               يبدأ خلال
             </div>
             <div className="font-mono text-lg font-black text-white">
@@ -794,13 +794,13 @@ function TournamentCard({ t }: { t: Tournament }) {
           </div>
         </div>
 
-        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-slate-200/60 dark:bg-white/5 overflow-hidden">
           <div
             className="h-full bg-gradient-to-l from-[#1e88ff] to-[#0a4d9c]"
             style={{ width: `${(t.registered / t.capacity) * 100}%` }}
           />
         </div>
-        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+        <div className="flex items-center justify-between text-[11px] text-slate-700 dark:text-slate-400 mt-1.5">
           <span className="flex items-center gap-1">
             <Users className="w-3 h-3" />
             <span className="text-white font-bold">{t.registered}</span>
@@ -843,7 +843,7 @@ function GameTileCard({ g, kind }: { g: GameTile; kind: "team" | "solo" }) {
       <div className="p-3">
         <div className="font-bold text-white text-sm">{g.name}</div>
         <div className="flex items-center justify-between mt-1.5">
-          <span className="text-[11px] text-slate-400 flex items-center gap-1">
+          <span className="text-[11px] text-slate-700 dark:text-slate-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-emerald-400 font-bold">
               {g.online.toLocaleString()}
@@ -880,7 +880,7 @@ function ChallengeCard({ c }: { c: Challenge }) {
         >
           {incoming ? "تحدّاك" : "تحدّيك أنت"}
         </Badge>
-        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+        <span className="text-[11px] text-slate-700 dark:text-slate-400 flex items-center gap-1">
           <Timer className="w-3 h-3 text-[#ffb627]" />
           ينتهي خلال{" "}
           <span className="font-mono text-white font-bold">{c.expiresIn}</span>
@@ -907,14 +907,14 @@ function ChallengeCard({ c }: { c: Challenge }) {
                 {c.rank}
               </Badge>
             </div>
-            <div className="text-[11px] text-slate-400">{c.oppHandle}</div>
+            <div className="text-[11px] text-slate-700 dark:text-slate-400">{c.oppHandle}</div>
           </div>
-          <span className="text-[10px] font-bold text-slate-500">{c.flag}</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-500">{c.flag}</span>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] text-slate-400 uppercase">اللعبة</div>
+          <div className="rounded-md border border-slate-300/70 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-2">
+            <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase">اللعبة</div>
             <div className="text-sm font-bold text-white mt-0.5 flex items-center gap-1">
               <Gamepad2 className="w-3.5 h-3.5 text-[#1e88ff]" />
               {c.game}
@@ -937,13 +937,13 @@ function ChallengeCard({ c }: { c: Challenge }) {
               </Button>
               <Button
                 variant="outline"
-                className="h-9 px-3 bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                className="h-9 px-3 bg-slate-200/60 dark:bg-white/5 border-slate-300/70 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:bg-white/10"
               >
                 <X className="w-4 h-4" />
               </Button>
             </>
           ) : (
-            <Button className="w-full h-9 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 rounded-md">
+            <Button className="w-full h-9 bg-slate-200/60 dark:bg-white/5 border border-slate-300/70 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:bg-white/10 rounded-md">
               في انتظار الرد...
             </Button>
           )}
@@ -981,7 +981,7 @@ function ActivityRow({ e, idx }: { e: ActivityEvent; idx: number }) {
       </div>
       <div className="min-w-0">
         <div className="text-sm text-white leading-snug">{e.text}</div>
-        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+        <div className="text-[11px] text-slate-500 dark:text-slate-500 mt-0.5 flex items-center gap-2">
           <span>{e.meta}</span>
           <span>·</span>
           <span>{e.ago}</span>
@@ -1000,7 +1000,7 @@ function ActivityRow({ e, idx }: { e: ActivityEvent; idx: number }) {
         >
           {e.amount > 0 ? "+" : ""}
           {e.amount.toLocaleString()}{" "}
-          <span className="text-[10px] text-slate-500">USDT</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-500">USDT</span>
         </div>
       )}
     </div>
@@ -1041,28 +1041,28 @@ function ActivityTimeline() {
             <Activity className="w-4 h-4" />
           </span>
           <div>
-            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-white leading-none">
+            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none">
               سجل المنصة المباشر
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-700 dark:text-slate-400 mt-1">
               كل ما يحدث على VEX — بطولات، انتصارات، صدمات وقفزات قياسية
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+        <div className="flex items-center gap-1 text-[11px] text-slate-700 dark:text-slate-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           يُحدَّث الآن
         </div>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
-        <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-white/10 rounded-xl p-2 md:p-4">
+        <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-2 md:p-4">
           {items.map((e, i) => (
             <ActivityRow key={e.id} e={e} idx={i} />
           ))}
           <div
             ref={sentinel}
-            className="py-6 text-center text-xs text-slate-500"
+            className="py-6 text-center text-xs text-slate-500 dark:text-slate-500"
           >
             <div className="inline-flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#1e88ff] animate-pulse" />
@@ -1072,7 +1072,7 @@ function ActivityTimeline() {
         </Card>
 
         <aside className="space-y-4">
-          <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-white/10 rounded-xl p-5">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5">
             <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#ffb627]/30 blur-3xl" />
             <div className="relative">
               <div className="flex items-center gap-2 text-[#ffb627] text-xs font-bold tracking-widest mb-2">
@@ -1086,10 +1086,10 @@ function ActivityTimeline() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="font-['Bebas_Neue'] text-2xl text-white tracking-wider leading-none">
+                  <div className="font-['Bebas_Neue'] text-2xl text-slate-900 dark:text-white tracking-wider leading-none">
                     AbuFlash
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-slate-700 dark:text-slate-400">
                     24 انتصار · ربح 18,200 USDT
                   </div>
                 </div>
@@ -1102,7 +1102,7 @@ function ActivityTimeline() {
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-white/10 rounded-xl p-4">
+          <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4">
             <div className="flex items-center gap-2 text-[#1e88ff] text-xs font-bold tracking-widest mb-3">
               <Target className="w-4 h-4" />
               تحدّيات اليوم
@@ -1120,14 +1120,14 @@ function ActivityTimeline() {
                   </div>
                   <Progress
                     value={q.v}
-                    className="h-1.5 mt-1.5 bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-[#ffb627] [&>div]:to-[#ff8a00]"
+                    className="h-1.5 mt-1.5 bg-slate-200/80 dark:bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-[#ffb627] [&>div]:to-[#ff8a00]"
                   />
                 </div>
               ))}
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-white/10 rounded-xl p-4">
+          <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4">
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold tracking-widest mb-3">
               <Megaphone className="w-4 h-4" />
               إعلان رسمي
@@ -1137,7 +1137,7 @@ function ActivityTimeline() {
               <span className="text-[#ffb627] font-bold">250,000 USDT</span>،
               التسجيل مفتوح لجميع الرتب من ذهبي وما فوق.
             </div>
-            <Button className="w-full mt-3 h-9 bg-white/5 border border-white/10 text-white hover:bg-white/10 rounded-md text-sm">
+            <Button className="w-full mt-3 h-9 bg-slate-200/60 dark:bg-white/5 border border-slate-300/70 dark:border-white/10 text-white hover:bg-slate-200/80 dark:bg-white/10 rounded-md text-sm">
               تفاصيل الموسم
             </Button>
           </Card>
@@ -1157,11 +1157,11 @@ function MiniStat({
   tone: string;
 }) {
   return (
-    <div className="rounded-md bg-white/[0.04] border border-white/10 py-2">
+    <div className="rounded-md bg-slate-100 dark:bg-white/[0.04] border border-slate-300/70 dark:border-white/10 py-2">
       <div className={`font-['Bebas_Neue'] text-xl tracking-wider ${tone}`}>
         {value}
       </div>
-      <div className="text-[10px] text-slate-400 mt-0.5">{label}</div>
+      <div className="text-[10px] text-slate-700 dark:text-slate-400 mt-0.5">{label}</div>
     </div>
   );
 }
@@ -1176,7 +1176,7 @@ export function StadiumHome({ owner, showTopBar = false }: StadiumHomeProps) {
     <div
       dir="rtl"
       lang="ar"
-      className="min-h-screen bg-[#0a0e1a] text-white selection:bg-[#ffb627] selection:text-black"
+      className="min-h-screen bg-slate-100 dark:bg-[#0a0e1a] text-slate-900 dark:text-white selection:bg-[#ffb627] selection:text-black"
       style={{ fontFamily: "'IBM Plex Sans Arabic', 'Cairo', sans-serif" }}
     >
       <style>{`
@@ -1196,7 +1196,7 @@ export function StadiumHome({ owner, showTopBar = false }: StadiumHomeProps) {
       <HeroCarousel />
 
       <div className="space-y-10 py-8 relative">
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#0a0e1a] to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-100 dark:from-[#0a0e1a] to-transparent pointer-events-none" />
 
         <Rail
           title="بطولات مباشرة"
@@ -1246,7 +1246,7 @@ export function StadiumHome({ owner, showTopBar = false }: StadiumHomeProps) {
       </div>
 
       <div className="px-4 md:px-6 pb-12">
-        <div className="text-center text-[11px] text-slate-600">
+        <div className="text-center text-[11px] text-slate-700 dark:text-slate-600">
           استمر في التمرير — السجل لا ينتهي. كل لحظة جديدة على VEX تظهر هنا.
         </div>
       </div>
