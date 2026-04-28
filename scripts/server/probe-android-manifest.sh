@@ -213,12 +213,42 @@ else
       bad "manifest.json public probe failed: HTTP ${manifest_status:-???}, Content-Type=${manifest_type:-<none>} (URL: ${manifest_url})"
     fi
 
-    # 3b) APK must be reachable, with the right MIME, with PK magic in the body.
+    # 3b) APK must be reachable. We do this in TWO legs on purpose:
+    #
+    #   (i)  An explicit HEAD against the public URL — exactly what the task
+    #        spec asks for. HEAD is the cheapest possible probe and also
+    #        the one most likely to be cached at the CDN/proxy layer, so
+    #        if the headers look good we already know the URL is wired up
+    #        end-to-end without spending a single body byte.
+    #
+    #   (ii) A ranged GET (bytes 0-1) — the load-bearing leg. HEAD alone
+    #        is not sufficient because some proxies happily echo back a
+    #        green status + the right Content-Type while the body is
+    #        actually an HTML error page (the EACCES → HTML-rewrite case
+    #        that motivated this script). Fetching the first 2 bytes and
+    #        asserting ZIP magic (PK / 0x504b) is what genuinely proves
+    #        Android's package installer would accept this URL.
+    #
+    # If HEAD and GET disagree (e.g. HEAD reports application/vnd.android.
+    # package-archive but GET returns text/html), the GET wins — it's what
+    # a real phone would see.
     apk_url="${PUBLIC_URL}/downloads/${APK_FILE}"
-    # HEAD via GET (-I issues HEAD which some CDNs serve from cache without
-    # invoking Express; a real GET with -o/dev/null and -w gives us exactly
-    # what a phone's browser would see). --max-time guards against hanging
-    # on a misconfigured proxy that holds the connection open.
+
+    # Leg (i): HEAD.
+    head_meta="$(curl -sS -L --max-time 15 -I -o /dev/null \
+      -w 'STATUS=%{http_code}\nTYPE=%{content_type}\n' "$apk_url" 2>&1)" || true
+    head_status="$(printf '%s\n' "$head_meta" | awk -F= '/^STATUS=/{print $2}')"
+    head_type="$(printf '%s\n' "$head_meta" | awk -F= '/^TYPE=/{print $2}' | awk '{print tolower($0)}')"
+    if [ "$head_status" != "200" ]; then
+      bad "APK HEAD probe failed: HTTP ${head_status:-???} at ${apk_url}"
+    elif ! printf '%s' "$head_type" | grep -q "$EXPECTED_APK_MIME"; then
+      bad "APK HEAD Content-Type wrong: got '${head_type:-<none>}', expected '${EXPECTED_APK_MIME}' (URL: ${apk_url})"
+    else
+      ok "APK HEAD OK — ${apk_url} (HTTP ${head_status}, ${head_type})"
+    fi
+
+    # Leg (ii): ranged GET. --max-time guards against hanging on a
+    # misconfigured proxy that holds the connection open.
     apk_meta="$(curl -sS -L --max-time 30 -o /dev/null \
       -w 'STATUS=%{http_code}\nTYPE=%{content_type}\nLEN=%{size_download}\n' \
       -X GET -r 0-1 "$apk_url" 2>&1)" || true
@@ -229,13 +259,13 @@ else
     # as success. Any other status — including 404, 403, 500, or a 200-with-
     # HTML-body that some intermediates synthesise — is a hard failure.
     if [ "$apk_status" != "200" ] && [ "$apk_status" != "206" ]; then
-      bad "APK public probe failed: HTTP ${apk_status:-???} at ${apk_url}"
+      bad "APK GET probe failed: HTTP ${apk_status:-???} at ${apk_url}"
     elif ! printf '%s' "$apk_type" | grep -q "$EXPECTED_APK_MIME"; then
       # This is the load-bearing assertion: even if the HTTP status looks
       # green, an HTML-rewritten 200 body would have Content-Type text/html
       # and Android's package installer would reject the install with a
       # cryptic "There was a problem parsing the package" error.
-      bad "APK Content-Type wrong: got '${apk_type:-<none>}', expected '${EXPECTED_APK_MIME}' (URL: ${apk_url})"
+      bad "APK GET Content-Type wrong: got '${apk_type:-<none>}', expected '${EXPECTED_APK_MIME}' (URL: ${apk_url})"
     else
       # Now actually fetch 2 bytes from the URL and confirm ZIP magic. This
       # catches the rare case where a proxy/CDN returns the right MIME but
@@ -245,7 +275,7 @@ else
       if [ "$magic_bytes" != "504b" ]; then
         bad "APK public body is not a ZIP (got first bytes 0x${magic_bytes:-empty}, expected 0x504b/PK) at ${apk_url}"
       else
-        ok "APK reachable at ${apk_url} (HTTP ${apk_status}, ${apk_type}, ZIP magic PK)"
+        ok "APK GET OK — ${apk_url} (HTTP ${apk_status}, ${apk_type}, ZIP magic PK)"
       fi
     fi
   fi

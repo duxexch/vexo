@@ -54,10 +54,19 @@ and `VEX-official-release.aab` attached.
 | --- | --- |
 | Pull latest code, rebuild, redeploy, verify, probe | `bash scripts/server/update-all.sh` |
 | Refresh APK only (no code/container change) | `bash scripts/server/update-all.sh --skip-pull --skip-deploy` |
+| Skip the slow read-only audit but keep the strict APK gate | `bash scripts/server/update-all.sh --skip-verify` |
+| Skip the strict APK gate too (rarely correct — emits warnings) | `bash scripts/server/update-all.sh --skip-verify --skip-probe` |
 | Re-check the public APK URL after a CDN/proxy change | `bash scripts/server/probe-android-manifest.sh` |
 | Run the same probe but skip the network leg (offline) | `bash scripts/server/probe-android-manifest.sh --skip-public` |
 | Read-only deep audit (signature, DB FKs, file integrity) | `bash scripts/server/verify-vex-deployment.sh` |
 | Just download new binaries + rewrite manifest | `bash scripts/server/refresh-android-binaries.sh` |
+
+`--skip-verify` and `--skip-probe` are intentionally separate flags. The
+verify pass (Step 4) is an advisory deep audit (APK signature, DB foreign
+keys, on-disk file integrity) that prints warnings but never aborts the
+orchestrator. The probe (Step 5) is the load-bearing "is the APK actually
+installable?" gate that DOES abort the orchestrator on any mismatch — keep
+it on for every real production deploy.
 
 ## Why Step 5/5 exists
 

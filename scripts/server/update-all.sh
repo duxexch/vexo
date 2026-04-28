@@ -46,6 +46,16 @@
 #   --skip-apk         Don't refresh the Android binaries / manifest
 #   --skip-deploy      Don't rebuild / restart docker-compose
 #   --skip-verify      Don't run the post-deploy verification script
+#                      (Step 4). Step 5 (the strict APK probe) still runs
+#                      unless you also pass --skip-probe — verify is the
+#                      advisory deep audit; the probe is the load-bearing
+#                      "is the APK installable?" gate.
+#   --skip-probe       Don't run the strict APK manifest probe (Step 5).
+#                      RARELY NEEDED. Use only when you've already proven
+#                      the APK URL works through another channel and want
+#                      a faster CI loop. Skipping this is what allows
+#                      "Update sequence finished" to print without proof
+#                      that the APK is actually installable.
 #   --force            Always run the docker-compose rebuild even if
 #                      `git pull` reported no new commits (useful after
 #                      an env file change or a manual code edit)
@@ -63,9 +73,9 @@
 #   # Force a full rebuild even when git is up-to-date (e.g. after .env edit)
 #   bash scripts/server/update-all.sh --force
 #
-#   # Rebuild without the deep verify (faster CI loop). Note: --skip-verify
-#   # also skips Step 5 (the strict APK manifest probe) — only use this in
-#   # CI loops where you have a separate post-deploy gate.
+#   # Rebuild without the deep verify (faster CI loop). The strict APK
+#   # probe (Step 5) still runs — that's the gate that prevents silent
+#   # "deploy succeeded but APK is missing" failures.
 #   bash scripts/server/update-all.sh --skip-verify
 #
 #   # Just re-check that the public APK URL still serves the manifest's
@@ -111,6 +121,7 @@ SKIP_PULL="false"
 SKIP_APK="false"
 SKIP_DEPLOY="false"
 SKIP_VERIFY="false"
+SKIP_PROBE="false"
 FORCE_DEPLOY="false"
 BRANCH=""
 PROD_UPDATE_FORWARD_ARGS=()
@@ -121,6 +132,7 @@ while [[ $# -gt 0 ]]; do
     --skip-apk)     SKIP_APK="true"; shift ;;
     --skip-deploy)  SKIP_DEPLOY="true"; shift ;;
     --skip-verify)  SKIP_VERIFY="true"; shift ;;
+    --skip-probe)   SKIP_PROBE="true"; shift ;;
     --force)        FORCE_DEPLOY="true"; shift ;;
     --branch)       BRANCH="${2:-}"; shift 2 ;;
     --help|-h)
@@ -172,9 +184,9 @@ log_ok "All required commands available"
 CODE_CHANGED="false"
 
 if [[ "$SKIP_PULL" == "true" ]]; then
-  log_step "Step 1/4: git pull (skipped)"
+  log_step "Step 1/5: git pull (skipped)"
 else
-  log_step "Step 1/4: git pull"
+  log_step "Step 1/5: git pull"
 
   if [[ ! -d ".git" ]]; then
     log_error "$(pwd) is not a git working tree"
@@ -215,9 +227,9 @@ fi
 # Step 2 — refresh Android binaries + manifest
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_APK" == "true" ]]; then
-  log_step "Step 2/4: refresh Android binaries (skipped)"
+  log_step "Step 2/5: refresh Android binaries (skipped)"
 else
-  log_step "Step 2/4: refresh Android binaries (APK + AAB + manifest.json)"
+  log_step "Step 2/5: refresh Android binaries (APK + AAB + manifest.json)"
   bash scripts/server/refresh-android-binaries.sh
   log_ok "Android binaries refreshed"
 fi
@@ -230,11 +242,11 @@ fi
 # overrides this when the operator knows there's an out-of-band change
 # (e.g. a .env edit or a manual file replacement).
 if [[ "$SKIP_DEPLOY" == "true" ]]; then
-  log_step "Step 3/4: docker-compose redeploy (skipped)"
+  log_step "Step 3/5: docker-compose redeploy (skipped)"
 elif [[ "$CODE_CHANGED" == "false" && "$FORCE_DEPLOY" == "false" && "$SKIP_PULL" == "false" ]]; then
-  log_step "Step 3/4: docker-compose redeploy (skipped — no code changes; pass --force to override)"
+  log_step "Step 3/5: docker-compose redeploy (skipped — no code changes; pass --force to override)"
 else
-  log_step "Step 3/4: docker-compose redeploy"
+  log_step "Step 3/5: docker-compose redeploy"
   if [[ ${#PROD_UPDATE_FORWARD_ARGS[@]} -gt 0 ]]; then
     log_info "Forwarding to prod-update.sh: ${PROD_UPDATE_FORWARD_ARGS[*]}"
     bash "$REPO_ROOT/prod-update.sh" "${PROD_UPDATE_FORWARD_ARGS[@]}"
@@ -281,8 +293,10 @@ fi
 # The probe script also prints the recovery command
 # (refresh-android-binaries.sh) directly in its failure output, so the
 # operator doesn't need to remember which sub-script to re-run.
-if [[ "$SKIP_VERIFY" == "true" ]]; then
-  log_step "Step 5/5: manifest ↔ disk ↔ public URL probe (skipped via --skip-verify)"
+if [[ "$SKIP_PROBE" == "true" ]]; then
+  log_step "Step 5/5: manifest ↔ disk ↔ public URL probe (skipped via --skip-probe)"
+  log_warn "Skipping Step 5 means 'Update sequence finished' will print"
+  log_warn "without proof that the public APK URL is actually installable."
 else
   log_step "Step 5/5: manifest ↔ disk ↔ public URL probe (strict)"
   # Run the probe inline. It uses `set -uo pipefail` (no -e) and exits
