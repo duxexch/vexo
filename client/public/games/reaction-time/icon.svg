@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <radialGradient id="ag" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#ffb627"/>
+      <stop offset="0.7" stop-color="#a86b00"/>
+      <stop offset="1" stop-color="#3d2700"/>
+    </radialGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde047"/>
+      <stop offset="1" stop-color="#facc15"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="200" height="200" rx="32" fill="#0a1020"/>
+  <circle cx="100" cy="100" r="76" fill="url(#ag)" filter="drop-shadow(0 0 20px #ffb627)"/>
+  <polygon points="106,40 56,108 96,108 84,160 144,90 102,90" fill="url(#bolt)" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+</svg>

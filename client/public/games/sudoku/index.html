@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Sudoku</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .sudoku {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 4px;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    gap: 1px;
+    overflow: hidden;
+  }
+  .scell {
+    background: rgba(15, 23, 42, 0.85);
+    display: grid;
+    place-items: center;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-size: clamp(0.95rem, 4vw, 1.4rem);
+    cursor: pointer;
+    transition: background 0.12s;
+    color: var(--vex-text);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .scell.given { color: var(--vex-text-dim); cursor: default; background: rgba(15, 23, 42, 1); }
+  .scell.user { color: var(--vex-blue); }
+  .scell.selected { background: rgba(30, 136, 255, 0.25); box-shadow: inset 0 0 0 2px var(--vex-blue); }
+  .scell.same { background: rgba(30, 136, 255, 0.08); }
+  .scell.wrong { color: var(--vex-rose); animation: vexShake 0.3s ease-out; }
+  /* Box borders */
+  .scell:nth-child(3n)        { box-shadow: inset 0 0 0 0, 1px 0 0 rgba(30, 136, 255, 0.4); }
+  .scell:nth-child(9n)        { box-shadow: none; }
+  /* row 3, 6 bottom borders */
+  .scell:nth-child(n+19):nth-child(-n+27),
+  .scell:nth-child(n+46):nth-child(-n+54) {
+    border-bottom: 1px solid rgba(30, 136, 255, 0.4);
+  }
+  .scell:nth-child(3n+3):not(:nth-child(9n)) {
+    border-right: 1px solid rgba(30, 136, 255, 0.4);
+  }
+  .scell.selected.same { background: rgba(30, 136, 255, 0.3); }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+    width: 100%;
+    max-width: 380px;
+    margin-left: auto; margin-right: auto;
+  }
+  .kbtn {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    background: var(--vex-surface);
+    border: 1px solid var(--vex-border);
+    color: var(--vex-text);
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .kbtn:hover { background: var(--vex-surface-hover); }
+  .kbtn:active { transform: scale(0.94); }
+  .kbtn.erase { color: var(--vex-rose); font-size: 1rem; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      </div>
+      <span id="title">سودوكو</span>
+    </div>
+    <button class="vex-btn" id="newBtn"><span id="newBtnLabel">جديدة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTime">الوقت</div><div class="vex-stat-value" id="time">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblMistakes">الأخطاء</div><div class="vex-stat-value rose" id="mistakes">0/3</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblDiff">المستوى</div><div class="vex-stat-value blue" id="diff">سهل</div></div>
+  </div>
+
+  <div class="vex-board" style="padding:6px;">
+    <div class="sudoku" id="board"></div>
+  </div>
+
+  <div class="keypad" id="keypad"></div>
+
+  <div class="vex-hint" id="hint">انقر على خانة فارغة، ثم اختر رقماً. أكمل الشبكة!</div>
+</div>
+
+<div class="vex-overlay show" id="startOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="startTitle">سودوكو</div>
+    <div class="vex-overlay-subtitle" id="startSubtitle">املأ الشبكة 9×9 — كل صف وعمود ومربع 3×3 يحتوي على 1-9.</div>
+    <div class="vex-btn-row" style="margin-bottom:0;">
+      <button class="vex-btn diff-pick" data-d="easy" style="flex:1;">سهل</button>
+      <button class="vex-btn diff-pick" data-d="medium" style="flex:1;">متوسط</button>
+      <button class="vex-btn diff-pick" data-d="hard" style="flex:1;">صعب</button>
+    </div>
+  </div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" id="endIcon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">رائع! حللت الشبكة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">ذكاء حاد!</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalTime">الوقت</div><div class="vex-overlay-stat-value" id="finalTime">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalMistakes">الأخطاء</div><div class="vex-overlay-stat-value" id="finalMistakes">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;">جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'سودوكو', time:'الوقت', mistakes:'الأخطاء', diff:'المستوى', new:'جديدة',
+      sub:'املأ الشبكة 9×9 — كل صف وعمود ومربع 3×3 يحتوي على 1-9.',
+      easy:'سهل', medium:'متوسط', hard:'صعب', won:'رائع! حللت الشبكة!', wonSub:'ذكاء حاد!',
+      lost:'كثرة الأخطاء!', lostSub:'حاول مجدداً بصبر أكبر',
+      hint:'انقر على خانة فارغة، ثم اختر رقماً. أكمل الشبكة!', restart:'جديدة' },
+    en: { title:'Sudoku', time:'Time', mistakes:'Errors', diff:'Level', new:'New',
+      sub:'Fill the 9×9 — every row, column and 3×3 box contains 1-9.',
+      easy:'Easy', medium:'Medium', hard:'Hard', won:'Solved!', wonSub:'Sharp mind!',
+      lost:'Too many errors!', lostSub:'Try again with more patience',
+      hint:'Tap an empty cell then choose a number. Complete the grid!', restart:'New' },
+  };
+  let lang = 'ar';
+  const titleEl = document.getElementById('title'), boardEl = document.getElementById('board'), keypadEl = document.getElementById('keypad'),
+        timeEl = document.getElementById('time'), mistakesEl = document.getElementById('mistakes'),
+        diffEl = document.getElementById('diff'), startOverlay = document.getElementById('startOverlay'),
+        endOverlay = document.getElementById('endOverlay'), endRestart = document.getElementById('endRestart'),
+        finalTime = document.getElementById('finalTime'), finalMistakes = document.getElementById('finalMistakes'),
+        endTitle = document.getElementById('endTitle'), endSubtitle = document.getElementById('endSubtitle'),
+        endIcon = document.getElementById('endIcon'), newBtn = document.getElementById('newBtn'),
+        newBtnLabel = document.getElementById('newBtnLabel'), startTitle = document.getElementById('startTitle'),
+        startSubtitle = document.getElementById('startSubtitle'),
+        lblTime = document.getElementById('lblTime'), lblMistakes = document.getElementById('lblMistakes'),
+        lblDiff = document.getElementById('lblDiff'), lblFinalTime = document.getElementById('lblFinalTime'),
+        lblFinalMistakes = document.getElementById('lblFinalMistakes'), hint = document.getElementById('hint');
+
+  let solution = [], puzzle = [], user = [], given = [], selected = -1, mistakes = 0, MAX_MISTAKES = 3,
+      startTs = 0, timer = null, difficulty = 'easy', solved = 0;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblTime.textContent = s.time; lblMistakes.textContent = s.mistakes;
+    lblDiff.textContent = s.diff; newBtnLabel.textContent = s.new; hint.textContent = s.hint;
+    startTitle.textContent = s.title; startSubtitle.textContent = s.sub;
+    document.querySelectorAll('.diff-pick').forEach(b => { b.textContent = s[b.dataset.d]; });
+    diffEl.textContent = s[difficulty];
+    endRestart.textContent = s.restart;
+    lblFinalTime.textContent = s.time; lblFinalMistakes.textContent = s.mistakes;
+  }
+
+  // Sudoku generator
+  function genSolved() {
+    const g = Array.from({ length: 9 }, () => Array(9).fill(0));
+    function isOK(r, c, n) {
+      for (let i = 0; i < 9; i++) if (g[r][i] === n || g[i][c] === n) return false;
+      const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (g[br+i][bc+j] === n) return false;
+      return true;
+    }
+    function solve(idx) {
+      if (idx === 81) return true;
+      const r = Math.floor(idx/9), c = idx % 9;
+      const nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+      for (const n of nums) {
+        if (isOK(r, c, n)) {
+          g[r][c] = n;
+          if (solve(idx+1)) return true;
+          g[r][c] = 0;
+        }
+      }
+      return false;
+    }
+    solve(0);
+    return g.flat();
+  }
+
+  function makePuzzle(d) {
+    solution = genSolved();
+    puzzle = solution.slice();
+    const remove = d === 'easy' ? 35 : d === 'medium' ? 45 : 55;
+    const indices = Array.from({ length: 81 }, (_, i) => i).sort(() => Math.random() - 0.5);
+    for (let i = 0; i < remove; i++) puzzle[indices[i]] = 0;
+    user = puzzle.map(v => v); // user starts with given
+    given = puzzle.map(v => v !== 0);
+  }
+
+  function newGame(d) {
+    difficulty = d || difficulty || 'easy';
+    diffEl.textContent = STRINGS[lang][difficulty];
+    makePuzzle(difficulty);
+    selected = -1; mistakes = 0; solved = 0;
+    mistakesEl.textContent = '0/' + MAX_MISTAKES;
+    if (timer) clearInterval(timer);
+    startTs = Date.now();
+    timer = setInterval(() => {
+      timeEl.textContent = Math.floor((Date.now() - startTs) / 1000) + 's';
+    }, 500);
+    render();
+    endOverlay.classList.remove('show');
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    for (let i = 0; i < 81; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'scell';
+      const v = user[i];
+      if (given[i]) cell.classList.add('given');
+      else if (v && v !== 0) cell.classList.add('user');
+      cell.textContent = v ? v : '';
+      cell.dataset.idx = i;
+      if (i === selected) cell.classList.add('selected');
+      if (selected !== -1 && user[selected] !== 0 && user[i] === user[selected] && i !== selected) cell.classList.add('same');
+      cell.addEventListener('click', () => onSelect(i));
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function buildKeypad() {
+    keypadEl.innerHTML = '';
+    for (let n = 1; n <= 9; n++) {
+      const b = document.createElement('button');
+      b.className = 'kbtn';
+      b.textContent = n;
+      b.addEventListener('click', () => place(n));
+      keypadEl.appendChild(b);
+    }
+    const erase = document.createElement('button');
+    erase.className = 'kbtn erase';
+    erase.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    erase.addEventListener('click', () => place(0));
+    keypadEl.appendChild(erase);
+  }
+
+  function onSelect(i) {
+    selected = i;
+    render();
+  }
+
+  function place(n) {
+    if (selected === -1 || given[selected]) return;
+    if (n !== 0 && solution[selected] !== n) {
+      mistakes++;
+      mistakesEl.textContent = mistakes + '/' + MAX_MISTAKES;
+      const cell = boardEl.children[selected];
+      cell.classList.add('wrong');
+      setTimeout(() => cell.classList.remove('wrong'), 320);
+      if (typeof VexGame !== 'undefined') VexGame.toast('خطأ!', 'error');
+      if (mistakes >= MAX_MISTAKES) {
+        endGame(false);
+        return;
+      }
+      return;
+    }
+    user[selected] = n;
+    if (n !== 0) solved++;
+    render();
+    // Check win
+    let win = true;
+    for (let i = 0; i < 81; i++) if (user[i] !== solution[i]) { win = false; break; }
+    if (win) endGame(true);
+  }
+
+  function endGame(isWin) {
+    if (timer) { clearInterval(timer); timer = null; }
+    const elapsed = Math.floor((Date.now() - startTs) / 1000);
+    const s = STRINGS[lang];
+    if (isWin) {
+      endTitle.textContent = s.won; endSubtitle.textContent = s.wonSub;
+      endIcon.className = 'vex-overlay-icon emerald';
+    } else {
+      endTitle.textContent = s.lost; endSubtitle.textContent = s.lostSub;
+      endIcon.className = 'vex-overlay-icon rose';
+    }
+    finalTime.textContent = elapsed + 's';
+    finalMistakes.textContent = mistakes;
+    endOverlay.classList.add('show');
+    const score = isWin ? Math.max(200, 5000 - elapsed * 4 - mistakes * 200 - (difficulty === 'easy' ? 1000 : difficulty === 'medium' ? 0 : -1500)) : 0;
+    if (typeof VexGame !== 'undefined') {
+      if (isWin) {
+        VexGame.setBest(score);
+        VexGame.confetti(2200);
+      }
+      VexGame.endSession({
+        score: score, result: isWin ? 'win' : 'loss',
+        metadata: { difficulty: difficulty, mistakes: mistakes, timeSeconds: elapsed },
+      });
+    }
+  }
+
+  newBtn.addEventListener('click', () => { startOverlay.classList.add('show'); endOverlay.classList.remove('show'); });
+  endRestart.addEventListener('click', () => { startOverlay.classList.add('show'); endOverlay.classList.remove('show'); });
+  document.querySelectorAll('.diff-pick').forEach((b) => {
+    b.addEventListener('click', () => {
+      startOverlay.classList.remove('show');
+      newGame(b.dataset.d);
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (selected === -1) return;
+    if (e.key >= '1' && e.key <= '9') place(parseInt(e.key, 10));
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') place(0);
+  });
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'sudoku',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  buildKeypad();
+  applyLang();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Memory Flip</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .grid-mem {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .grid-mem.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-mem.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-mem.cols-5 { grid-template-columns: repeat(5, 1fr); }
+  .card-mem {
+    aspect-ratio: 1;
+    perspective: 600px;
+    cursor: pointer;
+  }
+  .card-inner {
+    position: relative;
+    width: 100%; height: 100%;
+    transition: transform 0.45s cubic-bezier(0.4,0,0.2,1);
+    transform-style: preserve-3d;
+  }
+  .card-mem.flipped .card-inner { transform: rotateY(180deg); }
+  .card-mem.matched .card-inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .face-back {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid rgba(30, 136, 255, 0.25);
+  }
+  .face-back::before {
+    content: '';
+    width: 38%; height: 38%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(30, 136, 255, 0.5), transparent 70%);
+  }
+  .face-front {
+    transform: rotateY(180deg);
+    background: linear-gradient(135deg, #1e88ff, #0a4d9c);
+    color: #fff;
+    box-shadow: 0 0 20px -2px rgba(30, 136, 255, 0.5);
+    font-size: 2.2rem;
+    font-weight: 700;
+  }
+  .card-mem.matched .face-front {
+    background: linear-gradient(135deg, #22c55e, #14532d);
+    box-shadow: 0 0 24px -2px rgba(34, 197, 94, 0.6);
+    animation: matchPulse 0.5s ease-out;
+  }
+  @keyframes matchPulse {
+    0% { transform: rotateY(180deg) scale(1); }
+    50% { transform: rotateY(180deg) scale(1.08); }
+    100% { transform: rotateY(180deg) scale(1); }
+  }
+  .card-mem.wrong .face-front {
+    background: linear-gradient(135deg, #ef4444, #7f1d1d);
+    box-shadow: 0 0 18px -2px rgba(239, 68, 68, 0.6);
+    animation: wrongShake 0.4s ease-out;
+  }
+  @keyframes wrongShake {
+    0%, 100% { transform: rotateY(180deg) translateX(0); }
+    25% { transform: rotateY(180deg) translateX(-4px); }
+    75% { transform: rotateY(180deg) translateX(4px); }
+  }
+  .difficulty-row {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .diff-btn {
+    padding: 6px 14px; border-radius: 99px; font-size: 0.78rem; font-weight: 600;
+    background: var(--vex-surface); border: 1px solid var(--vex-border); color: var(--vex-text-dim); cursor: pointer; transition: all 0.18s;
+    font-family: inherit;
+  }
+  .diff-btn:hover { color: var(--vex-text); }
+  .diff-btn.active {
+    background: linear-gradient(135deg, #1e88ff, #0a4d9c);
+    color: white; border-color: transparent;
+    box-shadow: 0 0 16px -3px #1e88ff;
+  }
+  @media (max-width: 380px) {
+    .face-front { font-size: 1.7rem; }
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge emerald">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </div>
+      <span id="title">تطابق الذاكرة</span>
+    </div>
+    <button class="vex-btn" id="newBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> <span id="newBtnLabel">جديدة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblScore">النقاط</div><div class="vex-stat-value" id="score">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblMoves">المحاولات</div><div class="vex-stat-value blue" id="moves">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTime">الوقت</div><div class="vex-stat-value emerald" id="time">0</div></div>
+  </div>
+
+  <div class="difficulty-row" id="diffRow"></div>
+
+  <div class="vex-board">
+    <div class="grid-mem cols-4" id="grid"></div>
+  </div>
+
+  <div class="vex-hint" id="hint">اقلب البطاقات للعثور على الأزواج. أنهِ بأقل عدد محاولات!</div>
+</div>
+
+<div class="vex-overlay show" id="startOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon emerald">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="startTitle">تطابق الذاكرة</div>
+    <div class="vex-overlay-subtitle" id="startSubtitle">اقلب البطاقات لإيجاد الأزواج المتطابقة. اختر مستوى الصعوبة وابدأ!</div>
+    <button class="vex-btn vex-btn-primary" id="startBtn" style="width:100%;">ابدأ اللعب</button>
+  </div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" id="endIcon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">رائع!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">أنهيت اللعبة بنجاح</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">النقاط</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalTime">الوقت</div><div class="vex-overlay-stat-value" id="finalTime">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;">العب مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function () {
+  'use strict';
+  const STRINGS = {
+    ar: {
+      title: 'تطابق الذاكرة', score:'النقاط', moves:'المحاولات', time:'الوقت', new:'جديدة', start:'ابدأ اللعب', restart:'العب مجدداً',
+      hint:'اقلب البطاقات للعثور على الأزواج. أنهِ بأقل عدد محاولات!',
+      sub:'اقلب البطاقات لإيجاد الأزواج المتطابقة. اختر مستوى الصعوبة وابدأ!',
+      easy:'سهل', medium:'متوسط', hard:'صعب', win:'رائع!', winSub:'أنهيت اللعبة بنجاح',
+    },
+    en: {
+      title:'Memory Flip', score:'Score', moves:'Moves', time:'Time', new:'New', start:'Start', restart:'Play again',
+      hint:'Flip cards to find pairs. Finish in fewest moves!',
+      sub:'Flip cards to find matching pairs. Pick difficulty and go!',
+      easy:'Easy', medium:'Medium', hard:'Hard', win:'Awesome!', winSub:'You completed the game',
+    },
+  };
+  let lang = 'ar';
+
+  const titleEl = document.getElementById('title');
+  const scoreEl = document.getElementById('score');
+  const movesEl = document.getElementById('moves');
+  const timeEl = document.getElementById('time');
+  const grid = document.getElementById('grid');
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  const finalScore = document.getElementById('finalScore');
+  const finalTime = document.getElementById('finalTime');
+  const startBtn = document.getElementById('startBtn');
+  const endRestart = document.getElementById('endRestart');
+  const newBtn = document.getElementById('newBtn');
+  const newBtnLabel = document.getElementById('newBtnLabel');
+  const lblScore = document.getElementById('lblScore'), lblMoves=document.getElementById('lblMoves'),
+        lblTime=document.getElementById('lblTime'), lblFinalScore=document.getElementById('lblFinalScore'),
+        lblFinalTime=document.getElementById('lblFinalTime'), startTitle=document.getElementById('startTitle'),
+        startSubtitle=document.getElementById('startSubtitle'), hint=document.getElementById('hint'),
+        diffRow=document.getElementById('diffRow'), endTitle=document.getElementById('endTitle'),
+        endSubtitle=document.getElementById('endSubtitle');
+
+  // Difficulty: cards count + grid cols
+  const DIFF = {
+    easy:   { pairs: 6, cols: 3 },   // 12 cards 3x4
+    medium: { pairs: 8, cols: 4 },   // 16 cards 4x4
+    hard:   { pairs: 10, cols: 5 },  // 20 cards 5x4
+  };
+  let difficulty = 'medium';
+
+  function renderDiffButtons() {
+    diffRow.innerHTML = '';
+    ['easy', 'medium', 'hard'].forEach((d) => {
+      const b = document.createElement('button');
+      b.className = 'diff-btn' + (d === difficulty ? ' active' : '');
+      b.textContent = STRINGS[lang][d];
+      b.addEventListener('click', () => { difficulty = d; renderDiffButtons(); newGame(); });
+      diffRow.appendChild(b);
+    });
+  }
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblScore.textContent = s.score; lblMoves.textContent = s.moves; lblTime.textContent = s.time;
+    newBtnLabel.textContent = s.new; startBtn.textContent = s.start; endRestart.textContent = s.restart;
+    hint.textContent = s.hint; startTitle.textContent = s.title; startSubtitle.textContent = s.sub;
+    lblFinalScore.textContent = s.score; lblFinalTime.textContent = s.time;
+    endTitle.textContent = s.win; endSubtitle.textContent = s.winSub;
+    renderDiffButtons();
+  }
+
+  // SVG symbols (simple shapes for cards)
+  const SYMBOLS = ['♛','★','♥','◆','▲','●','✦','✿','♬','☀','☂','☎','✈','♞','✪','☘','♨','✺','♟','✿'];
+
+  let cards = [];
+  let flipped = [];
+  let score = 0, moves = 0, matches = 0, totalPairs = 0, busy = false;
+  let startTime = 0, timer = null;
+
+  function shuffle(a) { for (let i = a.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; }
+
+  function newGame() {
+    endOverlay.classList.remove('show');
+    const d = DIFF[difficulty];
+    grid.className = 'grid-mem cols-' + d.cols;
+    grid.innerHTML = '';
+    totalPairs = d.pairs; matches = 0; moves = 0; score = 0; busy = false;
+    flipped = [];
+    cards = [];
+    const sym = shuffle(SYMBOLS.slice()).slice(0, d.pairs);
+    const pool = shuffle([...sym, ...sym]);
+    pool.forEach((s, i) => {
+      const card = document.createElement('div');
+      card.className = 'card-mem';
+      card.dataset.symbol = s;
+      card.dataset.idx = i;
+      card.innerHTML = `<div class="card-inner"><div class="face face-back"></div><div class="face face-front">${s}</div></div>`;
+      card.addEventListener('click', () => onFlip(card));
+      grid.appendChild(card);
+      cards.push(card);
+    });
+    score = 0; movesEl.textContent = 0; scoreEl.textContent = 0;
+    startTimer();
+    updateScore();
+  }
+
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    startTime = Date.now();
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now() - startTime) / 1000);
+      timeEl.textContent = s + 's';
+    }, 250);
+  }
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+  function onFlip(card) {
+    if (busy) return;
+    if (card.classList.contains('matched') || card.classList.contains('flipped')) return;
+    if (flipped.length >= 2) return;
+    card.classList.add('flipped');
+    flipped.push(card);
+    if (flipped.length === 2) {
+      moves++;
+      movesEl.textContent = moves;
+      const [a, b] = flipped;
+      if (a.dataset.symbol === b.dataset.symbol) {
+        busy = true;
+        setTimeout(() => {
+          a.classList.add('matched'); b.classList.add('matched');
+          a.classList.remove('flipped'); b.classList.remove('flipped');
+          flipped = []; busy = false; matches++;
+          // Score: faster + fewer moves = higher
+          score += 100;
+          updateScore();
+          if (typeof VexGame !== 'undefined') {
+            const r = a.getBoundingClientRect();
+            VexGame.popScore(document.body, 100, r.left + r.width/2 + 'px', r.top + 'px');
+          }
+          if (matches === totalPairs) endGame();
+        }, 320);
+      } else {
+        busy = true;
+        a.classList.add('wrong'); b.classList.add('wrong');
+        setTimeout(() => {
+          a.classList.remove('flipped','wrong'); b.classList.remove('flipped','wrong');
+          flipped = []; busy = false;
+          score = Math.max(0, score - 10);
+          updateScore();
+        }, 720);
+      }
+    }
+  }
+
+  function updateScore() {
+    // Bonus penalty per move
+    const rawTime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+    const timeBonus = Math.max(0, 200 - rawTime * 2);
+    const movePenalty = Math.max(0, (moves - totalPairs) * 5);
+    const display = Math.max(0, matches * 100 + timeBonus - movePenalty);
+    scoreEl.textContent = display;
+    score = display;
+  }
+
+  function endGame() {
+    stopTimer();
+    const totalTime = Math.floor((Date.now() - startTime) / 1000);
+    finalScore.textContent = score;
+    finalTime.textContent = totalTime + 's';
+    endOverlay.classList.add('show');
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(score);
+      VexGame.confetti(2000);
+      VexGame.endSession({
+        score: score, result: 'win',
+        metadata: { difficulty: difficulty, moves: moves, timeSeconds: totalTime, pairs: totalPairs },
+      });
+    }
+  }
+
+  newBtn.addEventListener('click', newGame);
+  endRestart.addEventListener('click', newGame);
+  startBtn.addEventListener('click', () => { startOverlay.classList.remove('show'); newGame(); });
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'memory-flip',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+})();
+</script>
+</body>
+</html>

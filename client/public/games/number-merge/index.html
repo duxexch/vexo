@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Number Merge</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .merge-board {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 14px;
+    padding: 6px;
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 5/6;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 4px;
+    touch-action: none;
+  }
+  .cell-merge {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .orb {
+    position: absolute;
+    inset: 6%;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    color: white;
+    transition: transform 0.18s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .orb.new { animation: orbPop 0.22s ease-out; }
+  .orb.merged { animation: orbMerge 0.3s ease-out; z-index:2; }
+  @keyframes orbPop { 0%{transform:scale(0)}100%{transform:scale(1)} }
+  @keyframes orbMerge {
+    0%{transform:scale(0.7)} 60%{transform:scale(1.18)} 100%{transform:scale(1)}
+  }
+  .o-2 { background: linear-gradient(135deg,#1e88ff,#0a4d9c); font-size: 1.3rem; }
+  .o-4 { background: linear-gradient(135deg,#22d3ee,#0891b2); font-size: 1.3rem; }
+  .o-8 { background: linear-gradient(135deg,#22c55e,#14532d); font-size: 1.3rem; }
+  .o-16 { background: linear-gradient(135deg,#a855f7,#5b21b6); font-size: 1.2rem; }
+  .o-32 { background: linear-gradient(135deg,#ec4899,#be185d); font-size: 1.1rem; }
+  .o-64 { background: linear-gradient(135deg,#f97316,#c2410c); font-size: 1.05rem; }
+  .o-128 { background: linear-gradient(135deg,#ef4444,#7f1d1d); font-size: 0.95rem; }
+  .o-256 { background: linear-gradient(135deg,#ffb627,#a86b00); color:black; font-size: 0.95rem; box-shadow: 0 0 16px -2px #ffb627; }
+  .o-512 { background: linear-gradient(135deg,#fde047,#ca8a04); color:black; font-size: 0.85rem; box-shadow: 0 0 18px -1px #ffd700; }
+  .o-big { background: linear-gradient(135deg,#22c55e,#14532d); font-size: 0.7rem; box-shadow: 0 0 22px #22c55e; }
+
+  .next-orb {
+    width: 56px; height: 56px;
+    margin: 0 auto 12px;
+    position: relative;
+  }
+  .next-orb .orb { inset: 0; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge" style="background:linear-gradient(135deg,#f97316,#c2410c);box-shadow:0 0 30px -5px #f97316;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>
+      </div>
+      <span id="title">دمج الأرقام</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblScore">النقاط</div><div class="vex-stat-value" id="score">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value blue" id="best">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTop">أعلى رقم</div><div class="vex-stat-value emerald" id="top">2</div></div>
+  </div>
+
+  <div style="text-align:center;font-size:0.72rem;color:var(--vex-text-muted);margin-bottom:6px;letter-spacing:0.05em;text-transform:uppercase;" id="nextLbl">القادم</div>
+  <div class="next-orb" id="nextOrb"></div>
+
+  <div class="vex-board" style="padding:6px;">
+    <div class="merge-board" id="board"></div>
+  </div>
+
+  <div class="vex-hint" id="hint">انقر عمود لإسقاط الكرة. الكرات المتشابهة الملاصقة تندمج وتتضاعف!</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon rose">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">امتلأت اللوحة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">حاول دمج المزيد في المرة القادمة</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">النقاط</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalTop">أعلى رقم</div><div class="vex-overlay-stat-value" id="finalTop">2</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#f97316,#c2410c);">العب مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'دمج الأرقام', score:'النقاط', best:'الأفضل', top:'أعلى رقم', reset:'إعادة', next:'القادم',
+      end:'امتلأت اللوحة!', endSub:'حاول دمج المزيد في المرة القادمة', restart:'العب مجدداً',
+      hint:'انقر عمود لإسقاط الكرة. الكرات المتشابهة الملاصقة تندمج وتتضاعف!' },
+    en: { title:'Number Merge', score:'Score', best:'Best', top:'Top', reset:'Reset', next:'Next',
+      end:'Board is full!', endSub:'Try merging more next time', restart:'Play again',
+      hint:'Tap a column to drop the orb. Equal adjacent orbs merge and double!' },
+  };
+  let lang = 'ar';
+
+  const COLS = 5, ROWS = 6;
+  const titleEl = document.getElementById('title'), boardEl = document.getElementById('board'),
+        scoreEl = document.getElementById('score'), bestEl = document.getElementById('best'),
+        topEl = document.getElementById('top'), nextOrbEl = document.getElementById('nextOrb'),
+        nextLbl = document.getElementById('nextLbl'), endOverlay = document.getElementById('endOverlay'),
+        endRestart = document.getElementById('endRestart'), finalScore = document.getElementById('finalScore'),
+        finalTop = document.getElementById('finalTop'), resetBtn = document.getElementById('resetBtn'),
+        resetBtnLabel = document.getElementById('resetBtnLabel'), endTitle = document.getElementById('endTitle'),
+        endSubtitle = document.getElementById('endSubtitle'), hint = document.getElementById('hint'),
+        lblScore = document.getElementById('lblScore'), lblBest = document.getElementById('lblBest'),
+        lblTop = document.getElementById('lblTop'), lblFinalScore = document.getElementById('lblFinalScore'),
+        lblFinalTop = document.getElementById('lblFinalTop');
+
+  let grid, score, topVal, nextVal, busy;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblScore.textContent = s.score; lblBest.textContent = s.best; lblTop.textContent = s.top;
+    resetBtnLabel.textContent = s.reset; nextLbl.textContent = s.next; hint.textContent = s.hint;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub; endRestart.textContent = s.restart;
+    lblFinalScore.textContent = s.score; lblFinalTop.textContent = s.top;
+    bestEl.textContent = (typeof VexGame !== 'undefined' ? VexGame.getBest() : 0);
+  }
+
+  function classFor(v) {
+    if (v >= 1024) return 'o-big';
+    if (v <= 512) return 'o-' + v;
+    return 'o-big';
+  }
+
+  function pickNext() {
+    const max = Math.min(32, Math.max(8, Math.floor(topVal / 4)));
+    const choices = [2, 4, 8];
+    if (max >= 16) choices.push(16);
+    if (max >= 32 && Math.random() < 0.2) choices.push(32);
+    nextVal = choices[Math.floor(Math.random() * choices.length)];
+    nextOrbEl.innerHTML = `<div class="orb ${classFor(nextVal)}">${nextVal}</div>`;
+  }
+
+  function reset() {
+    grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => 0));
+    score = 0; topVal = 2; busy = false;
+    scoreEl.textContent = 0; topEl.textContent = 2;
+    pickNext();
+    render();
+    endOverlay.classList.remove('show');
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell-merge';
+        cell.dataset.col = c;
+        cell.addEventListener('click', () => drop(c));
+        if (grid[r][c]) {
+          const v = grid[r][c];
+          const orb = document.createElement('div');
+          orb.className = 'orb ' + classFor(v);
+          orb.textContent = v;
+          cell.appendChild(orb);
+        }
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function drop(c) {
+    if (busy) return;
+    if (grid[0][c] !== 0) return;
+    let r = 0;
+    while (r + 1 < ROWS && grid[r + 1][c] === 0) r++;
+    grid[r][c] = nextVal;
+    busy = true;
+    render();
+    setTimeout(() => {
+      const merged = mergeChain(r, c);
+      if (merged > 0) {
+        // After merging, gravity may chain: settle and re-merge
+        settle();
+        // Check chained merges by looking again
+        let chain = 1;
+        let total = merged;
+        while (true) {
+          let any = false;
+          for (let rr = ROWS - 1; rr >= 0; rr--) {
+            for (let cc = 0; cc < COLS; cc++) {
+              if (grid[rr][cc]) {
+                const m = mergeChain(rr, cc);
+                if (m > 0) { any = true; total += m; chain++; }
+              }
+            }
+          }
+          if (!any) break;
+          settle();
+        }
+        score += total * chain;
+        scoreEl.textContent = score;
+        if (typeof VexGame !== 'undefined') {
+          const rect = boardEl.getBoundingClientRect();
+          VexGame.popScore(document.body, total * chain, rect.left + rect.width/2 + 'px', rect.top + 20 + 'px');
+        }
+      }
+      render();
+      pickNext();
+      busy = false;
+      // Update top
+      let mx = 2;
+      for (let r2 = 0; r2 < ROWS; r2++) for (let c2 = 0; c2 < COLS; c2++) if (grid[r2][c2] > mx) mx = grid[r2][c2];
+      topVal = mx;
+      topEl.textContent = mx;
+      // Game over check
+      if (grid[0].every(v => v !== 0)) {
+        endGame();
+      }
+    }, 100);
+  }
+
+  function mergeChain(r, c) {
+    const v = grid[r][c];
+    if (!v) return 0;
+    // Find all 4-neighbours equal to v. If any exist, perform a single doubling:
+    // remove every equal-valued neighbour and double this cell. This guarantees
+    // all values stay powers of two while still allowing cluster merges.
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+    let count = 0;
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+      if (grid[nr][nc] === v) {
+        grid[nr][nc] = 0;
+        count++;
+      }
+    }
+    if (count > 0) {
+      grid[r][c] = v * 2;
+      return grid[r][c];
+    }
+    return 0;
+  }
+
+  function settle() {
+    // Apply gravity column by column
+    for (let c = 0; c < COLS; c++) {
+      const stack = [];
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (grid[r][c]) stack.push(grid[r][c]);
+      }
+      for (let r = ROWS - 1; r >= 0; r--) {
+        grid[r][c] = stack.shift() || 0;
+      }
+    }
+  }
+
+  function endGame() {
+    finalScore.textContent = score;
+    finalTop.textContent = topVal;
+    endOverlay.classList.add('show');
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(score);
+      VexGame.endSession({
+        score: score, result: 'loss',
+        metadata: { topTile: topVal },
+      });
+    }
+  }
+
+  resetBtn.addEventListener('click', reset);
+  endRestart.addEventListener('click', reset);
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'number-merge',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

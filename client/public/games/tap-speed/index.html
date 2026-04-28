@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Tap Speed</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .tap-area {
+    width: 100%;
+    aspect-ratio: 1;
+    max-height: 60vh;
+    border-radius: 18px;
+    background: radial-gradient(circle at center, rgba(34, 211, 238, 0.18), transparent 60%), linear-gradient(135deg, #0c1424, #060a14);
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 0.05s ease;
+    overflow: hidden;
+    position: relative;
+  }
+  .tap-area:active { transform: scale(0.98); }
+  .tap-counter {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.06em;
+    font-size: clamp(5rem, 24vw, 9rem);
+    color: #22d3ee;
+    text-shadow: 0 0 40px rgba(34, 211, 238, 0.6);
+    line-height: 1;
+    transition: transform 0.08s ease;
+  }
+  .tap-counter.bump { transform: scale(1.1); }
+  .tap-sub {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: var(--vex-text-dim);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(34, 211, 238, 0.4);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: ripple 0.4s ease-out forwards;
+  }
+  @keyframes ripple {
+    0% { width: 20px; height: 20px; opacity: 0.7; }
+    100% { width: 160px; height: 160px; opacity: 0; }
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge" style="background:linear-gradient(135deg,#22d3ee,#0891b2);box-shadow:0 0 30px -5px #22d3ee;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74"/><path d="M14 11h2.5a2.5 2.5 0 0 1 0 5H14"/><path d="M9 11h-1.5a2.5 2.5 0 0 0 0 5H9"/><path d="M9 16v3a2 2 0 0 0 4 0v-3"/></svg>
+      </div>
+      <span id="title">سرعة النقر</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> <span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTaps">النقرات</div><div class="vex-stat-value" id="taps">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTime">الوقت</div><div class="vex-stat-value blue" id="time">10.0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value emerald" id="best">0</div></div>
+  </div>
+
+  <div class="vex-progress"><div class="vex-progress-fill" id="progress" style="width:100%;"></div></div>
+
+  <div class="vex-board" style="padding:6px;">
+    <div class="tap-area" id="arena">
+      <div>
+        <div class="tap-counter" id="counter">0</div>
+        <div class="tap-sub" id="counterSub">انقر للبدء</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">انقر بأسرع ما يمكن لمدة 10 ثوانٍ. اختبر سرعة أصابعك!</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#22d3ee,#0891b2);box-shadow:0 0 30px -5px #22d3ee;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهى الوقت!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">رصيد سرعتك:</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalTaps">النقرات</div><div class="vex-overlay-stat-value" id="finalTaps">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblTps">نقرة/ثانية</div><div class="vex-overlay-stat-value" id="tps">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;">حاول مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'سرعة النقر', taps:'النقرات', time:'الوقت', best:'الأفضل', tps:'نقرة/ثانية', reset:'إعادة',
+      tap:'انقر للبدء', go:'انقر!', end:'انتهى الوقت!', endSub:'رصيد سرعتك:', restart:'حاول مجدداً',
+      hint:'انقر بأسرع ما يمكن لمدة 10 ثوانٍ. اختبر سرعة أصابعك!' },
+    en: { title:'Tap Speed', taps:'Taps', time:'Time', best:'Best', tps:'Taps/sec', reset:'Reset',
+      tap:'Tap to start', go:'TAP!', end:"Time's up!", endSub:'Your speed:', restart:'Try again',
+      hint:'Tap as fast as you can for 10 seconds. Test your finger speed!' },
+  };
+  let lang = 'ar';
+  const titleEl = document.getElementById('title');
+  const arena = document.getElementById('arena'), counter = document.getElementById('counter'), counterSub = document.getElementById('counterSub');
+  const tapsEl = document.getElementById('taps'), timeEl = document.getElementById('time'), bestEl = document.getElementById('best');
+  const progress = document.getElementById('progress');
+  const lblTaps = document.getElementById('lblTaps'), lblTime = document.getElementById('lblTime'), lblBest = document.getElementById('lblBest');
+  const resetBtn = document.getElementById('resetBtn'), resetBtnLabel = document.getElementById('resetBtnLabel');
+  const endOverlay = document.getElementById('endOverlay'), endRestart = document.getElementById('endRestart');
+  const endTitle = document.getElementById('endTitle'), endSubtitle = document.getElementById('endSubtitle');
+  const finalTaps = document.getElementById('finalTaps'), tpsEl = document.getElementById('tps');
+  const lblFinalTaps = document.getElementById('lblFinalTaps'), lblTps = document.getElementById('lblTps');
+  const hint = document.getElementById('hint');
+
+  const DURATION = 10000;
+  let phase = 'idle';
+  let count = 0, startTs = 0, raf = null;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblTaps.textContent = s.taps; lblTime.textContent = s.time; lblBest.textContent = s.best;
+    resetBtnLabel.textContent = s.reset; hint.textContent = s.hint;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub; endRestart.textContent = s.restart;
+    lblFinalTaps.textContent = s.taps; lblTps.textContent = s.tps;
+    if (phase === 'idle') counterSub.textContent = s.tap;
+    if (phase === 'playing') counterSub.textContent = s.go;
+    bestEl.textContent = (typeof VexGame !== 'undefined' ? VexGame.getBest() : (parseInt(localStorage.getItem('vex:best:tap-speed')||'0',10)));
+  }
+
+  function reset() {
+    phase = 'idle';
+    count = 0; tapsEl.textContent = 0;
+    timeEl.textContent = (DURATION/1000).toFixed(1);
+    progress.style.width = '100%';
+    counter.textContent = 0;
+    counterSub.textContent = STRINGS[lang].tap;
+    endOverlay.classList.remove('show');
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+  }
+
+  function start() {
+    phase = 'playing';
+    count = 0; tapsEl.textContent = 0;
+    counterSub.textContent = STRINGS[lang].go;
+    startTs = performance.now();
+    tick();
+  }
+
+  function tick() {
+    const elapsed = performance.now() - startTs;
+    const remain = Math.max(0, DURATION - elapsed);
+    timeEl.textContent = (remain / 1000).toFixed(1);
+    progress.style.width = (remain / DURATION * 100) + '%';
+    if (remain <= 0) {
+      finish();
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function tap(x, y) {
+    if (phase === 'idle') {
+      start();
+      return;
+    }
+    if (phase !== 'playing') return;
+    count++;
+    tapsEl.textContent = count;
+    counter.textContent = count;
+    counter.classList.remove('bump');
+    void counter.offsetWidth;
+    counter.classList.add('bump');
+    // ripple effect
+    if (typeof x === 'number' && typeof y === 'number') {
+      const rect = arena.getBoundingClientRect();
+      const r = document.createElement('div');
+      r.className = 'ripple';
+      r.style.left = (x - rect.left) + 'px';
+      r.style.top = (y - rect.top) + 'px';
+      arena.appendChild(r);
+      setTimeout(() => r.remove(), 420);
+    }
+  }
+
+  function finish() {
+    phase = 'finished';
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    const tps = (count / (DURATION / 1000)).toFixed(2);
+    finalTaps.textContent = count;
+    tpsEl.textContent = tps;
+    endOverlay.classList.add('show');
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(count);
+      bestEl.textContent = VexGame.getBest();
+      if (count >= 75) VexGame.confetti(1800);
+      VexGame.endSession({
+        score: count * 10, result: 'win',
+        metadata: { taps: count, durationMs: DURATION, tps: parseFloat(tps) },
+      });
+    } else {
+      const cur = parseInt(localStorage.getItem('vex:best:tap-speed') || '0', 10);
+      if (count > cur) localStorage.setItem('vex:best:tap-speed', String(count));
+      bestEl.textContent = Math.max(cur, count);
+    }
+  }
+
+  arena.addEventListener('click', (e) => tap(e.clientX, e.clientY));
+  arena.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    tap(t.clientX, t.clientY);
+  }, { passive: false });
+  resetBtn.addEventListener('click', reset);
+  endRestart.addEventListener('click', () => { reset(); });
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'tap-speed',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  reset();
+  applyLang();
+})();
+</script>
+</body>
+</html>

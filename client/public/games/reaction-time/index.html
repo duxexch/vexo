@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Reaction Time</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .arena {
+    width: 100%;
+    aspect-ratio: 1;
+    max-height: 60vh;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: background 0.18s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    text-align: center;
+    padding: 30px;
+    border: 1px solid var(--vex-border);
+    position: relative;
+    overflow: hidden;
+  }
+  .arena.idle  { background: linear-gradient(135deg, #1e293b, #0f172a); }
+  .arena.wait  { background: linear-gradient(135deg, #ef4444, #7f1d1d); }
+  .arena.go    { background: linear-gradient(135deg, #ffb627, #a86b00); box-shadow: inset 0 0 80px rgba(255, 200, 50, 0.3), 0 0 40px -5px #ffb627; }
+  .arena.early { background: linear-gradient(135deg, #ef4444, #7f1d1d); }
+  .arena.done  { background: linear-gradient(135deg, #22c55e, #14532d); box-shadow: inset 0 0 80px rgba(50, 200, 100, 0.3); }
+  .arena-text {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.05em;
+    font-size: clamp(2rem, 9vw, 3rem);
+    color: white;
+    text-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    line-height: 1.1;
+  }
+  .arena-sub {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+  }
+  .arena-ms {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.05em;
+    font-size: clamp(3rem, 14vw, 5rem);
+    color: white;
+    text-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    line-height: 1;
+  }
+  .history-row {
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 10px;
+  }
+  .history-pill {
+    padding: 4px 10px; border-radius: 99px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
+    color: var(--vex-text); letter-spacing: 0.04em;
+  }
+  .history-pill.best { background: linear-gradient(135deg, #ffb627, #a86b00); color: black; border-color: transparent; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge rose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <span id="title">زمن رد الفعل</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> <span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value" id="best">—</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblAvg">المتوسط</div><div class="vex-stat-value blue" id="avg">—</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTries">المحاولة</div><div class="vex-stat-value emerald" id="tries">0/5</div></div>
+  </div>
+
+  <div class="vex-board" style="padding:8px;">
+    <div class="arena idle" id="arena">
+      <div>
+        <div class="arena-text" id="arenaText">انقر للبدء</div>
+        <div class="arena-sub" id="arenaSub">سننتظر بضع ثوانٍ، ثم تتحول الشاشة إلى الذهبي. عندها انقر بأسرع ما يمكن!</div>
+      </div>
+    </div>
+    <div class="history-row" id="history"></div>
+  </div>
+
+  <div class="vex-hint" id="hint">5 محاولات. متوسطك يحدد نقاطك. كلما كان الزمن أصغر — النقاط أعلى.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon gold">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت المحاولات!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">إليك نتيجتك النهائية</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalAvg">المتوسط</div><div class="vex-overlay-stat-value" id="finalAvg">—</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">النقاط</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1;">حاول مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'زمن رد الفعل', best:'الأفضل', avg:'المتوسط', tries:'المحاولة', reset:'إعادة',
+      tap:'انقر للبدء', sub:'سننتظر بضع ثوانٍ، ثم تتحول الشاشة إلى الذهبي. عندها انقر بأسرع ما يمكن!',
+      wait:'انتظر…', waitSub:'انتظر حتى يتحول اللون إلى الذهبي', go:'الآن!', goSub:'انقر بسرعة!',
+      early:'مبكراً!', earlySub:'لا تنقر قبل أن يتحول اللون. حاول مجدداً.', done:'سرعة!', tap2:'انقر للمحاولة التالية',
+      hint:'5 محاولات. متوسطك يحدد نقاطك. كلما كان الزمن أصغر — النقاط أعلى.',
+      end:'انتهت المحاولات!', endSub:'إليك نتيجتك النهائية', restart:'حاول مجدداً', score:'النقاط' },
+    en: { title:'Reaction Time', best:'Best', avg:'Avg', tries:'Try', reset:'Reset',
+      tap:'Tap to start', sub:'We will wait, then the screen turns gold. Tap as fast as you can!',
+      wait:'Wait…', waitSub:'Wait until it turns gold', go:'TAP!', goSub:'Tap fast!',
+      early:'Too early!', earlySub:"Don't tap before it turns gold. Try again.", done:'Nice!', tap2:'Tap for next round',
+      hint:'5 rounds. Your average sets your score. Faster = more points.',
+      end:'Rounds over!', endSub:'Here is your final score', restart:'Try again', score:'Score' },
+  };
+  let lang = 'ar';
+
+  const arena = document.getElementById('arena');
+  const arenaText = document.getElementById('arenaText');
+  const arenaSub = document.getElementById('arenaSub');
+  const titleEl = document.getElementById('title');
+  const bestEl = document.getElementById('best');
+  const avgEl = document.getElementById('avg');
+  const triesEl = document.getElementById('tries');
+  const historyEl = document.getElementById('history');
+  const lblBest = document.getElementById('lblBest'), lblAvg = document.getElementById('lblAvg'), lblTries = document.getElementById('lblTries');
+  const resetBtn = document.getElementById('resetBtn'), resetBtnLabel = document.getElementById('resetBtnLabel');
+  const endOverlay = document.getElementById('endOverlay');
+  const endRestart = document.getElementById('endRestart');
+  const endTitle = document.getElementById('endTitle'), endSubtitle = document.getElementById('endSubtitle');
+  const finalAvg = document.getElementById('finalAvg'), finalScore = document.getElementById('finalScore');
+  const lblFinalAvg = document.getElementById('lblFinalAvg'), lblFinalScore = document.getElementById('lblFinalScore');
+  const hint = document.getElementById('hint');
+
+  const ROUNDS = 5;
+  let phase = 'idle'; // idle, waiting, ready, done, early, finished
+  let waitTimer = null;
+  let goTime = 0;
+  let times = [];
+  let bestMs = 0;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblBest.textContent = s.best; lblAvg.textContent = s.avg; lblTries.textContent = s.tries;
+    resetBtnLabel.textContent = s.reset; hint.textContent = s.hint;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub; endRestart.textContent = s.restart;
+    lblFinalAvg.textContent = s.avg; lblFinalScore.textContent = s.score;
+    setIdle();
+  }
+
+  function setIdle() {
+    phase = 'idle';
+    arena.className = 'arena idle';
+    arenaText.textContent = STRINGS[lang].tap;
+    arenaSub.textContent = STRINGS[lang].sub;
+  }
+  function setWaiting() {
+    phase = 'waiting';
+    arena.className = 'arena wait';
+    arenaText.textContent = STRINGS[lang].wait;
+    arenaSub.textContent = STRINGS[lang].waitSub;
+    const delay = 1100 + Math.random() * 2600;
+    waitTimer = setTimeout(() => {
+      phase = 'ready';
+      arena.className = 'arena go';
+      arenaText.textContent = STRINGS[lang].go;
+      arenaSub.textContent = STRINGS[lang].goSub;
+      goTime = performance.now();
+    }, delay);
+  }
+  function setEarly() {
+    if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
+    phase = 'early';
+    arena.className = 'arena early';
+    arenaText.textContent = STRINGS[lang].early;
+    arenaSub.textContent = STRINGS[lang].earlySub;
+  }
+  function setDone(ms) {
+    phase = 'done';
+    arena.className = 'arena done';
+    arenaText.innerHTML = `<div class="arena-ms">${ms}<span style="font-size:0.4em;letter-spacing:0;"> ms</span></div>`;
+    arenaSub.textContent = STRINGS[lang].tap2;
+  }
+
+  function pushTime(ms) {
+    times.push(ms);
+    triesEl.textContent = times.length + '/' + ROUNDS;
+    if (!bestMs || ms < bestMs) bestMs = ms;
+    bestEl.textContent = bestMs + 'ms';
+    const sum = times.reduce((a,b) => a+b, 0);
+    const avg = Math.round(sum / times.length);
+    avgEl.textContent = avg + 'ms';
+    renderHistory();
+    if (times.length >= ROUNDS) {
+      finishGame();
+    }
+  }
+
+  function renderHistory() {
+    historyEl.innerHTML = '';
+    times.forEach((t) => {
+      const p = document.createElement('div');
+      p.className = 'history-pill' + (t === bestMs ? ' best' : '');
+      p.textContent = t + 'ms';
+      historyEl.appendChild(p);
+    });
+  }
+
+  function calcScore(avg) {
+    // Score formula: under 200ms = exceptional. Above 600ms = poor.
+    // 200 → 1000, 300 → 700, 400 → 400, 500 → 200, 600+ → 100
+    return Math.max(50, Math.round(2000 - avg * 3));
+  }
+
+  function finishGame() {
+    phase = 'finished';
+    const avg = Math.round(times.reduce((a,b) => a+b, 0) / times.length);
+    const score = calcScore(avg);
+    finalAvg.textContent = avg + 'ms';
+    finalScore.textContent = score;
+    endOverlay.classList.add('show');
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(score);
+      if (avg <= 250) VexGame.confetti(1800);
+      VexGame.endSession({
+        score: score, result: 'win',
+        metadata: { avgMs: avg, bestMs: bestMs, times: times },
+      });
+    }
+  }
+
+  function reset() {
+    times = []; bestMs = 0;
+    avgEl.textContent = '—'; bestEl.textContent = '—';
+    triesEl.textContent = '0/' + ROUNDS;
+    historyEl.innerHTML = '';
+    endOverlay.classList.remove('show');
+    setIdle();
+  }
+
+  function tap() {
+    if (phase === 'idle' || phase === 'done' || phase === 'early') {
+      setWaiting();
+    } else if (phase === 'waiting') {
+      setEarly();
+    } else if (phase === 'ready') {
+      const ms = Math.round(performance.now() - goTime);
+      setDone(ms);
+      pushTime(ms);
+    }
+  }
+
+  arena.addEventListener('click', tap);
+  arena.addEventListener('touchstart', (e) => { e.preventDefault(); tap(); }, { passive: false });
+  resetBtn.addEventListener('click', reset);
+  endRestart.addEventListener('click', reset);
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'reaction-time',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Tile Slider</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .slider-board {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 14px;
+    padding: 8px;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .tile-slide {
+    border-radius: 10px;
+    background: linear-gradient(135deg, #1e88ff, #0a4d9c);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.04em;
+    font-size: 2rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .tile-slide:hover { transform: scale(0.97); }
+  .tile-slide:active { transform: scale(0.93); }
+  .tile-slide.empty { background: transparent; box-shadow: none; pointer-events: none; }
+  .tile-slide.correct { background: linear-gradient(135deg, #22c55e, #14532d); box-shadow: 0 0 12px -2px rgba(34, 197, 94, 0.5); }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+      </div>
+      <span id="title">بازل الأرقام</span>
+    </div>
+    <button class="vex-btn" id="newBtn"><span id="newBtnLabel">جديدة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblMoves">الحركات</div><div class="vex-stat-value" id="moves">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTime">الوقت</div><div class="vex-stat-value blue" id="time">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value emerald" id="best">—</div></div>
+  </div>
+
+  <div class="vex-board" style="padding:6px;">
+    <div class="slider-board" id="board"></div>
+  </div>
+
+  <div class="vex-hint" id="hint">حرّك البلاط لترتيب الأرقام من 1 إلى 15. أنهِ بأقل عدد حركات!</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">رائع! أنهيت البازل!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">أداء ممتاز</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalMoves">الحركات</div><div class="vex-overlay-stat-value" id="finalMoves">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalTime">الوقت</div><div class="vex-overlay-stat-value" id="finalTime">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;">العب مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'بازل الأرقام', moves:'الحركات', time:'الوقت', best:'الأفضل', new:'جديدة', restart:'العب مجدداً',
+      end:'رائع! أنهيت البازل!', endSub:'أداء ممتاز', hint:'حرّك البلاط لترتيب الأرقام من 1 إلى 15. أنهِ بأقل عدد حركات!' },
+    en: { title:'Tile Slider', moves:'Moves', time:'Time', best:'Best', new:'New', restart:'Play again',
+      end:'Solved!', endSub:'Excellent work', hint:'Slide tiles to put numbers 1-15 in order. Finish in fewest moves!' },
+  };
+  let lang = 'ar';
+
+  const titleEl = document.getElementById('title'), boardEl = document.getElementById('board'),
+        movesEl = document.getElementById('moves'), timeEl = document.getElementById('time'),
+        bestEl = document.getElementById('best'), endOverlay = document.getElementById('endOverlay'),
+        endRestart = document.getElementById('endRestart'), finalMoves = document.getElementById('finalMoves'),
+        finalTime = document.getElementById('finalTime'), newBtn = document.getElementById('newBtn'),
+        newBtnLabel = document.getElementById('newBtnLabel'), endTitle = document.getElementById('endTitle'),
+        endSubtitle = document.getElementById('endSubtitle'),
+        lblMoves = document.getElementById('lblMoves'), lblTime = document.getElementById('lblTime'),
+        lblBest = document.getElementById('lblBest'), lblFinalMoves = document.getElementById('lblFinalMoves'),
+        lblFinalTime = document.getElementById('lblFinalTime'), hint = document.getElementById('hint');
+
+  let board = [], moves = 0, startTs = 0, timer = null, won = false;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblMoves.textContent = s.moves; lblTime.textContent = s.time; lblBest.textContent = s.best;
+    newBtnLabel.textContent = s.new; endRestart.textContent = s.restart; hint.textContent = s.hint;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub;
+    lblFinalMoves.textContent = s.moves; lblFinalTime.textContent = s.time;
+    const b = (typeof VexGame !== 'undefined' ? VexGame.getBest() : 0);
+    bestEl.textContent = b > 0 ? b : '—';
+  }
+
+  function shuffle() {
+    // Generate solvable shuffle by random valid moves from goal
+    board = Array.from({ length: 16 }, (_, i) => i === 15 ? 0 : i + 1);
+    let emptyIdx = 15;
+    for (let i = 0; i < 200; i++) {
+      const neighbors = [];
+      const r = Math.floor(emptyIdx / 4), c = emptyIdx % 4;
+      if (r > 0) neighbors.push(emptyIdx - 4);
+      if (r < 3) neighbors.push(emptyIdx + 4);
+      if (c > 0) neighbors.push(emptyIdx - 1);
+      if (c < 3) neighbors.push(emptyIdx + 1);
+      const pick = neighbors[Math.floor(Math.random() * neighbors.length)];
+      [board[emptyIdx], board[pick]] = [board[pick], board[emptyIdx]];
+      emptyIdx = pick;
+    }
+  }
+
+  function newGame() {
+    won = false;
+    moves = 0; movesEl.textContent = 0;
+    shuffle();
+    render();
+    if (timer) clearInterval(timer);
+    startTs = Date.now();
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now() - startTs) / 1000);
+      timeEl.textContent = s + 's';
+    }, 250);
+    endOverlay.classList.remove('show');
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    board.forEach((v, i) => {
+      const t = document.createElement('div');
+      if (v === 0) {
+        t.className = 'tile-slide empty';
+      } else {
+        t.className = 'tile-slide' + (v === i + 1 ? ' correct' : '');
+        t.textContent = v;
+        t.addEventListener('click', () => move(i));
+      }
+      boardEl.appendChild(t);
+    });
+  }
+
+  function move(i) {
+    if (won) return;
+    const r = Math.floor(i / 4), c = i % 4;
+    const empty = board.indexOf(0);
+    const er = Math.floor(empty / 4), ec = empty % 4;
+    if ((r === er && Math.abs(c - ec) === 1) || (c === ec && Math.abs(r - er) === 1)) {
+      [board[i], board[empty]] = [board[empty], board[i]];
+      moves++;
+      movesEl.textContent = moves;
+      render();
+      checkWin();
+    }
+  }
+
+  function checkWin() {
+    for (let i = 0; i < 15; i++) if (board[i] !== i + 1) return;
+    if (board[15] !== 0) return;
+    won = true;
+    if (timer) { clearInterval(timer); timer = null; }
+    const elapsed = Math.floor((Date.now() - startTs) / 1000);
+    finalMoves.textContent = moves;
+    finalTime.textContent = elapsed + 's';
+    endOverlay.classList.add('show');
+    // Score: lower moves & time = higher
+    const score = Math.max(100, 5000 - moves * 8 - elapsed * 4);
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(score);
+      VexGame.confetti(2200);
+      VexGame.endSession({
+        score: score, result: 'win',
+        metadata: { moves: moves, timeSeconds: elapsed },
+      });
+    }
+  }
+
+  newBtn.addEventListener('click', newGame);
+  endRestart.addEventListener('click', newGame);
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'tile-slider',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  newGame();
+})();
+</script>
+</body>
+</html>

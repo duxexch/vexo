@@ -69,6 +69,23 @@ type ApiGame = {
   isFeatured: boolean;
 };
 
+type ApiExternalGame = {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameAr: string;
+  descriptionEn?: string | null;
+  descriptionAr?: string | null;
+  category: string;
+  iconUrl?: string | null;
+  thumbnailUrl?: string | null;
+  bannerUrl?: string | null;
+  accentColor?: string | null;
+  playCount: number;
+  isFeatured: boolean;
+  sortOrder: number;
+};
+
 type ApiChallenge = {
   id: string;
   gameType: string;
@@ -817,6 +834,68 @@ function GameTileCard({ g, lang }: { g: ApiGame; lang: string }) {
   );
 }
 
+function SoloGameTileCard({ g, lang }: { g: ApiExternalGame; lang: string }) {
+  const name = lang === "ar" && g.nameAr ? g.nameAr : g.nameEn;
+  const cover = g.thumbnailUrl || g.iconUrl || g.bannerUrl;
+  const initial = name.trim().charAt(0).toUpperCase();
+  const accent = g.accentColor || "#1e88ff";
+  return (
+    <Card
+      className="group relative shrink-0 w-[160px] sm:w-[200px] overflow-hidden border-white/10 bg-gradient-to-b from-[#10172a] to-[#0a0e1a] text-white p-0 rounded-xl transition-all hover:-translate-y-1"
+      style={{ boxShadow: `0 0 0 transparent` }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 15px 40px -10px ${accent}66`;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 0 0 transparent`;
+      }}
+    >
+      <Link href={`/play/${g.slug}`} className="block">
+        <div
+          className="relative aspect-[4/5] overflow-hidden grid place-items-center"
+          style={{
+            background: `radial-gradient(circle at 30% 30%, ${accent}33, transparent 60%), linear-gradient(135deg, #0f172a, #050810)`,
+          }}
+        >
+          {cover ? (
+            <img
+              src={cover}
+              alt={name}
+              className="w-3/4 h-3/4 object-contain group-hover:scale-110 transition-transform drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]"
+              loading="lazy"
+            />
+          ) : (
+            <span
+              className="font-['Bebas_Neue'] text-6xl tracking-wider text-white drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]"
+              style={{ color: accent }}
+            >
+              {initial}
+            </span>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
+          {g.isFeatured && (
+            <Badge className="absolute top-2 right-2 bg-[#ffb627] hover:bg-[#ffb627] text-black rounded-sm px-1.5 py-0 text-[9px] font-bold">
+              ★
+            </Badge>
+          )}
+          <div
+            className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
+            style={{ backgroundColor: `${accent}33`, color: accent, border: `1px solid ${accent}66` }}
+          >
+            {g.category}
+          </div>
+        </div>
+        <div className="p-2.5">
+          <div className="font-bold text-white text-sm truncate">{name}</div>
+          <div className="text-[11px] text-slate-400 truncate">
+            {(g.playCount ?? 0).toLocaleString()} {lang === "ar" ? "لاعب" : "plays"}
+          </div>
+        </div>
+      </Link>
+    </Card>
+  );
+}
+
 function ChallengeCard({ c, gamesMap }: { c: ApiChallenge; gamesMap: Map<string, string> }) {
   const opp = c.player2Name || "—";
   const game = gamesMap.get(c.gameType) || c.gameType;
@@ -1305,6 +1384,11 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
     staleTime: 30_000,
   });
 
+  const externalGamesQ = useQuery<ApiExternalGame[]>({
+    queryKey: ["/api/external-games"],
+    staleTime: 5 * 60_000,
+  });
+
   const topPlayersQ = useQuery<ApiLeaderboardEntry[]>({
     queryKey: ["/api/leaderboard?sortBy=earnings&period=weekly&limit=10"],
     staleTime: 60_000,
@@ -1340,15 +1424,15 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
     [games]
   );
   const soloGames = useMemo(
-    () => games.filter((g) => g.gameType === "single" || g.gameType !== "multiplayer"),
-    [games]
+    () => (externalGamesQ.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder),
+    [externalGamesQ.data]
   );
   const gamesMap = useMemo(() => gameNameMap(games), [games]);
 
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={lang === "ar" ? "rtl" : "ltr"}
+      lang={lang}
       className="min-h-screen bg-slate-100 dark:bg-[#0a0e1a] text-slate-900 dark:text-white selection:bg-[#ffb627] selection:text-black"
     >
       <OwnerBar {...owner} />
@@ -1440,12 +1524,12 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
           href="/games"
           accent="blue"
         >
-          {gamesQ.isLoading ? (
+          {externalGamesQ.isLoading ? (
             <RailSkeleton width={200} />
-          ) : gamesQ.isError ? (
+          ) : externalGamesQ.isError ? (
             <RailError
               label={t("home.soloGamesError") || "تعذّر تحميل ألعاب الفرد"}
-              onRetry={() => gamesQ.refetch()}
+              onRetry={() => externalGamesQ.refetch()}
             />
           ) : soloGames.length === 0 ? (
             <RailEmpty
@@ -1453,7 +1537,7 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
               label={t("home.noSoloGames") || "لا توجد ألعاب فرد متاحة"}
             />
           ) : (
-            soloGames.map((g) => <GameTileCard key={g.id} g={g} lang={lang} />)
+            soloGames.map((g) => <SoloGameTileCard key={g.id} g={g} lang={lang} />)
           )}
         </Rail>
 

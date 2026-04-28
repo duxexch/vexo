@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Endless Runner</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .runner-canvas {
+    width: 100%;
+    aspect-ratio: 4/3;
+    border-radius: 14px;
+    background: linear-gradient(to bottom, #0c1430 0%, #050a14 60%, #1a0f00 80%, #2a1500 100%);
+    border: 1px solid var(--vex-border);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge gold">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M11 8l4 2-3 5 3 4-2 1-3-4-2 3-2-1 4-6-2-2"/></svg>
+      </div>
+      <span id="title">العداء اللانهائي</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblScore">المسافة</div><div class="vex-stat-value" id="score">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value blue" id="best">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblSpeed">السرعة</div><div class="vex-stat-value emerald" id="speed">1.0×</div></div>
+  </div>
+
+  <div class="vex-board" style="padding:6px;">
+    <canvas class="runner-canvas" id="canvas" width="800" height="600"></canvas>
+  </div>
+
+  <div class="vex-hint" id="hint">انقر أو اضغط مسافة للقفز فوق العوائق. السرعة تزداد!</div>
+</div>
+
+<div class="vex-overlay show" id="startOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon gold">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M11 8l4 2-3 5 3 4-2 1-3-4-2 3-2-1 4-6-2-2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="startTitle">العداء اللانهائي</div>
+    <div class="vex-overlay-subtitle" id="startSubtitle">اقفز فوق العوائق! انقر أو اضغط مسافة للقفز.</div>
+    <button class="vex-btn vex-btn-gold" id="startBtn" style="width:100%;">ابدأ الجري</button>
+  </div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon rose">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">سقطت!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">المسافة المقطوعة:</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">المسافة</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalBest">الأفضل</div><div class="vex-overlay-stat-value" id="finalBest">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1;">حاول مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'العداء اللانهائي', score:'المسافة', best:'الأفضل', speed:'السرعة', reset:'إعادة',
+      start:'ابدأ الجري', restart:'حاول مجدداً', sub:'اقفز فوق العوائق! انقر أو اضغط مسافة للقفز.',
+      end:'سقطت!', endSub:'المسافة المقطوعة:', hint:'انقر أو اضغط مسافة للقفز فوق العوائق. السرعة تزداد!' },
+    en: { title:'Endless Runner', score:'Distance', best:'Best', speed:'Speed', reset:'Reset',
+      start:'Start running', restart:'Try again', sub:'Jump over obstacles! Tap or press space to jump.',
+      end:'You fell!', endSub:'Distance covered:', hint:'Tap or press space to jump. Speed increases!' },
+  };
+  let lang = 'ar';
+
+  const titleEl = document.getElementById('title'),
+        scoreEl = document.getElementById('score'), bestEl = document.getElementById('best'),
+        speedEl = document.getElementById('speed'), canvas = document.getElementById('canvas'),
+        ctx = canvas.getContext('2d'), startOverlay = document.getElementById('startOverlay'),
+        startBtn = document.getElementById('startBtn'), endOverlay = document.getElementById('endOverlay'),
+        endRestart = document.getElementById('endRestart'), resetBtn = document.getElementById('resetBtn'),
+        resetBtnLabel = document.getElementById('resetBtnLabel'), finalScore = document.getElementById('finalScore'),
+        finalBest = document.getElementById('finalBest'), endTitle = document.getElementById('endTitle'),
+        endSubtitle = document.getElementById('endSubtitle'), startTitle = document.getElementById('startTitle'),
+        startSubtitle = document.getElementById('startSubtitle'),
+        lblScore = document.getElementById('lblScore'), lblBest = document.getElementById('lblBest'),
+        lblSpeed = document.getElementById('lblSpeed'), lblFinalScore = document.getElementById('lblFinalScore'),
+        lblFinalBest = document.getElementById('lblFinalBest'), hint = document.getElementById('hint');
+
+  // Game state
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H - 80;
+  const GRAVITY = 0.7;
+  const JUMP_VEL = -16;
+
+  let player, obstacles, particles, distance, speed, baseSpeed, alive, raf, lastSpawn;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblScore.textContent = s.score; lblBest.textContent = s.best; lblSpeed.textContent = s.speed;
+    resetBtnLabel.textContent = s.reset; hint.textContent = s.hint;
+    startTitle.textContent = s.title; startSubtitle.textContent = s.sub; startBtn.textContent = s.start;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub; endRestart.textContent = s.restart;
+    lblFinalScore.textContent = s.score; lblFinalBest.textContent = s.best;
+    bestEl.textContent = (typeof VexGame !== 'undefined' ? VexGame.getBest() : 0);
+  }
+
+  function reset() {
+    player = { x: 100, y: GROUND_Y - 60, w: 44, h: 60, vy: 0, jumping: false, jumps: 0 };
+    obstacles = [];
+    particles = [];
+    distance = 0;
+    baseSpeed = 6;
+    speed = baseSpeed;
+    alive = true;
+    lastSpawn = 0;
+  }
+
+  function spawnObstacle() {
+    const isHigh = Math.random() < 0.18;
+    if (isHigh) {
+      // flying obstacle to duck (low jumps under)
+      obstacles.push({ x: W + 40, y: GROUND_Y - 130, w: 60, h: 30, kind: 'fly' });
+    } else {
+      const w = 30 + Math.random() * 40;
+      const h = 40 + Math.random() * 50;
+      obstacles.push({ x: W + 40, y: GROUND_Y - h, w: w, h: h, kind: 'cactus' });
+    }
+  }
+
+  function jump() {
+    if (!alive) return;
+    if (player.jumps < 2) {
+      player.vy = player.jumps === 0 ? JUMP_VEL : JUMP_VEL * 0.78;
+      player.jumping = true;
+      player.jumps++;
+      // dust particles
+      for (let i = 0; i < 6; i++) {
+        particles.push({
+          x: player.x + player.w / 2,
+          y: GROUND_Y,
+          vx: -3 - Math.random() * 2,
+          vy: -1 - Math.random() * 2,
+          life: 24,
+          color: 'rgba(255,182,39,0.7)',
+          size: 3 + Math.random() * 3,
+        });
+      }
+    }
+  }
+
+  function update() {
+    if (!alive) return;
+    distance += speed / 4;
+    speed = baseSpeed + Math.min(8, distance / 1500);
+    speedEl.textContent = (speed / baseSpeed).toFixed(1) + '×';
+    scoreEl.textContent = Math.floor(distance);
+
+    // Player physics
+    player.vy += GRAVITY;
+    player.y += player.vy;
+    if (player.y >= GROUND_Y - player.h) {
+      player.y = GROUND_Y - player.h;
+      player.vy = 0;
+      player.jumping = false;
+      player.jumps = 0;
+    }
+
+    // Spawn obstacles
+    lastSpawn += speed;
+    const interval = Math.max(160, 360 - distance / 50);
+    if (lastSpawn > interval && Math.random() < 0.06) {
+      spawnObstacle();
+      lastSpawn = 0;
+    }
+
+    // Move obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      obstacles[i].x -= speed;
+      if (obstacles[i].x + obstacles[i].w < 0) {
+        obstacles.splice(i, 1);
+        continue;
+      }
+      // Collision
+      const o = obstacles[i];
+      if (player.x < o.x + o.w - 6 && player.x + player.w - 6 > o.x &&
+          player.y < o.y + o.h - 6 && player.y + player.h - 6 > o.y) {
+        die();
+        return;
+      }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  function die() {
+    alive = false;
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    const finalDist = Math.floor(distance);
+    finalScore.textContent = finalDist;
+    if (typeof VexGame !== 'undefined') {
+      VexGame.setBest(finalDist);
+      finalBest.textContent = VexGame.getBest();
+      bestEl.textContent = VexGame.getBest();
+      VexGame.endSession({
+        score: finalDist, result: 'loss',
+        metadata: { distance: finalDist, topSpeed: parseFloat((speed/baseSpeed).toFixed(2)) },
+      });
+    } else {
+      finalBest.textContent = finalDist;
+    }
+    endOverlay.classList.add('show');
+  }
+
+  // Decorations
+  let stars = [];
+  for (let i = 0; i < 60; i++) {
+    stars.push({ x: Math.random() * W, y: Math.random() * (GROUND_Y - 150), s: 0.4 + Math.random() * 1.5, b: 0.3 + Math.random() * 0.7 });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Stars (parallax)
+    for (const st of stars) {
+      ctx.fillStyle = `rgba(220,230,255,${st.b})`;
+      ctx.fillRect(st.x, st.y, st.s, st.s);
+      st.x -= speed * 0.15;
+      if (st.x < 0) st.x = W;
+    }
+
+    // Mountains (back)
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    const offset = (distance * 0.4) % 200;
+    for (let x = -offset; x <= W + 200; x += 200) {
+      ctx.lineTo(x + 50, GROUND_Y - 80);
+      ctx.lineTo(x + 100, GROUND_Y - 130);
+      ctx.lineTo(x + 150, GROUND_Y - 80);
+      ctx.lineTo(x + 200, GROUND_Y);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+
+    // Ground
+    const grad = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+    grad.addColorStop(0, '#1e88ff');
+    grad.addColorStop(1, '#0a4d9c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+    // Ground stripes (motion)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    const stripeOffset = -(distance * 4) % 80;
+    for (let x = stripeOffset; x < W; x += 80) {
+      ctx.fillRect(x, GROUND_Y + 30, 40, 4);
+    }
+
+    // Obstacles
+    for (const o of obstacles) {
+      if (o.kind === 'fly') {
+        const og = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
+        og.addColorStop(0, '#a855f7');
+        og.addColorStop(1, '#5b21b6');
+        ctx.fillStyle = og;
+        ctx.beginPath();
+        ctx.ellipse(o.x + o.w/2, o.y + o.h/2, o.w/2, o.h/2, 0, 0, Math.PI*2);
+        ctx.fill();
+        // wings
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.5)';
+        ctx.beginPath();
+        ctx.ellipse(o.x + o.w/2, o.y, o.w * 0.7, 8, 0, 0, Math.PI*2);
+        ctx.fill();
+      } else {
+        const og = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
+        og.addColorStop(0, '#ef4444');
+        og.addColorStop(1, '#7f1d1d');
+        ctx.fillStyle = og;
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.fillRect(o.x + 4, o.y + 4, 4, o.h - 8);
+      }
+    }
+
+    // Particles
+    for (const p of particles) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+
+    // Player
+    const pg = ctx.createLinearGradient(player.x, player.y, player.x, player.y + player.h);
+    pg.addColorStop(0, '#ffb627');
+    pg.addColorStop(1, '#a86b00');
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    const px = player.x, py = player.y, pw = player.w, ph = player.h;
+    // body
+    ctx.roundRect ? ctx.roundRect(px, py, pw, ph, 8) : ctx.rect(px, py, pw, ph);
+    ctx.fill();
+    // visor
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.8)';
+    ctx.fillRect(px + 8, py + 12, pw - 16, 14);
+    // tag
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('VEX', px + pw/2, py + 50);
+  }
+
+  function loop() {
+    update();
+    draw();
+    if (alive) raf = requestAnimationFrame(loop);
+  }
+
+  function start() {
+    reset();
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  }
+
+  // Input
+  function tap() {
+    if (!alive) return;
+    jump();
+  }
+  canvas.addEventListener('click', tap);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); tap(); }, { passive: false });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); tap(); }
+  });
+  resetBtn.addEventListener('click', () => { endOverlay.classList.remove('show'); start(); });
+  endRestart.addEventListener('click', () => { endOverlay.classList.remove('show'); start(); });
+  startBtn.addEventListener('click', () => { startOverlay.classList.remove('show'); start(); });
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'endless-runner',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+})();
+</script>
+</body>
+</html>

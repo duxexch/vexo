@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Pattern Recall</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .pads {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: min(80vw, 360px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+  }
+  .pad {
+    border-radius: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.06);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .pad::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.4);
+    opacity: 0;
+    transition: opacity 0.13s ease;
+  }
+  .pad.lit { transform: scale(1.04); }
+  .pad.lit::after { opacity: 1; }
+  .pad[data-disabled="true"] { cursor: not-allowed; filter: brightness(0.55); }
+
+  .pad-0 { background: linear-gradient(135deg, #1e88ff, #0a4d9c); box-shadow: 0 6px 30px rgba(30, 136, 255, 0.25); }
+  .pad-0.lit { box-shadow: 0 6px 50px rgba(30, 136, 255, 0.7); }
+  .pad-1 { background: linear-gradient(135deg, #ffb627, #a86b00); box-shadow: 0 6px 30px rgba(255, 182, 39, 0.22); }
+  .pad-1.lit { box-shadow: 0 6px 50px rgba(255, 182, 39, 0.7); }
+  .pad-2 { background: linear-gradient(135deg, #22c55e, #14532d); box-shadow: 0 6px 30px rgba(34, 197, 94, 0.22); }
+  .pad-2.lit { box-shadow: 0 6px 50px rgba(34, 197, 94, 0.7); }
+  .pad-3 { background: linear-gradient(135deg, #ef4444, #7f1d1d); box-shadow: 0 6px 30px rgba(239, 68, 68, 0.22); }
+  .pad-3.lit { box-shadow: 0 6px 50px rgba(239, 68, 68, 0.7); }
+
+  .level-text {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.06em;
+    font-size: 1.6rem;
+    color: var(--vex-blue);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge emerald">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74"/><circle cx="12" cy="16" r="1"/><path d="M5 12a7 7 0 1 1 14 0"/></svg>
+      </div>
+      <span id="title">تذكر النمط</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblLevel">المستوى</div><div class="vex-stat-value" id="level">1</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblScore">النقاط</div><div class="vex-stat-value blue" id="score">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value emerald" id="best">0</div></div>
+  </div>
+
+  <div class="level-text" id="status">شاهد التسلسل</div>
+
+  <div class="vex-board" style="padding:12px;">
+    <div class="pads">
+      <div class="pad pad-0" data-pad="0" data-disabled="true"></div>
+      <div class="pad pad-1" data-pad="1" data-disabled="true"></div>
+      <div class="pad pad-2" data-pad="2" data-disabled="true"></div>
+      <div class="pad pad-3" data-pad="3" data-disabled="true"></div>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">شاهد التسلسل ثم كرره! المستويات تطول مع كل دور.</div>
+</div>
+
+<div class="vex-overlay show" id="startOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon emerald">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74"/><circle cx="12" cy="16" r="1"/><path d="M5 12a7 7 0 1 1 14 0"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="startTitle">تذكر النمط</div>
+    <div class="vex-overlay-subtitle" id="startSubtitle">ستضيء الأزرار بترتيب معين. تذكر التسلسل ثم اضغط الأزرار بالترتيب الصحيح!</div>
+    <button class="vex-btn vex-btn-primary" id="startBtn" style="width:100%;background:linear-gradient(135deg,#22c55e,#14532d);box-shadow:0 0 30px -5px #22c55e;">ابدأ اللعب</button>
+  </div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon rose">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle">أنت قريب! حاول مرة أخرى</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalLevel">المستوى</div><div class="vex-overlay-stat-value" id="finalLevel">1</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">النقاط</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#22c55e,#14532d);">العب مجدداً</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'تذكر النمط', level:'المستوى', score:'النقاط', best:'الأفضل', reset:'إعادة',
+      watch:'شاهد التسلسل', repeat:'كرر التسلسل!', wrong:'خطأ! انتهت اللعبة',
+      sub:'ستضيء الأزرار بترتيب معين. تذكر التسلسل ثم اضغط الأزرار بالترتيب الصحيح!',
+      start:'ابدأ اللعب', restart:'العب مجدداً', end:'انتهت اللعبة!', endSub:'أنت قريب! حاول مرة أخرى',
+      hint:'شاهد التسلسل ثم كرره! المستويات تطول مع كل دور.' },
+    en: { title:'Pattern Recall', level:'Level', score:'Score', best:'Best', reset:'Reset',
+      watch:'Watch the sequence', repeat:'Repeat it!', wrong:'Wrong! Game over',
+      sub:'Pads will light up in order. Remember the sequence and tap them back in the right order!',
+      start:'Start', restart:'Play again', end:'Game over!', endSub:"You're close! Try again",
+      hint:'Watch the sequence then repeat it! Levels grow longer.' },
+  };
+  let lang = 'ar';
+
+  const titleEl = document.getElementById('title'), levelEl = document.getElementById('level'),
+        scoreEl = document.getElementById('score'), bestEl = document.getElementById('best'),
+        statusEl = document.getElementById('status'), hint = document.getElementById('hint'),
+        lblLevel=document.getElementById('lblLevel'), lblScore=document.getElementById('lblScore'),
+        lblBest=document.getElementById('lblBest'), resetBtn=document.getElementById('resetBtn'),
+        resetBtnLabel=document.getElementById('resetBtnLabel'), startOverlay=document.getElementById('startOverlay'),
+        startBtn=document.getElementById('startBtn'), startTitle=document.getElementById('startTitle'),
+        startSubtitle=document.getElementById('startSubtitle'), endOverlay=document.getElementById('endOverlay'),
+        endRestart=document.getElementById('endRestart'), endTitle=document.getElementById('endTitle'),
+        endSubtitle=document.getElementById('endSubtitle'), finalLevel=document.getElementById('finalLevel'),
+        finalScore=document.getElementById('finalScore'), lblFinalLevel=document.getElementById('lblFinalLevel'),
+        lblFinalScore=document.getElementById('lblFinalScore');
+  const pads = Array.from(document.querySelectorAll('.pad'));
+
+  let sequence = [], userIndex = 0, level = 1, score = 0, busy = false;
+
+  function applyLang() {
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    titleEl.textContent = s.title; lblLevel.textContent = s.level; lblScore.textContent = s.score; lblBest.textContent = s.best;
+    resetBtnLabel.textContent = s.reset; hint.textContent = s.hint;
+    startTitle.textContent = s.title; startSubtitle.textContent = s.sub; startBtn.textContent = s.start;
+    endTitle.textContent = s.end; endSubtitle.textContent = s.endSub; endRestart.textContent = s.restart;
+    lblFinalLevel.textContent = s.level; lblFinalScore.textContent = s.score;
+    bestEl.textContent = (typeof VexGame !== 'undefined' ? VexGame.getBest() : 0);
+  }
+
+  function lightPad(idx, ms) {
+    return new Promise((res) => {
+      const p = pads[idx];
+      p.classList.add('lit');
+      setTimeout(() => { p.classList.remove('lit'); setTimeout(res, 120); }, ms);
+    });
+  }
+
+  async function playSequence() {
+    busy = true;
+    statusEl.textContent = STRINGS[lang].watch;
+    statusEl.style.color = 'var(--vex-blue)';
+    pads.forEach((p) => p.dataset.disabled = 'true');
+    await new Promise((r) => setTimeout(r, 500));
+    const speed = Math.max(220, 600 - level * 25);
+    for (let i = 0; i < sequence.length; i++) {
+      await lightPad(sequence[i], speed);
+    }
+    statusEl.textContent = STRINGS[lang].repeat;
+    statusEl.style.color = 'var(--vex-gold)';
+    pads.forEach((p) => p.dataset.disabled = 'false');
+    userIndex = 0;
+    busy = false;
+  }
+
+  function nextLevel() {
+    sequence.push(Math.floor(Math.random() * 4));
+    levelEl.textContent = level;
+    playSequence();
+  }
+
+  function start() {
+    sequence = []; userIndex = 0; level = 1; score = 0;
+    levelEl.textContent = 1; scoreEl.textContent = 0;
+    nextLevel();
+  }
+
+  function onPad(idx) {
+    if (busy) return;
+    if (pads[idx].dataset.disabled === 'true') return;
+    pads[idx].classList.add('lit');
+    setTimeout(() => pads[idx].classList.remove('lit'), 180);
+    if (sequence[userIndex] !== idx) {
+      gameOver();
+      return;
+    }
+    userIndex++;
+    if (userIndex >= sequence.length) {
+      score += 10 * level;
+      scoreEl.textContent = score;
+      level++;
+      setTimeout(nextLevel, 600);
+    }
+  }
+
+  function gameOver() {
+    busy = true;
+    statusEl.textContent = STRINGS[lang].wrong;
+    statusEl.style.color = 'var(--vex-rose)';
+    pads.forEach((p) => p.dataset.disabled = 'true');
+    setTimeout(() => {
+      finalLevel.textContent = level;
+      finalScore.textContent = score;
+      endOverlay.classList.add('show');
+      if (typeof VexGame !== 'undefined') {
+        VexGame.setBest(score);
+        VexGame.endSession({
+          score: score, result: 'loss',
+          metadata: { levelReached: level, sequenceLength: sequence.length },
+        });
+      }
+    }, 700);
+  }
+
+  function reset() {
+    sequence = []; userIndex = 0; level = 1; score = 0; busy = false;
+    levelEl.textContent = 1; scoreEl.textContent = 0;
+    pads.forEach((p) => { p.dataset.disabled = 'true'; p.classList.remove('lit'); });
+    statusEl.textContent = STRINGS[lang].watch;
+    statusEl.style.color = 'var(--vex-blue)';
+    endOverlay.classList.remove('show');
+    startOverlay.classList.add('show');
+  }
+
+  pads.forEach((p) => {
+    p.addEventListener('click', () => onPad(parseInt(p.dataset.pad, 10)));
+    p.addEventListener('touchstart', (e) => { e.preventDefault(); onPad(parseInt(p.dataset.pad, 10)); }, { passive: false });
+  });
+  resetBtn.addEventListener('click', reset);
+  endRestart.addEventListener('click', () => { endOverlay.classList.remove('show'); start(); });
+  startBtn.addEventListener('click', () => { startOverlay.classList.remove('show'); start(); });
+
+  if (typeof VexGame !== 'undefined') {
+    VexGame.boot({
+      slug: 'pattern-recall',
+      onReady: function (player) {
+        if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+})();
+</script>
+</body>
+</html>
