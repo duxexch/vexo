@@ -2425,6 +2425,8 @@ const en: Record<string, string> = {
   'rtcCall.unmute': 'Unmute',
   'rtcCall.cameraOn': 'Camera on',
   'rtcCall.cameraOff': 'Camera off',
+  'rtcCall.fullScreen': 'Full screen',
+  'rtcCall.exitFullScreen': 'Exit full screen',
   'rtcCall.tier.p2p': 'Direct connection',
   'rtcCall.tier.relay': 'Relay (TURN)',
   'rtcCall.tier.text-only': 'Text-only fallback',

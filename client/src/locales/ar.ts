@@ -2413,6 +2413,8 @@ const ar: Record<string, string> = {
   'rtcCall.unmute': 'إلغاء الكتم',
   'rtcCall.cameraOn': 'تشغيل الكاميرا',
   'rtcCall.cameraOff': 'إيقاف الكاميرا',
+  'rtcCall.fullScreen': 'ملء الشاشة',
+  'rtcCall.exitFullScreen': 'إنهاء ملء الشاشة',
   'rtcCall.tier.p2p': 'اتصال مباشر',
   'rtcCall.tier.relay': 'وسيط (TURN)',
   'rtcCall.tier.text-only': 'نص فقط (احتياطي)',

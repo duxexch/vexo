@@ -24,7 +24,29 @@ import {
   reportOutgoingCall,
   updateNativeCallState,
 } from "@/lib/native-call-ui";
-import { Minimize2, Maximize2, Mic, MicOff, PhoneOff, Video, VideoOff, Loader2, Phone } from "lucide-react";
+import { Minimize2, Maximize2, Maximize, Shrink, Mic, MicOff, PhoneOff, Video, VideoOff, Loader2, Phone } from "lucide-react";
+import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
+
+/**
+ * Shared className tokens for the in-call control buttons. We deliberately
+ * paint each action with a high-contrast solid background instead of the
+ * stock `outline` variant, because the surrounding card alternates between
+ * `bg-white/95` (card chrome) and `bg-slate-900` (video frame) and the
+ * default text-on-transparent contrast was so faint on Android that the
+ * icons were almost invisible (the user's exact complaint that motivated
+ * this change). Each token forces `text-white` plus a 20px icon so the
+ * affordance is unmistakable in both light and dark surroundings.
+ */
+const CALL_CTRL_BUTTON_BASE =
+  "min-h-[48px] rounded-2xl text-white border-0 shadow-md [&_svg]:size-5 [&_svg]:shrink-0 transition-colors";
+const CALL_CTRL_BUTTON_NEUTRAL =
+  `${CALL_CTRL_BUTTON_BASE} bg-slate-700 hover:bg-slate-800 active:bg-slate-900`;
+const CALL_CTRL_BUTTON_OK =
+  `${CALL_CTRL_BUTTON_BASE} bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800`;
+const CALL_CTRL_BUTTON_DANGER =
+  `${CALL_CTRL_BUTTON_BASE} bg-rose-600 hover:bg-rose-700 active:bg-rose-800`;
+const CALL_CTRL_BUTTON_ACCENT =
+  `${CALL_CTRL_BUTTON_BASE} bg-sky-600 hover:bg-sky-700 active:bg-sky-800`;
 
 type CallType = "voice" | "video";
 type CallPhase = "idle" | "ringing" | "connecting" | "connected" | "error";
@@ -136,6 +158,17 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const minimizedCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Fullscreen for the in-call surface — same hook used by the games stack so
+  // we get the native Fullscreen API on web (with Esc + back-button handling)
+  // and a CSS-based `position:fixed inset-0` fallback for the Capacitor
+  // WebView, where some Android builds reject `requestFullscreen()`.
+  const {
+    containerRef: fullscreenRef,
+    isFullscreen: isCallFullscreen,
+    toggleFullscreen: toggleCallFullscreen,
+    exitFullscreen: exitCallFullscreen,
+  } = useGameFullscreen();
 
   const dragPointerIdRef = useRef<number | null>(null);
   const dragOffsetRef = useRef<MinimizedPosition>({ x: 0, y: 0 });
@@ -320,6 +353,9 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
     setMinimizedPosition(null);
     setIsMicMuted(false);
     setIsCameraEnabled(true);
+    // Always drop fullscreen on hangup so the next page render isn't pinned
+    // behind a stale `:fullscreen` element.
+    void exitCallFullscreen();
     dragPointerIdRef.current = null;
     remoteStreamRef.current = null;
     if (remoteVideoRef.current) {
@@ -1164,13 +1200,20 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
 
       {activeCall && (
         <div
-          className={isMinimized
-            ? "fixed z-[120] transition-transform duration-200 ease-out"
-            : "fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] end-3 z-[120] w-[min(94vw,380px)]"
+          className={
+            isCallFullscreen
+              ? "fixed inset-0 z-[200]"
+              : isMinimized
+                ? "fixed z-[120] transition-transform duration-200 ease-out"
+                : "fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] end-3 z-[120] w-[min(94vw,380px)]"
           }
-          style={isMinimized ? { left: minimizedPosition?.x ?? MINIMIZED_WIDGET_MARGIN, top: minimizedPosition?.y ?? MINIMIZED_WIDGET_MARGIN } : undefined}
+          style={
+            !isCallFullscreen && isMinimized
+              ? { left: minimizedPosition?.x ?? MINIMIZED_WIDGET_MARGIN, top: minimizedPosition?.y ?? MINIMIZED_WIDGET_MARGIN }
+              : undefined
+          }
         >
-          {isMinimized ? (
+          {isMinimized && !isCallFullscreen ? (
             <div ref={minimizedCardRef} className={`rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55)] backdrop-blur transition-transform duration-150 dark:border-slate-800 dark:bg-slate-950/95 ${isDraggingMinimized ? "scale-[1.03]" : "scale-100"}`}>
               <div className="flex items-center gap-2">
                 <div
@@ -1180,7 +1223,7 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
                   onPointerUp={handleMinimizedPointerUp}
                   onPointerCancel={handleMinimizedPointerUp}
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500 text-white">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-600 text-white shadow">
                     {activeCall.callType === "video" ? <Video className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0">
@@ -1188,32 +1231,63 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
                     <p className="truncate text-[11px] text-muted-foreground">{phaseLabel} | ~ {estimatedCost}</p>
                   </div>
                 </div>
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={expandCallWidget}>
+                <Button
+                  type="button"
+                  size="icon"
+                  className={`${CALL_CTRL_BUTTON_NEUTRAL} h-9 w-9 min-h-0 rounded-full p-0`}
+                  onClick={expandCallWidget}
+                  aria-label={t("common.back")}
+                >
                   <Maximize2 className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="destructive" size="icon" className="h-8 w-8" onClick={() => void endCurrentCall()}>
+                <Button
+                  type="button"
+                  size="icon"
+                  className={`${CALL_CTRL_BUTTON_DANGER} h-9 w-9 min-h-0 rounded-full p-0`}
+                  onClick={() => void endCurrentCall()}
+                  aria-label={t("rtcCall.hangup")}
+                >
                   <PhoneOff className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_32px_80px_-30px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-              <div className="flex items-center justify-between border-b border-slate-200/70 px-3 py-2 dark:border-slate-800">
+            <div
+              ref={fullscreenRef}
+              className={
+                isCallFullscreen
+                  ? "flex h-full w-full flex-col bg-slate-950 text-white"
+                  : "overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_32px_80px_-30px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+              }
+            >
+              <div
+                className={
+                  isCallFullscreen
+                    ? "flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
+                    : "flex items-center justify-between border-b border-slate-200/70 px-3 py-2 dark:border-slate-800"
+                }
+              >
                 <div>
-                  <p className="text-sm font-semibold">
+                  <p className={`text-sm font-semibold ${isCallFullscreen ? "text-white" : ""}`}>
                     {activeCall.callType === "video" ? t("chat.video") : t("challenge.voiceStart")}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className={`text-xs ${isCallFullscreen ? "text-white/70" : "text-muted-foreground"}`}>
                     {phaseLabel}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-mono text-sm">{elapsedLabel}</p>
-                  <p className="text-[11px] text-muted-foreground">~ {estimatedCost}</p>
+                  <p className={`font-mono text-sm ${isCallFullscreen ? "text-white" : ""}`}>{elapsedLabel}</p>
+                  <p className={`text-[11px] ${isCallFullscreen ? "text-white/70" : "text-muted-foreground"}`}>~ {estimatedCost}</p>
                 </div>
               </div>
 
-              <div className="relative aspect-[4/5] bg-slate-900">
+              <div
+                className={
+                  isCallFullscreen
+                    ? "relative flex-1 bg-slate-900"
+                    : "relative aspect-[4/5] bg-slate-900"
+                }
+              >
                 {activeCall.callType === "video" ? (
                   <>
                     <video
@@ -1227,7 +1301,11 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
                       autoPlay
                       muted
                       playsInline
-                      className="absolute bottom-3 end-3 h-24 w-16 rounded-xl border border-white/30 object-cover shadow-lg"
+                      className={
+                        isCallFullscreen
+                          ? "absolute bottom-4 end-4 h-32 w-24 rounded-xl border border-white/40 object-cover shadow-lg"
+                          : "absolute bottom-3 end-3 h-24 w-16 rounded-xl border border-white/30 object-cover shadow-lg"
+                      }
                     />
                   </>
                 ) : (
@@ -1240,45 +1318,79 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
                 )}
               </div>
 
-              <div className="grid grid-cols-5 gap-2 p-3">
+              <div
+                className={
+                  isCallFullscreen
+                    ? `grid ${activeCall.callType === "video" ? "grid-cols-6" : "grid-cols-5"} gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3`
+                    : `grid ${activeCall.callType === "video" ? "grid-cols-6" : "grid-cols-5"} gap-2 p-3`
+                }
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant={isMicMuted ? "destructive" : "outline"}
-                      className="min-h-[44px] rounded-2xl"
+                      className={isMicMuted ? CALL_CTRL_BUTTON_DANGER : CALL_CTRL_BUTTON_OK}
                       onClick={() => setIsMicMuted((value) => !value)}
+                      aria-label={isMicMuted ? t("rtcCall.unmute") : t("rtcCall.mute")}
                     >
-                      {isMicMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      {isMicMuted ? <MicOff /> : <Mic />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>{isMicMuted ? t("challenge.voiceUnmuteMic") : t("challenge.voiceMuteMic")}</TooltipContent>
+                  <TooltipContent>{isMicMuted ? t("rtcCall.unmute") : t("rtcCall.mute")}</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant={isCameraEnabled ? "outline" : "destructive"}
-                      className="min-h-[44px] rounded-2xl"
+                      className={
+                        activeCall.callType !== "video"
+                          ? `${CALL_CTRL_BUTTON_NEUTRAL} opacity-60`
+                          : isCameraEnabled
+                            ? CALL_CTRL_BUTTON_ACCENT
+                            : CALL_CTRL_BUTTON_DANGER
+                      }
                       disabled={activeCall.callType !== "video"}
                       onClick={() => setIsCameraEnabled((value) => !value)}
+                      aria-label={isCameraEnabled ? t("rtcCall.cameraOff") : t("rtcCall.cameraOn")}
                     >
-                      {isCameraEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+                      {isCameraEnabled ? <Video /> : <VideoOff />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>{t("chat.video")}</TooltipContent>
+                  <TooltipContent>{isCameraEnabled ? t("rtcCall.cameraOff") : t("rtcCall.cameraOn")}</TooltipContent>
                 </Tooltip>
+
+                {activeCall.callType === "video" && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        className={CALL_CTRL_BUTTON_NEUTRAL}
+                        onClick={() => void toggleCallFullscreen()}
+                        aria-label={isCallFullscreen ? t("rtcCall.exitFullScreen") : t("rtcCall.fullScreen")}
+                        data-testid="button-call-fullscreen"
+                      >
+                        {isCallFullscreen ? <Shrink /> : <Maximize />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{isCallFullscreen ? t("rtcCall.exitFullScreen") : t("rtcCall.fullScreen")}</TooltipContent>
+                  </Tooltip>
+                )}
 
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="min-h-[44px] rounded-2xl"
-                      onClick={minimizeCallWidget}
+                      className={CALL_CTRL_BUTTON_NEUTRAL}
+                      onClick={async () => {
+                        // Drop fullscreen first so the minimized widget isn't
+                        // hidden behind the now-stale `:fullscreen` element.
+                        if (isCallFullscreen) await exitCallFullscreen();
+                        minimizeCallWidget();
+                      }}
+                      aria-label={t("common.back")}
                     >
-                      <Minimize2 className="h-4 w-4" />
+                      <Minimize2 />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{t("common.back")}</TooltipContent>
@@ -1287,11 +1399,11 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
                 <div className="col-span-2">
                   <Button
                     type="button"
-                    variant="destructive"
-                    className="min-h-[44px] w-full rounded-2xl"
+                    className={`${CALL_CTRL_BUTTON_DANGER} w-full`}
                     onClick={() => void endCurrentCall()}
+                    aria-label={t("rtcCall.hangup")}
                   >
-                    {phase === "connecting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneOff className="h-4 w-4" />}
+                    {phase === "connecting" ? <Loader2 className="animate-spin" /> : <PhoneOff />}
                   </Button>
                 </div>
               </div>
