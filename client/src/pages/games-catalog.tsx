@@ -330,7 +330,7 @@ export default function GamesCatalogPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setLocation("/share-links")}
+              onClick={() => navigate("/share-links")}
               data-testid="button-share-links"
               className="gap-2"
             >

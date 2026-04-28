@@ -223,9 +223,10 @@ export default function ShareLinksPage() {
     const entries = (apiGames || [])
       .filter((g) => g.isActive !== false)
       .map((g) => {
-        const cfg: GameConfigItem = resolveGameConfigEntry(config, g.key);
-        return { key: g.key, cfg, raw: g };
-      });
+        const cfg = resolveGameConfigEntry(config, g.key);
+        return cfg ? { key: g.key, cfg, raw: g } : null;
+      })
+      .filter((entry): entry is { key: string; cfg: GameConfigItem; raw: MultiplayerGameFromAPI } => entry !== null);
     return entries;
   }, [apiGames]);
 
