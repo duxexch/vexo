@@ -137,6 +137,11 @@ interface GameFormData {
   developerName: string;
   developerUrl: string;
   version: string;
+  // Economy
+  playMode: string;        // 'free' | 'fixed_fee' | 'prize'
+  entryFee: string;        // decimal
+  prizeMultiplier: string; // decimal e.g. 1.80
+  housePercent: string;    // decimal e.g. 10.00
 }
 
 const defaultForm: GameFormData = {
@@ -169,6 +174,10 @@ const defaultForm: GameFormData = {
   developerName: "",
   developerUrl: "",
   version: "1.0.0",
+  playMode: "free",
+  entryFee: "0.00",
+  prizeMultiplier: "1.80",
+  housePercent: "10.00",
 };
 
 export default function AdminExternalGames() {
@@ -327,6 +336,10 @@ export default function AdminExternalGames() {
       developerName: game.developerName || "",
       developerUrl: game.developerUrl || "",
       version: game.version || "1.0.0",
+      playMode: (game as any).playMode || "free",
+      entryFee: (game as any).entryFee || "0.00",
+      prizeMultiplier: (game as any).prizeMultiplier || "1.80",
+      housePercent: (game as any).housePercent || "10.00",
     });
     setShowDialog(true);
   }
@@ -875,23 +888,75 @@ export default function AdminExternalGames() {
                     <Input type="number" value={form.maxPlayers} onChange={e => setForm(f => ({ ...f, maxPlayers: parseInt(e.target.value) || 1 }))} min={1} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Min Bet</Label>
-                    <Input value={form.minBet} onChange={e => setForm(f => ({ ...f, minBet: e.target.value }))} placeholder="0.00" />
+
+                {/* ============== ECONOMY / PLAY MODE ============== */}
+                <div className="rounded-2xl border-2 border-amber-300/60 bg-gradient-to-br from-amber-50/80 to-yellow-50/40 p-4 dark:from-amber-950/30 dark:to-yellow-950/10 dark:border-amber-700/50 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">💰</span>
+                    <div>
+                      <div className="font-bold text-base">نظام الاقتصاد / Economy Mode</div>
+                      <div className="text-xs text-muted-foreground">اختر طريقة احتساب الرسوم والجوائز للعبة</div>
+                    </div>
                   </div>
+
                   <div>
-                    <Label>Max Bet</Label>
-                    <Input value={form.maxBet} onChange={e => setForm(f => ({ ...f, maxBet: e.target.value }))} placeholder="100.00" />
+                    <Label className="font-semibold">وضع اللعب / Play Mode</Label>
+                    <Select value={form.playMode} onValueChange={v => setForm(f => ({ ...f, playMode: v, isFreeToPlay: v === "free" }))}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free">🆓 مجاني / Free — بدون أي رسوم</SelectItem>
+                        <SelectItem value="fixed_fee">💸 رسوم ثابتة / Fixed Fee — يُخصم مبلغ ثابت من رصيد العميل</SelectItem>
+                        <SelectItem value="prize">🏆 لعب للربح / Play for Prize — رهان متغيّر مع مضاعف فوز</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {form.playMode === "fixed_fee" && (
+                    <div className="space-y-3 rounded-xl border bg-white/60 dark:bg-slate-900/40 p-3">
+                      <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">⚙️ إعدادات الرسوم الثابتة</div>
+                      <div>
+                        <Label>رسوم الدخول / Entry Fee (per session)</Label>
+                        <Input value={form.entryFee} onChange={e => setForm(f => ({ ...f, entryFee: e.target.value }))} placeholder="5.00" />
+                        <div className="text-xs text-muted-foreground mt-1">المبلغ الذي يُخصم من رصيد اللاعب عند بدء كل جلسة</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {form.playMode === "prize" && (
+                    <div className="space-y-3 rounded-xl border bg-white/60 dark:bg-slate-900/40 p-3">
+                      <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">⚙️ إعدادات اللعب للربح</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>الحد الأدنى / Min Bet</Label>
+                          <Input value={form.minBet} onChange={e => setForm(f => ({ ...f, minBet: e.target.value }))} placeholder="1.00" />
+                        </div>
+                        <div>
+                          <Label>الحد الأقصى / Max Bet</Label>
+                          <Input value={form.maxBet} onChange={e => setForm(f => ({ ...f, maxBet: e.target.value }))} placeholder="100.00" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>مضاعف الفوز / Prize Multiplier</Label>
+                          <Input value={form.prizeMultiplier} onChange={e => setForm(f => ({ ...f, prizeMultiplier: e.target.value }))} placeholder="1.80" />
+                          <div className="text-xs text-muted-foreground mt-1">يفوز اللاعب بـ (الرهان × المضاعف)</div>
+                        </div>
+                        <div>
+                          <Label>نسبة المنصة / House %</Label>
+                          <Input value={form.housePercent} onChange={e => setForm(f => ({ ...f, housePercent: e.target.value }))} placeholder="10.00" />
+                          <div className="text-xs text-muted-foreground mt-1">النسبة المئوية التي تحتفظ بها المنصة</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {form.playMode === "free" && (
+                    <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-xs text-emerald-700 dark:text-emerald-400">
+                      ✓ اللعبة مجانية تماماً، لا يتم خصم أي مبلغ من رصيد اللاعب
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border">
-                  <div>
-                    <div className="text-sm font-medium">Free to Play</div>
-                    <div className="text-xs text-muted-foreground">Allow playing without betting</div>
-                  </div>
-                  <Switch checked={form.isFreeToPlay} onCheckedChange={v => setForm(f => ({ ...f, isFreeToPlay: v }))} />
-                </div>
+
                 <div className="flex items-center justify-between p-3 rounded-lg border">
                   <div>
                     <div className="text-sm font-medium">Has In-Game Currency</div>

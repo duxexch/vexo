@@ -372,6 +372,8 @@ export function registerAdminExternalGamesRoutes(app: Express) {
         "enableOffline", "cacheMaxAge",
         "status", "isFeatured", "sortOrder",
         "developerName", "developerUrl", "version",
+        // Economy
+        "playMode", "entryFee", "prizeMultiplier", "housePercent",
       ];
 
       const safeUpdates: Record<string, any> = {};

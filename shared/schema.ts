@@ -612,6 +612,11 @@ export const externalGames = pgTable("external_games", {
   isFreeToPlay: boolean("is_free_to_play").notNull().default(true),
   hasInGameCurrency: boolean("has_in_game_currency").notNull().default(false),
   sdkVersion: text("sdk_version").default("1.0"),
+  // Economy modes: 'free' = no fee, 'fixed_fee' = deduct entryFee per session, 'prize' = pay minBet..maxBet for a chance to win prizeMultiplier×bet (house keeps housePercent)
+  playMode: text("play_mode").notNull().default("free"),
+  entryFee: decimal("entry_fee", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  prizeMultiplier: decimal("prize_multiplier", { precision: 6, scale: 2 }).notNull().default("1.80"),
+  housePercent: decimal("house_percent", { precision: 5, scale: 2 }).notNull().default("10.00"),
 
   // Security / Sandbox
   sandboxPermissions: text("sandbox_permissions").default("allow-scripts allow-same-origin"),

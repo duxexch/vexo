@@ -1423,9 +1423,21 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
     () => games.filter((g) => g.gameType === "multiplayer" || g.category === "multiplayer"),
     [games]
   );
-  const soloGames = useMemo(
+  const allExternalGames = useMemo(
     () => (externalGamesQ.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder),
     [externalGamesQ.data]
+  );
+  const soloGames = useMemo(
+    () => allExternalGames.filter((g) => (g.maxPlayers ?? 1) <= 1),
+    [allExternalGames]
+  );
+  const duoGames = useMemo(
+    () => allExternalGames.filter((g) => (g.maxPlayers ?? 1) === 2),
+    [allExternalGames]
+  );
+  const partyGames = useMemo(
+    () => allExternalGames.filter((g) => (g.maxPlayers ?? 1) >= 3),
+    [allExternalGames]
   );
   const gamesMap = useMemo(() => gameNameMap(games), [games]);
 
@@ -1538,6 +1550,54 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
             />
           ) : (
             soloGames.map((g) => <SoloGameTileCard key={g.id} g={g} lang={lang} />)
+          )}
+        </Rail>
+
+        <Rail
+          title={lang === "ar" ? "ألعاب الثنائي (لاعبَين)" : "Duo Games (2 Players)"}
+          kicker={lang === "ar" ? "تنافس صديقك على نفس الجهاز" : "Pass-and-play head-to-head"}
+          icon={<Users className="w-4 h-4" />}
+          href="/games"
+          accent="gold"
+        >
+          {externalGamesQ.isLoading ? (
+            <RailSkeleton width={200} />
+          ) : externalGamesQ.isError ? (
+            <RailError
+              label={lang === "ar" ? "تعذّر تحميل ألعاب الثنائي" : "Failed to load duo games"}
+              onRetry={() => externalGamesQ.refetch()}
+            />
+          ) : duoGames.length === 0 ? (
+            <RailEmpty
+              icon={<Users className="w-4 h-4" />}
+              label={lang === "ar" ? "لا توجد ألعاب ثنائية متاحة" : "No duo games available"}
+            />
+          ) : (
+            duoGames.map((g) => <SoloGameTileCard key={g.id} g={g} lang={lang} />)
+          )}
+        </Rail>
+
+        <Rail
+          title={lang === "ar" ? "ألعاب الجماعة (3-4 لاعبين)" : "Party Games (3-4 Players)"}
+          kicker={lang === "ar" ? "اجمع أصدقاءك حول جهاز واحد" : "Gather around a single device"}
+          icon={<Users className="w-4 h-4" />}
+          href="/games"
+          accent="red"
+        >
+          {externalGamesQ.isLoading ? (
+            <RailSkeleton width={200} />
+          ) : externalGamesQ.isError ? (
+            <RailError
+              label={lang === "ar" ? "تعذّر تحميل ألعاب الجماعة" : "Failed to load party games"}
+              onRetry={() => externalGamesQ.refetch()}
+            />
+          ) : partyGames.length === 0 ? (
+            <RailEmpty
+              icon={<Users className="w-4 h-4" />}
+              label={lang === "ar" ? "لا توجد ألعاب جماعية متاحة" : "No party games available"}
+            />
+          ) : (
+            partyGames.map((g) => <SoloGameTileCard key={g.id} g={g} lang={lang} />)
           )}
         </Rail>
 

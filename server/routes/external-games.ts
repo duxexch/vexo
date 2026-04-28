@@ -31,6 +31,10 @@ export function registerExternalGamesRoutes(app: Express): void {
         minBet: externalGames.minBet,
         maxBet: externalGames.maxBet,
         isFreeToPlay: externalGames.isFreeToPlay,
+        playMode: externalGames.playMode,
+        entryFee: externalGames.entryFee,
+        prizeMultiplier: externalGames.prizeMultiplier,
+        housePercent: externalGames.housePercent,
         playCount: externalGames.playCount,
         rating: externalGames.rating,
         ratingCount: externalGames.ratingCount,
@@ -87,26 +91,31 @@ export function registerExternalGamesRoutes(app: Express): void {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const bet = Number(betAmount || 0);
       const userBalance = Number(user.balance);
+      const playMode = (game.playMode as string) || "free";
 
-      // Validate bet amounts
-      if (!game.isFreeToPlay && bet <= 0) {
-        return res.status(400).json({ error: "Bet amount required for paid games" });
-      }
-      if (bet > 0) {
-        const minBet = Number(game.minBet || 0);
-        const maxBet = Number(game.maxBet || 9999999);
-        if (bet < minBet) {
-          return res.status(400).json({ error: `Minimum bet is ${minBet}` });
-        }
-        if (bet > maxBet) {
-          return res.status(400).json({ error: `Maximum bet is ${maxBet}` });
-        }
-        if (userBalance < bet) {
+      // Determine effective bet based on play mode:
+      //  - free       : no charge, ignore betAmount
+      //  - fixed_fee  : charge game.entryFee, ignore betAmount
+      //  - prize      : variable bet within [minBet, maxBet]
+      let bet = 0;
+      if (playMode === "fixed_fee") {
+        bet = Number(game.entryFee || 0);
+        if (bet > 0 && userBalance < bet) {
           return res.status(400).json({ error: "Insufficient balance" });
         }
+      } else if (playMode === "prize") {
+        bet = Number(betAmount || 0);
+        if (bet <= 0) {
+          return res.status(400).json({ error: "Bet amount required for prize games" });
+        }
+        const minBet = Number(game.minBet || 0);
+        const maxBet = Number(game.maxBet || 9999999);
+        if (bet < minBet) return res.status(400).json({ error: `Minimum bet is ${minBet}` });
+        if (bet > maxBet) return res.status(400).json({ error: `Maximum bet is ${maxBet}` });
+        if (userBalance < bet) return res.status(400).json({ error: "Insufficient balance" });
       }
+      // 'free' mode: bet stays 0
 
       // Generate unique session token
       const sessionToken = crypto.randomBytes(32).toString("hex");
