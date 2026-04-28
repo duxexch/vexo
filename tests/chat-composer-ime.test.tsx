@@ -1,5 +1,5 @@
 /**
- * Composer IME regression test.
+ * Composer IME regression test (Task #237).
  *
  * On Android, the Arabic Gboard keeps every keystroke inside an open
  * IME composition until the user taps the spacebar / picks a candidate.
@@ -24,119 +24,141 @@
  *   4. Flush the final composed value on `compositionend` so the
  *      first tap of Send picks it up.
  *
- * We exercise that contract here against a minimal harness — a full
- * GameChat / ChatPage mount drags in queries, sockets, and i18n that
- * are orthogonal to the IME plumbing. The harness mirrors the exact
- * pattern used in client/src/pages/chat.tsx, GameChat.tsx,
- * SpectatorPanel.tsx, and support-chat-widget.tsx.
+ * We exercise that contract directly against the real <GameChat />
+ * component so a regression in the production composer wiring (state
+ * variable rename, lost onInput handler, lost compositionEnd flush,
+ * Send button disable rule changes) fails the test — not just a
+ * regression in some local replica of the logic.
  */
 
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-function ComposerHarness({ onSend }: { onSend: (value: string) => void }) {
-  const [value, setValue] = useState("");
-  const [isComposing, setIsComposing] = useState(false);
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+    language: "ar" as const,
+    dir: "rtl" as const,
+    setLanguage: () => {},
+    isLoading: false,
+  }),
+}));
 
-  const hasDraft = value.trim().length > 0;
-  const showSend = hasDraft || isComposing;
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: () => {}, dismiss: () => {}, toasts: [] }),
+  toast: () => {},
+}));
 
-  return (
-    <div>
-      <input
-        data-testid="composer-input"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onInput={(event) => {
-          const next = (event.currentTarget as HTMLInputElement).value;
-          if (next !== value) setValue(next);
-        }}
-        onCompositionStart={() => setIsComposing(true)}
-        onCompositionEnd={(event) => {
-          setIsComposing(false);
-          const next = (event.currentTarget as HTMLInputElement).value;
-          if (next !== value) setValue(next);
-        }}
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({
+    user: { id: "user-1", username: "tester" },
+    refreshUser: () => {},
+    token: null,
+  }),
+}));
+
+vi.mock("@/hooks/use-keyboard-inset", () => ({
+  useKeyboardInset: () => {},
+}));
+
+vi.mock("wouter", async () => {
+  const actual = await vi.importActual<typeof import("wouter")>("wouter");
+  return {
+    ...actual,
+    useLocation: () => ["/", () => {}],
+    Link: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  };
+});
+
+import { GameChat } from "@/components/games/GameChat";
+
+function renderGameChat(onSendMessage: (message: string) => void = () => {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <GameChat
+        messages={[]}
+        onSendMessage={onSendMessage}
+        quickMessages={[]}
+        language="ar"
+        currentUserId="user-1"
       />
-      {showSend ? (
-        <button
-          type="button"
-          data-testid="button-send"
-          disabled={!hasDraft && !isComposing}
-          onClick={() => onSend(value)}
-        >
-          Send
-        </button>
-      ) : (
-        <button type="button" data-testid="button-mic">
-          Mic
-        </button>
-      )}
-    </div>
+    </QueryClientProvider>,
   );
 }
 
-describe("chat composer + Arabic IME composition", () => {
-  it("starts with the mic button when the composer is empty", () => {
-    render(<ComposerHarness onSend={() => {}} />);
-    expect(screen.getByTestId("button-mic")).toBeTruthy();
-    expect(screen.queryByTestId("button-send")).toBeNull();
+function getComposerInput(): HTMLInputElement {
+  return screen.getByTestId("input-game-chat") as HTMLInputElement;
+}
+
+function getSendButton(): HTMLButtonElement {
+  return screen.getByTestId("button-send-game-chat") as HTMLButtonElement;
+}
+
+describe("<GameChat /> composer + Arabic IME composition", () => {
+  it("starts with the Send button disabled when the composer is empty", () => {
+    renderGameChat();
+    expect(getSendButton().disabled).toBe(true);
   });
 
-  it("switches to the Send button as soon as a composition starts, before any commit", () => {
-    render(<ComposerHarness onSend={() => {}} />);
-    const input = screen.getByTestId("composer-input") as HTMLInputElement;
+  it("enables the Send button as soon as a composition starts, before any commit", () => {
+    renderGameChat();
+    const input = getComposerInput();
 
     // Simulate Gboard opening a composition for an Arabic word — the
-    // browser dispatches compositionstart but `value` is still "".
+    // browser dispatches compositionstart but the controlled value is
+    // still "" because no `change` event has fired yet.
     fireEvent.compositionStart(input);
 
-    // The Send button must already be visible / enabled, even though
-    // no `change` event has fired and the controlled value is empty.
-    const send = screen.getByTestId("button-send") as HTMLButtonElement;
-    expect(send).toBeTruthy();
-    expect(send.disabled).toBe(false);
-    expect(screen.queryByTestId("button-mic")).toBeNull();
+    // The Send button must already be enabled. If a regression
+    // forgets the `isComposingInput` branch in the disabled rule,
+    // this assertion fails.
+    expect(getSendButton().disabled).toBe(false);
   });
 
   it("syncs DOM-only `input` events into state while the composition is open", () => {
-    render(<ComposerHarness onSend={() => {}} />);
-    const input = screen.getByTestId("composer-input") as HTMLInputElement;
+    renderGameChat();
+    const input = getComposerInput();
 
     fireEvent.compositionStart(input);
     // The IME has buffered an Arabic word in the DOM but not committed.
     fireEvent.input(input, { target: { value: "مرحبا" } });
 
+    // The onInput handler in production code mirrors the DOM value
+    // back into React state; the input must reflect the buffered word
+    // and Send must remain enabled.
     expect(input.value).toBe("مرحبا");
-    expect((screen.getByTestId("button-send") as HTMLButtonElement).disabled).toBe(false);
+    expect(getSendButton().disabled).toBe(false);
   });
 
-  it("flushes the composed value on compositionend so the first Send tap picks it up", () => {
+  it("flushes the composed value on compositionend so the first Send tap delivers it", () => {
     const sent: string[] = [];
-    render(<ComposerHarness onSend={(v) => sent.push(v)} />);
-    const input = screen.getByTestId("composer-input") as HTMLInputElement;
+    renderGameChat((message) => sent.push(message));
+    const input = getComposerInput();
 
     fireEvent.compositionStart(input);
     fireEvent.input(input, { target: { value: "مرحبا" } });
     fireEvent.compositionEnd(input, { data: "مرحبا", target: { value: "مرحبا" } });
 
-    fireEvent.click(screen.getByTestId("button-send"));
+    fireEvent.click(getSendButton());
 
     expect(sent).toEqual(["مرحبا"]);
   });
 
-  it("falls back to the mic button when the composition ends with no text", () => {
-    render(<ComposerHarness onSend={() => {}} />);
-    const input = screen.getByTestId("composer-input") as HTMLInputElement;
+  it("re-disables Send when the composition ends with no committed text", () => {
+    renderGameChat();
+    const input = getComposerInput();
 
     fireEvent.compositionStart(input);
-    expect(screen.getByTestId("button-send")).toBeTruthy();
+    expect(getSendButton().disabled).toBe(false);
 
     // User cancels the IME suggestion without committing anything.
     fireEvent.compositionEnd(input, { data: "", target: { value: "" } });
 
-    expect(screen.getByTestId("button-mic")).toBeTruthy();
-    expect(screen.queryByTestId("button-send")).toBeNull();
+    expect(getSendButton().disabled).toBe(true);
   });
 });
