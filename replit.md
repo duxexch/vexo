@@ -68,8 +68,24 @@ VEX is built on a modern, distributed architecture designed for scalability and 
 **Player home page (Stadium):**
 - The non-admin landing route (`/`) is rendered by `client/src/components/home/stadium-home.tsx` (1xbet-inspired stadium layout: 3D-tilted live-tournament hero carousel, owner stat bar, horizontal rails for live tournaments / team games / solo games / active challenges, and a continuously-loading activity timeline). Source images live under `client/public/images/home-stadium/`.
 - `StadiumHome` accepts an `owner` prop only; real user data (avatar, nickname, VIP, wallet from `formatWalletAmountFromUsd`, wins/losses/streak from `/api/me/stats`) is wired from `PlayerDashboard` in `client/src/pages/dashboard.tsx`. The deposit and challenge buttons navigate to `/wallet` and `/challenges`.
-- All rails are now backed by real APIs via `useQuery`: `/api/tournaments` (HeroCarousel + tournaments rail), `/api/games` (split into team-games and solo-games rails by `gameType === 'multiplayer'`), and `/api/challenges/public` (live-challenges rail). Loading shows skeletons; empty results show a `RailEmpty` component so no fake data is ever rendered. `/api/challenges/public` was switched to `optionalAuthMiddleware` so guests (when applicable) and logged-in viewers both receive data.
-- The decorative-only sections (ActivityTimeline, ticker, "Player of Week" / "Daily Challenges" / "Announcement" sidebar cards) were intentionally removed because there is no API to back them. They will return when admin-managed sections are introduced (planned next phase).
+- All rails and decorative sections are backed by real APIs via `useQuery` — no fake/mock data anywhere:
+  - HeroCarousel + tournaments rail → `/api/tournaments`
+  - Team / solo game rails → `/api/games` split by `gameType === 'multiplayer'`
+  - Live challenges rail → `/api/challenges/public` (switched to `optionalAuthMiddleware` so both guests and logged-in viewers receive data)
+  - `PlatformStatsTicker` → `/api/platform/stats` (refetched every 30s)
+  - "Top Players" rail + "Player of the Week" card → `/api/leaderboard?sortBy=earnings&period=weekly&limit=10`
+  - "Most Played" rail → `/api/games/most-played`
+  - "Daily Reward" card → `/api/daily-rewards/status` (renders the live 7-day schedule + streak + claimedToday)
+  - "Announcement" card → `/api/announcements` (pinned-first)
+- Loading shows skeletons; empty results show a `RailEmpty` component; **failures show `RailError` with a retry button** (no silent-fallback empty states).
+- Visual style — Stadium master design tokens used across the page and being propagated to other pages:
+  - Heading font: `Bebas Neue` (`font-['Bebas_Neue']`) with `tracking-wider`.
+  - Accent gradients: blue `#1e88ff → #0a4d9c`, gold `#ffb627 → #a86b00`, danger `rose-500 → rose-900`, each with a matching `shadow-[0_0_30px_-5px_<color>]` glow.
+  - Surfaces: `bg-white dark:bg-white/[0.03]` cards, `border-slate-200 dark:border-white/10` borders, `bg-slate-50 dark:bg-white/[0.02]` row backgrounds.
+  - Hero backdrop: `bg-[radial-gradient(circle_at_top_right,#1e88ff33,transparent_55%),radial-gradient(circle_at_top_left,#ffb62733,transparent_55%)]`.
+- Pages now using the Stadium master design (in addition to `/`):
+  - `/leaderboard` (`client/src/pages/leaderboard.tsx`) — Stadium hero header with radial gradient, gradient "Your Rank" card, custom 3-tab pill (wins/earnings/streak) using the accent gradients, Bebas Neue ranks/values, top-3 medal tiles with glow.
+  - Other pages (tournaments, games-catalog, challenges, wallet, etc.) still use the legacy theme and will be migrated in subsequent passes; the homepage and leaderboard are the source of truth for the new tokens.
 - The original three exploration variants (Stadium / Holographic / LiveFeed) remain in `artifacts/mockup-sandbox/src/components/mockups/vex-home/` for future reference.
 
 ## External Dependencies
