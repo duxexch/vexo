@@ -1,9 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { readFileSync } from "node:fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
+// Read package.json at config-evaluation time so the bundle gets a stable
+// build-time identifier baked in. The runtime release-poll in main.tsx
+// uses this to decide whether the server is advertising a *strictly newer*
+// version than the bundle the user is actually executing — without this,
+// any server-side version churn (manifest rewrite, env flip) would
+// trigger a spurious "update available" banner even when the loaded
+// bundle is already current.
+const pkgJson = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf8"),
+) as { version?: string };
+const BUILD_APP_VERSION = String(pkgJson.version ?? "0.0.0");
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(BUILD_APP_VERSION),
+  },
   plugins: [
     react(),
     runtimeErrorOverlay(),

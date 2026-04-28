@@ -228,18 +228,48 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return "dark";
   });
 
+  // Track the active admin theme separately so we can re-evaluate whether
+  // its CSS-variable overrides are appropriate every time the user
+  // changes between light/dark — without re-fetching from the server.
+  const [adminTheme, setAdminTheme] = useState<AdminTheme | null>(null);
+
+  // Single effect that owns BOTH the .light/.dark class on <html> AND
+  // the admin theme overrides. Combining them prevents the bug where
+  // `applyAdminTheme` writes `--background`, `--foreground`, `--card`,
+  // `--sidebar`, etc. as inline styles on :root, which then beat the
+  // .dark / :root rule cascade — making "Light Mode" only flip the
+  // properties NOT in ADMIN_THEME_VAR_NAMES (borders, button outlines,
+  // elevation tints) while the bulk surface colors remain the admin
+  // theme's dark palette. The new contract: admin overrides are only
+  // applied when the admin theme's mode matches the user's theme (or
+  // the admin theme is mode-agnostic, i.e. mode == null).
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {
+      // Storage may be disabled; persistence then degrades to per-tab.
+    }
+
+    if (adminTheme && (adminTheme.mode == null || adminTheme.mode === theme)) {
+      applyAdminTheme(adminTheme, root);
+    } else {
+      // Either there is no admin theme, or the admin theme is pinned to
+      // the *opposite* mode — in both cases we must clear any inline
+      // overrides so the canonical :root / .dark rules in index.css
+      // become the source of truth and the user's mode toggle has its
+      // full visual effect (background, foreground, cards, sidebar).
+      clearAdminTheme(root);
+    }
+  }, [theme, adminTheme]);
 
   useEffect(() => {
     let cancelled = false;
     fetchActiveTheme().then((active) => {
       if (cancelled || !active) return;
-      applyAdminTheme(active);
+      setAdminTheme(active);
       const userPinned =
         typeof window !== "undefined" &&
         localStorage.getItem(THEME_PINNED_KEY) === "1";
@@ -254,14 +284,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setThemePinned = (next: Theme) => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(THEME_PINNED_KEY, "1");
+      try {
+        localStorage.setItem(THEME_PINNED_KEY, "1");
+      } catch {
+        // ignore quota/disabled storage
+      }
     }
     setTheme(next);
   };
 
   const toggleTheme = () => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(THEME_PINNED_KEY, "1");
+      try {
+        localStorage.setItem(THEME_PINNED_KEY, "1");
+      } catch {
+        // ignore quota/disabled storage
+      }
     }
     setTheme(prev => prev === "dark" ? "light" : "dark");
   };

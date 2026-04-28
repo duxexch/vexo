@@ -22,6 +22,40 @@ const UPDATE_BANNER_ID = "app-update-banner";
 const UPDATE_FORCE_GATE_ID = "app-force-update-gate";
 const UPDATE_BANNER_TEXT = "تحديث جديد متاح — A new update is available";
 const UPDATE_BUTTON_TEXT = "تحديث / Update";
+const UPDATE_DISMISS_TEXT = "لاحقاً / Later";
+
+// Build-time bundle version (Vite-injected via `define` in vite.config.ts).
+// This is the only trustworthy "what is the user actually running right now"
+// signal — the previous design used the *first* /api/release response as
+// the baseline, which made any server-side version flip (manifest rewrite,
+// env var change, deployment that bumped server before bumping the bundle)
+// fire a spurious update banner forever after.
+const BUILD_WEB_VERSION: string =
+  typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__ ? __APP_VERSION__ : "0.0.0";
+
+// localStorage keys for cross-session dismissal of the same advertised
+// version. Without these, the same banner re-appears on every page load
+// even after the user has already seen and ignored / dismissed it for the
+// same target version.
+const DISMISSED_WEB_VERSION_KEY = "vex:update:dismissedWebVersion";
+const DISMISSED_NATIVE_VERSION_KEY = "vex:update:dismissedNativeVersion";
+
+function readDismissedVersion(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeDismissedVersion(key: string, version: string): void {
+  try {
+    window.localStorage.setItem(key, version);
+  } catch {
+    // Storage may be disabled (private mode, quota); dismissal then
+    // degrades to per-tab only, which still avoids the spam loop.
+  }
+}
 
 function isGameplayPath(pathname: string): boolean {
   return /^\/challenge\/\d+\/(play|watch)$/.test(pathname) || /^\/game\//.test(pathname);
@@ -37,7 +71,6 @@ interface ReleaseInfo {
 }
 
 let swRegistration: ServiceWorkerRegistration | null = null;
-let initialWebVersion: string | null = null;
 let announcedWebVersion: string | null = null;
 let announcedNativeVersion: string | null = null;
 
@@ -98,8 +131,48 @@ if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
               activateLatestWebUpdate();
               return;
             }
-            // New content available — show update banner
-            showUpdateBanner(() => activateLatestWebUpdate());
+            // New content available. Resolve the *server-advertised*
+            // webVersion at this moment so the dismissal sentinel that
+            // the banner writes matches the one the version-poll path
+            // will check next interval — without that alignment, a
+            // user who dismisses the SW banner would be re-prompted
+            // 60 s later by the poll for the exact same update. If
+            // the release fetch fails (offline), fall back to the
+            // bundle's build version so the banner still surfaces.
+            void fetchReleaseInfo().then((release) => {
+              // Resolve the *server-advertised* version when reachable so
+              // both detection mechanisms write/read the same dismissal
+              // sentinel for the same release. When offline, fall back
+              // to the bundle's own build version: the SW state machine
+              // already proved a newer asset graph is installed, so a
+              // banner is genuinely warranted even without a release
+              // ping.
+              const targetVersion = release?.webVersion ?? BUILD_WEB_VERSION;
+
+              // When the server IS reachable, apply the same strict
+              // semver gate the poll path uses. This prevents a stale
+              // /api/release (equal or older than the bundle) from
+              // surfacing a non-actionable banner just because the SW
+              // happened to refresh its asset map.
+              if (release && compareSemver(release.webVersion, BUILD_WEB_VERSION) <= 0) {
+                return;
+              }
+              if (announcedWebVersion === targetVersion) {
+                return;
+              }
+              if (
+                readDismissedVersion(DISMISSED_WEB_VERSION_KEY) === targetVersion
+              ) {
+                announcedWebVersion = targetVersion;
+                return;
+              }
+              announcedWebVersion = targetVersion;
+              showUpdateBanner(
+                targetVersion,
+                DISMISSED_WEB_VERSION_KEY,
+                () => activateLatestWebUpdate(),
+              );
+            });
           }
         });
       });
@@ -130,9 +203,40 @@ async function startReleaseMonitoring(): Promise<void> {
     return;
   }
 
+  const evaluate = (release: ReleaseInfo): void => {
+    // Only fire for a *strictly newer* server version than the bundle the
+    // user is actually executing. Equal-or-older server versions (which
+    // happen during partial deploys, manifest churn, or when the user is
+    // running a freshly rebuilt local bundle against a still-stale
+    // server) must NOT trigger a banner.
+    if (compareSemver(release.webVersion, BUILD_WEB_VERSION) <= 0) {
+      return;
+    }
+
+    // Per-tab guard: don't re-announce within the same session.
+    if (announcedWebVersion === release.webVersion) {
+      return;
+    }
+
+    // Cross-session guard: the user has already explicitly dismissed
+    // (or accepted) this exact version. Re-showing the banner for the
+    // same version would be exactly the spam loop we are eliminating.
+    if (readDismissedVersion(DISMISSED_WEB_VERSION_KEY) === release.webVersion) {
+      announcedWebVersion = release.webVersion;
+      return;
+    }
+
+    announcedWebVersion = release.webVersion;
+    showUpdateBanner(
+      release.webVersion,
+      DISMISSED_WEB_VERSION_KEY,
+      () => activateLatestWebUpdate(),
+    );
+  };
+
   const firstRelease = await fetchReleaseInfo();
   if (firstRelease) {
-    initialWebVersion = firstRelease.webVersion;
+    evaluate(firstRelease);
     await maybePromptNativeUpdate(firstRelease);
   }
 
@@ -141,25 +245,16 @@ async function startReleaseMonitoring(): Promise<void> {
     if (!latestRelease) {
       return;
     }
-
-    if (!initialWebVersion) {
-      initialWebVersion = latestRelease.webVersion;
-    }
-
-    if (
-      initialWebVersion &&
-      latestRelease.webVersion !== initialWebVersion &&
-      announcedWebVersion !== latestRelease.webVersion
-    ) {
-      announcedWebVersion = latestRelease.webVersion;
-      showUpdateBanner(() => activateLatestWebUpdate());
-    }
-
+    evaluate(latestRelease);
     await maybePromptNativeUpdate(latestRelease);
   }, UPDATE_POLL_INTERVAL_MS);
 }
 
-function showUpdateBanner(onAction: () => void | Promise<void>) {
+function showUpdateBanner(
+  targetVersion: string,
+  dismissStorageKey: string,
+  onAction: () => void | Promise<void>,
+) {
   // Avoid duplicates
   if (document.getElementById(UPDATE_BANNER_ID)) {
     return;
@@ -194,6 +289,29 @@ function showUpdateBanner(onAction: () => void | Promise<void>) {
   text.textContent = UPDATE_BANNER_TEXT;
   Object.assign(text.style, { color: '#e4e6ea', fontSize: '13px', flex: '1' });
 
+  const dismissBtn = document.createElement('button');
+  dismissBtn.textContent = UPDATE_DISMISS_TEXT;
+  dismissBtn.setAttribute('aria-label', 'Dismiss update notification');
+  Object.assign(dismissBtn.style, {
+    background: 'transparent',
+    color: '#9ca3af',
+    border: '1px solid rgba(156,163,175,0.35)',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    fontWeight: '500',
+    fontSize: '12px',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  });
+  dismissBtn.onclick = () => {
+    // Persist dismissal so the same advertised version never re-prompts
+    // across reloads or new tabs. The caller chooses which sentinel
+    // (web vs. native) to write so the two channels don't bleed into
+    // each other.
+    writeDismissedVersion(dismissStorageKey, targetVersion);
+    banner.remove();
+  };
+
   const btn = document.createElement('button');
   btn.textContent = UPDATE_BUTTON_TEXT;
   Object.assign(btn.style, {
@@ -208,11 +326,14 @@ function showUpdateBanner(onAction: () => void | Promise<void>) {
     whiteSpace: 'nowrap',
   });
   btn.onclick = () => {
+    // Treat acceptance as dismissal too, so a failed activation
+    // (no waiting SW + reload-into-same-version) does not re-prompt.
+    writeDismissedVersion(dismissStorageKey, targetVersion);
     void onAction();
     banner.remove();
   };
 
-  banner.append(text, btn);
+  banner.append(text, dismissBtn, btn);
   document.body.appendChild(banner);
 }
 
@@ -397,19 +518,29 @@ async function maybePromptNativeUpdate(release: ReleaseInfo): Promise<void> {
     }
 
     const triggerUpdate = () => openNativeUpdateUrl(updateUrl);
+    const targetNativeVersion = release.nativeLatestVersion;
 
     if (release.forceNativeUpdate) {
-      announcedNativeVersion = release.nativeLatestVersion;
+      announcedNativeVersion = targetNativeVersion;
       showForceUpdateGate(triggerUpdate);
       return;
     }
 
-    if (announcedNativeVersion === release.nativeLatestVersion) {
+    // Per-tab and cross-session dedupe — same as the web banner.
+    if (announcedNativeVersion === targetNativeVersion) {
+      return;
+    }
+    if (readDismissedVersion(DISMISSED_NATIVE_VERSION_KEY) === targetNativeVersion) {
+      announcedNativeVersion = targetNativeVersion;
       return;
     }
 
-    announcedNativeVersion = release.nativeLatestVersion;
-    showUpdateBanner(triggerUpdate);
+    announcedNativeVersion = targetNativeVersion;
+    showUpdateBanner(
+      targetNativeVersion,
+      DISMISSED_NATIVE_VERSION_KEY,
+      () => triggerUpdate(),
+    );
   } catch {
     // Ignore native version lookup errors and keep app usable.
   }

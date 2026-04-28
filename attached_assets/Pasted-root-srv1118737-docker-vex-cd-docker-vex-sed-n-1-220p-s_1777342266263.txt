@@ -1,0 +1,232 @@
+root@srv1118737:/docker/vex# cd /docker/vex && sed -n '1,220p' scripts/ci/patch-android-signing.mjs
+#!/usr/bin/env node
+/**
+ * patch-android-signing.mjs
+ *
+ * Appends the canonical VEX release-signing block to
+ * android/app/build.gradle (which is regenerated per machine by
+ * npx cap add android and is gitignored).
+ *
+ * The block mirrors docs/mobile/android-signing-gradle-snippet.md
+ * verbatim, except it is appended at the end of the file as a
+ * second android { ... } configuration. Gradle merges multiple
+ * android { ... } blocks in the same file, so this is equivalent
+ * to editing the original block but is far simpler and safer than
+ * regex-patching the existing one.
+ *
+ * Idempotent: re-running is a no-op once the marker comment is
+ * present.
+ *
+ * Used by .github/workflows/release-android.yml.
+ */
+
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const scriptFile = fileURLToPath(import.meta.url);
+const projectRoot = path.resolve(path.dirname(scriptFile), "..", "..");
+const buildGradlePath = path.join(projectRoot, "android", "app", "build.gradle");
+
+const MARKER = "// === VEX release signing (injected by CI) ===";
+
+const SIGNING_BLOCK = 
+
+${MARKER}
+android {
+    signingConfigs {
+        release {
+            def keystorePathEnv  = System.getenv("ANDROID_KEYSTORE_PATH")
+            def keyAliasEnv      = System.getenv("ANDROID_KEY_ALIAS")
+            def storePasswordEnv = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            def keyPasswordEnv   = System.getenv("ANDROID_KEY_PASSWORD")
+
+            if (!keystorePathEnv || !keyAliasEnv || !storePasswordEnv || !keyPasswordEnv) {
+                storeFile     = null
+                storePassword = null
+                keyAlias      = null
+                keyPassword   = null
+            } else {
+                storeFile     = file(keystorePathEnv)
+                storePassword = storePasswordEnv
+                keyAlias      = keyAliasEnv
+                keyPassword   = keyPasswordEnv
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+}
+
+// Late-bound verification: fail fast if release signing was not configured.
+// Uses tasks.matching(...).configureEach so we attach to real Gradle tasks
+// (assembleRelease / bundleRelease) rather than the BuildType DSL object,
+// which has no \tasks\ property and would break the configuration phase.
+gradle.taskGraph.whenReady { graph ->
+    def needsSigning = graph.allTasks.any {
+        it.name == "assembleRelease" || it.name == "bundleRelease" ||
+        it.name == "packageRelease"  || it.name == "signReleaseBundle"
+    }
+    if (needsSigning) {
+        def cfg = android.buildTypes.release.signingConfig
+        if (cfg == null || cfg.storeFile == null) {
+            throw new GradleException(
+                "VEX release signing not configured. Export ANDROID_KEYSTORE_PATH, " +
+                "ANDROID_KEY_ALIAS, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_PASSWORD " +
+                "(see docs/mobile/android-signing-gradle-snippet.md)."
+            )
+        }
+    }
+}
+;
+
+function main() {
+    if (!existsSync(buildGradlePath)) {
+        console.error([patch-signing] ${buildGradlePath} not found.);
+        console.error("[patch-signing] Run npx cap add android && npx cap sync android first.");
+        process.exit(1);
+    }
+
+    const gradle = readFileSync(buildGradlePath, "utf8");
+
+    if (gradle.includes(MARKER)) {
+        console.log("[patch-signing] Marker already present — nothing to do (idempotent).");
+        return;
+    }
+
+    if (gradle.includes("ANDROID_KEYSTORE_PASSWORD")) {
+        console.log(
+            "[patch-signing] build.gradle already references ANDROID_KEYSTORE_PASSWORD by hand; skipping append.",
+        );
+        return;
+    }
+
+    writeFileSync(buildGradlePath, gradle + SIGNING_BLOCK);
+    console.log("[patch-signing] Appended VEX release-signing block to android/app/build.gradle.");
+}
+
+main();
+root@srv1118737:/docker/vex# cd /docker/vex && nl -ba scripts/ci/patch-android-signing.mjs | sed -n '1,220p'
+     1  #!/usr/bin/env node
+     2  /**
+     3   * patch-android-signing.mjs
+     4   *
+     5   * Appends the canonical VEX release-signing block to
+     6   * android/app/build.gradle (which is regenerated per machine by
+     7   * npx cap add android and is gitignored).
+     8   *
+     9   * The block mirrors docs/mobile/android-signing-gradle-snippet.md
+    10   * verbatim, except it is appended at the end of the file as a
+    11   * second android { ... } configuration. Gradle merges multiple
+    12   * android { ... } blocks in the same file, so this is equivalent
+    13   * to editing the original block but is far simpler and safer than
+    14   * regex-patching the existing one.
+    15   *
+    16   * Idempotent: re-running is a no-op once the marker comment is
+    17   * present.
+    18   *
+    19   * Used by .github/workflows/release-android.yml.
+    20   */
+    21
+    22  import { existsSync, readFileSync, writeFileSync } from "node:fs";
+    23  import path from "node:path";
+    24  import process from "node:process";
+    25  import { fileURLToPath } from "node:url";
+    26
+    27  const scriptFile = fileURLToPath(import.meta.url);
+    28  const projectRoot = path.resolve(path.dirname(scriptFile), "..", "..");
+    29  const buildGradlePath = path.join(projectRoot, "android", "app", "build.gradle");
+    30
+    31  const MARKER = "// === VEX release signing (injected by CI) ===";
+    32
+    33  const SIGNING_BLOCK = 
+    34
+    35  ${MARKER}
+    36  android {
+    37      signingConfigs {
+    38          release {
+    39              def keystorePathEnv  = System.getenv("ANDROID_KEYSTORE_PATH")
+    40              def keyAliasEnv      = System.getenv("ANDROID_KEY_ALIAS")
+    41              def storePasswordEnv = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    42              def keyPasswordEnv   = System.getenv("ANDROID_KEY_PASSWORD")
+    43
+    44              if (!keystorePathEnv || !keyAliasEnv || !storePasswordEnv || !keyPasswordEnv) {
+    45                  storeFile     = null
+    46                  storePassword = null
+    47                  keyAlias      = null
+    48                  keyPassword   = null
+    49              } else {
+    50                  storeFile     = file(keystorePathEnv)
+    51                  storePassword = storePasswordEnv
+    52                  keyAlias      = keyAliasEnv
+    53                  keyPassword   = keyPasswordEnv
+    54              }
+    55          }
+    56      }
+    57
+    58      buildTypes {
+    59          release {
+    60              signingConfig signingConfigs.release
+    61          }
+    62      }
+    63  }
+    64
+    65  // Late-bound verification: fail fast if release signing was not configured.
+    66  // Uses tasks.matching(...).configureEach so we attach to real Gradle tasks
+    67  // (assembleRelease / bundleRelease) rather than the BuildType DSL object,
+    68  // which has no \tasks\ property and would break the configuration phase.
+    69  gradle.taskGraph.whenReady { graph ->
+    70      def needsSigning = graph.allTasks.any {
+    71          it.name == "assembleRelease" || it.name == "bundleRelease" ||
+    72          it.name == "packageRelease"  || it.name == "signReleaseBundle"
+    73      }
+    74      if (needsSigning) {
+    75          def cfg = android.buildTypes.release.signingConfig
+    76          if (cfg == null || cfg.storeFile == null) {
+    77              throw new GradleException(
+    78                  "VEX release signing not configured. Export ANDROID_KEYSTORE_PATH, " +
+    79                  "ANDROID_KEY_ALIAS, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_PASSWORD " +
+    80                  "(see docs/mobile/android-signing-gradle-snippet.md)."
+    81              )
+    82          }
+    83      }
+    84  }
+    85  ;
+    86
+    87  function main() {
+    88      if (!existsSync(buildGradlePath)) {
+    89          console.error([patch-signing] ${buildGradlePath} not found.);
+    90          console.error("[patch-signing] Run npx cap add android && npx cap sync android first.");
+    91          process.exit(1);
+    92      }
+    93
+    94      const gradle = readFileSync(buildGradlePath, "utf8");
+    95
+    96      if (gradle.includes(MARKER)) {
+    97          console.log("[patch-signing] Marker already present — nothing to do (idempotent).");
+    98          return;
+    99      }
+   100
+   101      if (gradle.includes("ANDROID_KEYSTORE_PASSWORD")) {
+   102          console.log(
+   103              "[patch-signing] build.gradle already references ANDROID_KEYSTORE_PASSWORD by hand; skipping append.",
+   104          );
+   105          return;
+   106      }
+   107
+   108      writeFileSync(buildGradlePath, gradle + SIGNING_BLOCK);
+   109      console.log("[patch-signing] Appended VEX release-signing block to android/app/build.gradle.");
+   110  }
+   111
+   112  main();
+root@srv1118737:/docker/vex# cd /docker/vex && ls -l scripts/ci | sed -n '1,120p'
+total 24
+-rw-r--r-- 1 root root 12404 Apr 27 21:09 generate-android-assets.mjs
+-rw-r--r-- 1 root root  3611 Apr 27 18:35 patch-android-kotlin.mjs
+-rw-r--r-- 1 root root  4013 Apr 27 18:35 patch-android-signing.mjs
+root@srv1118737:/docker/vex# 
