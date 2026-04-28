@@ -1,0 +1,64 @@
+[2026-04-27T23:54:37Z]       Manifest:    https://vixo.click/downloads/manifest.json
+root@srv1118737:/docker/vex# curl -I https://vixo.click/downloads/VEX-1.0.1.apk
+HTTP/2 200 
+accept-ranges: bytes
+cache-control: public, max-age=3600
+content-disposition: attachment; filename="VEX-1.0.1.apk"
+content-type: application/vnd.android.package-archive
+cross-origin-opener-policy: same-origin-allow-popups
+date: Mon, 27 Apr 2026 23:56:28 GMT
+etag: W/"e0d5af-19dd15dc310"
+last-modified: Mon, 27 Apr 2026 23:54:36 GMT
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-powered-by: Express
+x-robots-tag: index, follow
+x-xss-protection: 1; mode=block
+content-length: 14734767
+
+root@srv1118737:/docker/vex# cd /docker/vex && docker compose -f docker-compose.prod.yml ps && echo '---' && docker logs vex-app --since 15m --tail 120 2>&1 | grep -Ei 'download|error|exception|apk|aab|500|internal' | tail -60
+NAME           IMAGE                COMMAND                  SERVICE    CREATED             STATUS                       PORTS
+vex-ai-agent   vex-ai-agent         "/sbin/tini -- node …"   ai-agent   12 minutes ago      Up 12 minutes (healthy)      3100/tcp
+vex-app        vex-app              "/sbin/tini -- ./scr…"   app        12 minutes ago      Up 12 minutes (healthy)      3001/tcp
+vex-db         postgres:15-alpine   "docker-entrypoint.s…"   db         About an hour ago   Up About an hour (healthy)   5432/tcp
+vex-minio      minio/minio:latest   "/usr/bin/docker-ent…"   minio      About an hour ago   Up About an hour (healthy)   9000/tcp
+vex-redis      redis:7-alpine       "docker-entrypoint.s…"   redis      About an hour ago   Up About an hour (healthy)   6379/tcp
+---
+{"timestamp":"2026-04-27T23:56:31.793Z","level":"ERROR","message":"[CRON] Failed to cancel challenge 9455875c-4d3b-44df-aff0-445fc39fd779","error":{"name":"Error","message":"Failed query: \n                    UPDATE project_currency_wallets \n                    SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + $1)::text,\n                        total_balance = (CAST(total_balance AS DECIMAL(18,8)) + $2)::text,\n                        updated_at = NOW()\n                    WHERE user_id = $3\n                  \nparams: 1,1,523208ac-d141-4e87-9cc8-cda2ee986140"}}
+{"timestamp":"2026-04-27T23:59:05.209Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-27T23:59:06.378Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-27T23:59:08.380Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-27T23:59:37.500Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777334377477_6c603d0c9964","method":"GET","path":"/api/auth/me","statusCode":304,"duration":23,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-28T00:00:32.556Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-28T00:00:40.806Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-28T00:01:18.121Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+{"timestamp":"2026-04-28T00:01:31.785Z","level":"ERROR","message":"[CRON] Failed to cancel challenge 9455875c-4d3b-44df-aff0-445fc39fd779","error":{"name":"Error","message":"Failed query: \n                    UPDATE project_currency_wallets \n                    SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + $1)::text,\n                        total_balance = (CAST(total_balance AS DECIMAL(18,8)) + $2)::text,\n                        updated_at = NOW()\n                    WHERE user_id = $3\n                  \nparams: 1,1,523208ac-d141-4e87-9cc8-cda2ee986140"}}
+{"timestamp":"2026-04-28T00:02:50.059Z","level":"ERROR","message":"Unhandled error: EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'","context":{"path":"/downloads/VEX-1.0.1.apk","method":"GET"},"error":{"name":"Error","message":"EACCES: permission denied, open '/app/dist/public/downloads/VEX-1.0.1.apk'"}}
+root@srv1118737:/docker/vex# cd /docker/vex && ls -ld client/public/downloads /app/dist/public/downloads 2>/dev/null && ls -l client/public/downloads/VEX-1.0.1.apk 2>/dev/null && stat -c '%U:%G %a %n' client/public/downloads/VEX-1.0.1.apk 2>/dev/null && docker compose -f docker-compose.prod.yml exec -T app sh -lc 'id && ls -ld /app/dist/public/downloads && stat -c "%U:%G %a %n" /app/dist/public/downloads/VEX-1.0.1.apk 2>/dev/null'
+drwxr-xr-x 2 root root 4096 Apr 27 23:54 client/public/downloads
+root@srv1118737:/docker/vex# cd /docker/vex && chmod 755 client/public/downloads && chmod 644 client/public/downloads/VEX-1.0.1.apk && docker compose -f docker-compose.prod.yml restart app
+[+] restart 0/1
+ ⠼ Container vex-app Restarting                                                                                                                                                                                                                           0.4s
+root@srv1118737:/docker/vex# cd /docker/vex && docker compose -f docker-compose.prod.yml ps && echo '---' && stat -c '%a %U:%G %n' client/public/downloads client/public/downloads/VEX-1.0.1.apk
+NAME           IMAGE                COMMAND                  SERVICE    CREATED             STATUS                             PORTS
+vex-ai-agent   vex-ai-agent         "/sbin/tini -- node …"   ai-agent   12 minutes ago      Up 12 minutes (healthy)            3100/tcp
+vex-app        vex-app              "/sbin/tini -- ./scr…"   app        12 minutes ago      Up 10 seconds (health: starting)   3001/tcp
+vex-db         postgres:15-alpine   "docker-entrypoint.s…"   db         About an hour ago   Up About an hour (healthy)         5432/tcp
+vex-minio      minio/minio:latest   "/usr/bin/docker-ent…"   minio      About an hour ago   Up About an hour (healthy)         9000/tcp
+vex-redis      redis:7-alpine       "docker-entrypoint.s…"   redis      About an hour ago   Up About an hour (healthy)         6379/tcp
+---
+755 root:root client/public/downloads
+644 root:root client/public/downloads/VEX-1.0.1.apk
+root@srv1118737:/docker/vex# cd /docker/vex && git pull origin main
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+root@srv1118737:/docker/vex# cd /docker/vex && git status --short --branch
+## main...origin/main
+?? FETCH_HEAD
+?? client/public/downloads/manifest.json
+?? key.txt
+?? keystore_base64.txt
+root@srv1118737:/docker/vex# 
