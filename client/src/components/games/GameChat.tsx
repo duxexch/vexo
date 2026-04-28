@@ -432,7 +432,7 @@ export function GameChat({
         </div>
       )}
 
-      <div className="border-t bg-background/80 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom),var(--keyboard-inset-bottom,0px))]">
+      <div className="border-t bg-background/80 px-2 pt-2 pb-[max(0px,calc(env(safe-area-inset-bottom)-var(--keyboard-inset-bottom,0px)))]">
         <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {symbolChips.map((symbol) => (
             <button

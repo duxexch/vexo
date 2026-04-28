@@ -23,6 +23,7 @@ interface ChessChatProps {
 
 export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatProps) {
   const [newMessage, setNewMessage] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
   const { t } = useI18n();
@@ -95,26 +96,37 @@ export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatP
         </div>
       </ScrollArea>
 
-      <div className="p-2 border-t flex gap-2">
+      <div className="px-2 pt-2 pb-[max(0px,calc(env(safe-area-inset-bottom)-var(--keyboard-inset-bottom,0px)))] border-t flex gap-2">
         <Input
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
+          onInput={(e) => {
+            const v = (e.currentTarget as HTMLInputElement).value;
+            if (v !== newMessage) setNewMessage(v);
+          }}
           onCompositionStart={() => {
             isComposingRef.current = true;
+            setIsComposing(true);
           }}
-          onCompositionEnd={() => {
+          onCompositionEnd={(e) => {
             isComposingRef.current = false;
+            setIsComposing(false);
+            const v = (e.currentTarget as HTMLInputElement).value;
+            if (v !== newMessage) setNewMessage(v);
           }}
           onKeyDown={handleKeyDown}
           placeholder={t('chess.typeMessage')}
           className="flex-1"
+          dir="auto"
+          inputMode="text"
+          enterKeyHint="send"
           maxLength={500}
           data-testid="input-chat-message"
         />
         <Button
           size="icon"
           onClick={handleSend}
-          disabled={!newMessage.trim()}
+          disabled={!newMessage.trim() && !isComposing}
           data-testid="button-send-chat"
         >
           <Send className="w-4 h-4" />

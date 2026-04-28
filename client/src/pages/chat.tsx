@@ -1956,7 +1956,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
             )}
 
             {/* ======= Input Area ======= */}
-            <div className="p-3 sm:p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="px-3 pt-3 sm:px-4 sm:pt-4 pb-[max(0px,calc(env(safe-area-inset-bottom)-var(--keyboard-inset-bottom,0px)))] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
               {(activeConversationPendingCount > 0 || isVoiceUploading) && (
                 <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -2117,16 +2117,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       data-testid="input-chat-message"
                     />
 
-                    {shouldShowSendButton ? (
-                      <Button
-                        onClick={handleSendMessage}
-                        disabled={!hasTypedMessage && !editingMsg}
-                        className="min-h-[44px] min-w-[44px] rounded-full"
-                        data-testid="button-send-message"
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    ) : (
+                    {!shouldShowSendButton && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -2141,6 +2132,15 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                         <TooltipContent><p>{t('chat.voiceMessage')}</p></TooltipContent>
                       </Tooltip>
                     )}
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!hasTypedMessage && !editingMsg}
+                      className="min-h-[44px] min-w-[44px] rounded-full"
+                      data-testid="button-send-message"
+                      aria-label={t('chat.send') ?? 'Send'}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )}

@@ -446,7 +446,7 @@ export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = tr
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-border bg-background">
+          <div className="px-3 pt-3 pb-[max(0px,calc(env(safe-area-inset-bottom)-var(--keyboard-inset-bottom,0px)))] border-t border-border bg-background">
             {ticket?.status === "closed" ? (
               <p className="text-center text-xs text-muted-foreground py-2">
                 {t('support.conversationClosed')}
