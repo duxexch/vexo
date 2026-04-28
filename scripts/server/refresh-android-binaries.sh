@@ -80,6 +80,11 @@ APK_DEST_NAME="VEX-${APP_VERSION}.apk"
 AAB_DEST_NAME="VEX-${APP_VERSION}.aab"
 
 mkdir -p "${DEST_DIR}"
+# The Express container reads from this directory via a read-only bind
+# mount and runs as `vexuser` (non-root). 0755 ensures any user can
+# traverse + list it, which is required for `serve-static` to open the
+# files it advertises in the directory listing.
+chmod 755 "${DEST_DIR}"
 
 log()  { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
 fail() { log "ERROR: $*"; exit 1; }
@@ -172,6 +177,13 @@ fetch_asset() {
     fail "Downloaded file is not a ZIP/APK/AAB (magic=0x${magic_hex}). URL: ${url}"
   fi
 
+  # Force world-readable mode BEFORE the atomic rename. mktemp creates
+  # files at 0600 (root-only), and `mv -f` preserves source permissions —
+  # so without this chmod the published APK/AAB would be unreadable to
+  # the Express container, which runs as `vexuser` (see Dockerfile USER).
+  # Symptom in production: every `GET /downloads/VEX-<version>.apk` logs
+  # `EACCES: permission denied` and the user-visible install fails.
+  chmod 644 "$tmp"
   mv -f "$tmp" "$final"
   trap - RETURN
   log "  Saved → ${final} (${size} bytes)"
@@ -222,6 +234,11 @@ cat > "${MANIFEST_TMP}" <<JSON
   "releasedAt": "${RELEASED_AT}"
 }
 JSON
+# Set the readable mode on the staging file BEFORE the atomic rename
+# so there is no window where the published manifest is 0600 (the
+# default mode for files created via shell redirection inside a
+# directory whose umask is restrictive). Same reasoning as fetch_asset.
+chmod 644 "${MANIFEST_TMP}"
 mv -f "${MANIFEST_TMP}" "${MANIFEST_PATH}"
 log "Wrote manifest: ${MANIFEST_PATH}"
 log "  version:   ${APP_VERSION}"
