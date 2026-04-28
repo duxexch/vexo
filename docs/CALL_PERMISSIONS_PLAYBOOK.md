@@ -339,3 +339,143 @@ Tap **Voice call** on a fresh install and confirm:
   tapping **Allow**.
 - `getUserMedia` resolves with a real `MediaStream` (no
   `NotAllowedError` in logcat).
+
+---
+
+## 7. Background incoming-call wake (FCM on Android, PushKit on iOS)
+
+Sections 1–6 cover **foreground** calls — the app is on screen, the
+WebSocket is connected, the JS layer presents the incoming-call UI.
+When the receiver's app is **backgrounded or killed** the WebSocket is
+gone and the only thing the OS will allow is a high-priority push that
+wakes a foreground service inside the OS-budgeted ~5 second window.
+
+Without the credentials below, server logs print once at boot:
+
+```
+[voip-push] FCM not configured — Android background-call wake disabled
+            until FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY are set.
+[voip-push] APNs not configured — iOS lock-screen ringing disabled
+            until APNS_KEY_ID/APNS_TEAM_ID/APNS_BUNDLE_ID/APNS_PRIVATE_KEY are set.
+```
+
+…and `sendCallVoipPush` returns `{ sent: 0 }` instead of throwing, so
+foreground-only calls still work. Friend calls to a killed device just
+go unanswered until the receiver reopens the app.
+
+### 7.1. Android — Firebase Cloud Messaging HTTP v1
+
+#### One-time Firebase project setup
+
+1. Create (or reuse) a Firebase project at <https://console.firebase.google.com>.
+2. **Project settings → Service accounts → Generate new private key.**
+   This downloads a JSON file containing `project_id`, `client_email`
+   and `private_key`. Treat it as a production secret.
+3. **Project settings → Your apps → Add Android app.** Use the host
+   package id (`click.vixo.app`) and the SHA-1 from
+   `keytool -printcert -jarfile client/public/downloads/app.apk`.
+   Download the generated `google-services.json` and place it at
+   `android/app/google-services.json` on the workstation that builds
+   the APK. The Capacitor build picks it up automatically — no code
+   changes needed.
+
+#### Wire the credentials into the VPS
+
+Edit `/docker/vex/.env` and add **(values from the JSON above)**:
+
+```bash
+FIREBASE_PROJECT_ID=vex-xxxxx
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@vex-xxxxx.iam.gserviceaccount.com
+# The private key spans many lines. Either paste it on a single line
+# with literal `\n` separators OR use a $'...' quoted heredoc — the
+# server normalises both forms in getFcmConfig().
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADAN...\n-----END PRIVATE KEY-----\n"
+```
+
+`docker-compose.prod.yml` already maps these three names through to
+the `app` container's environment (added in this task). After editing
+`.env`:
+
+```bash
+cd /docker/vex
+docker compose -f docker-compose.prod.yml --env-file .env up -d app
+docker logs vex-app --tail 100 | grep voip-push
+# expect: NO "[voip-push] FCM not configured" line on the next boot
+```
+
+#### Verify the credentials before relying on them
+
+The repo ships an offline + online doctor that signs a real
+service-account JWT and (with `--ping-gateways`) hits the Google
+OAuth2 endpoint to confirm acceptance, **without** sending a push or
+needing a device:
+
+```bash
+# Offline (instant, no network):
+npm run ops:voip-push-doctor
+
+# Full handshake with Apple + Google:
+npm run ops:voip-push-doctor:online
+```
+
+Exit code 0 means every configured transport passed.
+
+#### Host-app registration (already wired)
+
+The plugin ships `CallFcmService` (a `FirebaseMessagingService`
+subclass) that recognises `type:"call"` data messages, hands them off
+to `IncomingCallForegroundService`, and broadcasts every refreshed
+token via `click.vixo.nativecallui.FCM_TOKEN_REFRESH`. The host app
+must:
+
+- Register the service in its merged `AndroidManifest.xml` — see
+  `native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`,
+  the `CallFcmService` block under `<application>`.
+- Listen for the `FCM_TOKEN_REFRESH` broadcast and POST the token to
+  `/api/devices/voip-token` with `{ platform: "android", kind: "fcm",
+  token }`. Server-side persistence and dedupe live in
+  `server/routes/devices/voip-tokens.ts` and
+  `server/storage/notifications.ts`.
+
+### 7.2. iOS — Apple PushKit / VoIP push
+
+1. <https://developer.apple.com/account> → **Certificates, IDs &
+   Profiles → Keys → ➕**. Tick **Apple Push Notifications service
+   (APNs)** and download the resulting `.p8` (you can only download
+   it once). Note the 10-character Key ID.
+2. Find the 10-character Team ID under **Membership**.
+3. Edit `/docker/vex/.env`:
+
+   ```bash
+   APNS_KEY_ID=ABCDE12345
+   APNS_TEAM_ID=ABCDE12345
+   APNS_BUNDLE_ID=click.vixo.app
+   APNS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...contents of AuthKey_ABCDE12345.p8...\n-----END PRIVATE KEY-----\n"
+   # While testing TestFlight builds against the sandbox gateway:
+   APNS_USE_SANDBOX=true
+   ```
+
+4. Restart the app container as in 7.1 and re-run
+   `npm run ops:voip-push-doctor:online`.
+
+The server appends `.voip` to `APNS_BUNDLE_ID` automatically when
+building the `apns-topic` header — paste the plain bundle id only.
+
+### 7.3. End-to-end smoke
+
+1. Sign in on two phones (one caller, one receiver). Confirm both
+   `/api/devices/voip-token` POSTs succeeded — there should be one row
+   per device in `device_push_tokens` with the right `platform`/`kind`.
+2. **Force-stop** the receiver's app from system settings (not just
+   background it — Android's "swipe away" leaves the WebSocket alive
+   for a few seconds).
+3. Initiate a friend voice call from the caller.
+4. Within ~5 seconds the receiver's lock screen should display the
+   native CallKit/Telecom incoming-call UI. Tapping **Accept** must
+   relaunch the app straight into the active call (the plugin emits
+   `acceptedFromNative` which the JS layer rehydrates into a normal
+   `useCallSession` connect).
+5. If nothing happens, check `docker logs vex-app | grep voip-push`
+   for either the not-configured warning or a non-2xx FCM/APNs
+   response code (`UNREGISTERED` ⇒ stale device token, `404` ⇒ wrong
+   `FIREBASE_PROJECT_ID`, `403` ⇒ service-account JWT signing failed).

@@ -298,6 +298,23 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TWITTER_API_KEY: ${TWITTER_API_KEY:-}
       TWITTER_API_SECRET: ${TWITTER_API_SECRET:-}
+      # ----------------------------------------------------------------
+      # VoIP push (background incoming-call wakes). Both stacks are
+      # optional: when blank, server/lib/voip-push.ts logs once and
+      # returns sent:0 instead of throwing, so the rest of the call
+      # experience keeps working. Required for ringing a killed app.
+      # ----------------------------------------------------------------
+      # Android — Firebase Cloud Messaging HTTP v1 (service-account JWT).
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+      # iOS — Apple PushKit / VoIP push (token-based ES256 auth).
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-click.vixo.app}
+      APNS_PRIVATE_KEY: ${APNS_PRIVATE_KEY:-}
+      APNS_HOST: ${APNS_HOST:-}
+      APNS_USE_SANDBOX: ${APNS_USE_SANDBOX:-false}
       TZ: UTC
     # No direct ports — Traefik handles all traffic via the vex-traefik network.
     # Uncomment the host port mapping below ONLY for local debugging from the VPS shell.
