@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "xjArHx-F12S4gD4P1MW08"
@@ -42,3 +41,51 @@ id = "iLTxjpPztLp0kd3775q1k"
 uri = "file://artifacts/mockup-sandbox/public/images/ad-chess.png"
 type = "image"
 title = "generated_image"
+
+[[outputs]]
+id = "ca4K4aFlyoLyJjWP6qFUk"
+uri = "file://client/public/marketing/ad-platform-square.png"
+type = "image"
+title = "إعلان VEX — مربع (1:1) لمنصات السوشيال"
+
+[[outputs]]
+id = "XHPYIFiVesF2yh0Wu-VoX"
+uri = "file://client/public/marketing/ad-platform-portrait.png"
+type = "image"
+title = "إعلان VEX — عمودي (4:5) لإنستغرام/فيسبوك"
+
+[[outputs]]
+id = "fiIYit9p8Rh9Wc40qsPi_"
+uri = "file://client/public/marketing/ad-platform-story.png"
+type = "image"
+title = "إعلان VEX — قصة (9:16) لستوريز"
+
+[[outputs]]
+id = "4ZyMYdFY6iPCLt0XPtWte"
+uri = "file://client/public/marketing/ad-platform-landscape.png"
+type = "image"
+title = "إعلان VEX — أفقي (16:9) لتويتر/يوتيوب"
+
+[[outputs]]
+id = "mOXKX8sXKREpogm_73yBi"
+uri = "file://client/public/marketing/ad-domino.png"
+type = "image"
+title = "إعلان لعبة الدومينو"
+
+[[outputs]]
+id = "8iGNVljsz2Rpd55Pv8LDj"
+uri = "file://client/public/marketing/ad-baloot.png"
+type = "image"
+title = "إعلان لعبة البلوت"
+
+[[outputs]]
+id = "JYx-xj8Psjr3fujmkAX1c"
+uri = "file://client/public/marketing/ad-chess.png"
+type = "image"
+title = "إعلان لعبة الشطرنج"
+
+[[outputs]]
+id = "t1fD_ADTNyH6XEQpOZbU9"
+uri = "file://client/public/marketing/vex-logo.png"
+type = "image"
+title = "شعار VEX"
