@@ -24,6 +24,27 @@
                         Must be granted by the user via system settings
                         (cannot be requested as a runtime dialog) — the
                         plugin exposes a helper that opens that screen.
+
+  Critical addition (mic-permission regression fix):
+   - MODIFY_AUDIO_SETTINGS : Capacitor 8's `BridgeWebChromeClient`
+                        responds to a WebView `RESOURCE_AUDIO_CAPTURE`
+                        request by issuing a *multi-permission* runtime
+                        request that ALWAYS bundles RECORD_AUDIO **and**
+                        MODIFY_AUDIO_SETTINGS together. Android's
+                        permission framework rejects the entire bundle
+                        if any single permission inside it is missing
+                        from the merged manifest, even when the user
+                        has already granted RECORD_AUDIO via the plugin
+                        rationale flow. The aggregator then computes
+                        `granted == false`, the bridge calls
+                        `request.deny()`, and `getUserMedia` rejects
+                        with NotAllowedError → user sees
+                        "voiceMicPermissionNeeded" while believing
+                        they granted everything. Declaring
+                        MODIFY_AUDIO_SETTINGS here closes the gap.
+                        This permission is "normal" (auto-granted at
+                        install time) so it adds no extra dialog — it
+                        only needs to exist in the merged manifest.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -36,6 +57,7 @@
 
     <!-- Friend voice + video calls. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- Lock-screen ringing overlay + future chat-heads bubbles. -->

@@ -69,6 +69,13 @@
       complete picture in one place.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!--
+      MODIFY_AUDIO_SETTINGS must be present in the merged manifest
+      because Capacitor's BridgeWebChromeClient bundles it together
+      with RECORD_AUDIO when the WebView issues a mic permission
+      request. See the plugin manifest for the full root-cause note.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 

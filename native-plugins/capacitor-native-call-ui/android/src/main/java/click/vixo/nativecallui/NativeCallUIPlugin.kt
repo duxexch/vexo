@@ -39,6 +39,19 @@ import com.getcapacitor.annotation.PermissionCallback
             alias = NativeCallUIPlugin.PERMISSION_ALIAS_CALL_MEDIA,
             strings = [
                 Manifest.permission.RECORD_AUDIO,
+                // MODIFY_AUDIO_SETTINGS is a "normal" permission so it
+                // is auto-granted at install time and does not surface
+                // a runtime dialog. We list it explicitly here (in
+                // addition to the manifest declaration) so this alias
+                // mirrors the bundle that Capacitor 8's
+                // BridgeWebChromeClient asks for under the hood when
+                // the WebView calls getUserMedia({ audio: true }).
+                // Without it, the bridge's RequestMultiplePermissions
+                // launcher returns `false` for the missing entry, the
+                // aggregator marks the whole grant as denied, and the
+                // WebView aborts the mic request with NotAllowedError
+                // — even though RECORD_AUDIO was granted by the user.
+                Manifest.permission.MODIFY_AUDIO_SETTINGS,
                 Manifest.permission.CAMERA,
             ],
         ),

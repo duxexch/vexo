@@ -57,7 +57,8 @@ import { VexNotificationPopupProvider } from "@/components/VexNotificationPopup"
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PrivateCallLayerProvider } from "@/components/chat/private-call-layer";
-import { CallSessionProvider } from "@/components/calls/CallSessionProvider";
+import { CallSessionProvider, useCall } from "@/components/calls/CallSessionProvider";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 
 import NotFound from "@/pages/not-found";
 import AdminLayout from "@/pages/admin/admin-layout";
@@ -671,12 +672,77 @@ function BottomNavigation({
     );
 }
 
+/**
+ * Mobile chat bottom-sheet host. Pulled out of `AuthenticatedLayout`
+ * so it can subscribe to `useCall()` (which is only available beneath
+ * `CallSessionProvider`) without dragging that subscription into the
+ * whole layout tree.
+ *
+ * Two production concerns it owns:
+ *  1. Tracks `--keyboard-inset-bottom` so the sheet rises above the
+ *     soft keyboard instead of leaving a dead gap below the composer.
+ *     `Capacitor.Keyboard.resize='none'` keeps the layout viewport
+ *     pinned, so the sheet would otherwise float at
+ *     `bottom: env(safe-area-inset-bottom)+4.75rem` *behind* the
+ *     keyboard.
+ *  2. Auto-dismisses the sheet the moment a call is dialing,
+ *     ringing, connecting, or connected — otherwise the sheet sits at
+ *     `z-100` and partially covers the call card.
+ */
+function ChatBottomSheet({
+    isOpen,
+    onClose,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+}) {
+    const { status: callStatus } = useCall();
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const callOccupiesScreen =
+            callStatus === "ringing-out" ||
+            callStatus === "ringing-in" ||
+            callStatus === "connecting" ||
+            callStatus === "connected";
+        if (callOccupiesScreen) {
+            onClose();
+        }
+    }, [isOpen, callStatus, onClose]);
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] md:hidden" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+                className="absolute start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
+                style={{
+                    bottom:
+                        "calc(env(safe-area-inset-bottom) + 4.75rem + var(--keyboard-inset-bottom, 0px))",
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <Suspense fallback={<PageLoader />}>
+                    <ChatPage embedded />
+                </Suspense>
+            </div>
+        </div>
+    );
+}
+
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     const { t, language, dir } = useI18n();
     const [location] = useLocation();
     const sidebarSide = dir === "rtl" ? "right" : "left";
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isBottomNavVisible, setIsBottomNavVisible] = useState(true);
+    // Drives `--keyboard-inset-bottom` on the document root so the
+    // mobile chat sheet (and the composer it embeds) tracks the
+    // on-screen keyboard instead of leaving a 4.75rem+keyboardHeight
+    // void below the input — Capacitor sets `Keyboard.resize='none'`
+    // so the layout viewport never reflows on its own.
+    useKeyboardInset();
     const mainContentRef = useRef<HTMLElement | null>(null);
     const lastMainScrollTopRef = useRef(0);
     const bottomNavScrollIntentRef = useRef(0);
@@ -862,19 +928,10 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                             </main>
                             <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} isVisible={isBottomNavVisible} />
                         </div>
-                        {isChatOpen && (
-                            <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
-                                <div className="absolute inset-0 bg-black/50" />
-                                <div
-                                    className="absolute bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <Suspense fallback={<PageLoader />}>
-                                        <ChatPage embedded />
-                                    </Suspense>
-                                </div>
-                            </div>
-                        )}
+                        <ChatBottomSheet
+                            isOpen={isChatOpen}
+                            onClose={toggleChat}
+                        />
                     </div>
                     <Suspense fallback={null}>
                         <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />

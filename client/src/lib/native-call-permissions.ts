@@ -13,7 +13,13 @@
  *    plugin call before the caller invokes `getUserMedia`, otherwise
  *    Capacitor 8's `BridgeWebChromeClient` rejects the WebView's
  *    permission request silently and the user sees "permissions
- *    denied" even after granting.
+ *    denied" even after granting. The plugin's permission alias
+ *    bundles `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS` + `CAMERA` —
+ *    the audio-settings entry is mandatory because the bridge's
+ *    `RequestMultiplePermissions` launcher fails the whole grant if
+ *    any bundled permission is missing from the merged manifest, even
+ *    though `MODIFY_AUDIO_SETTINGS` itself is "normal" and does not
+ *    surface a runtime dialog.
  *  - **Native iOS**: the plugin asks `AVCaptureDevice` for
  *    authorisation, which surfaces the system dialog the first time.
  *  - **Web**: the browser fires its own permission prompt directly
