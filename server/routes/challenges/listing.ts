@@ -3,7 +3,7 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, desc, or } from "drizzle-orm";
 import { challenges as challengesTable } from "@shared/schema";
-import { authMiddleware, AuthRequest } from "../middleware";
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
 
 /** Helper to compute rank from win/loss */
@@ -76,7 +76,7 @@ export function registerListingRoutes(app: Express) {
     }
   });
 
-  app.get("/api/challenges/public", authMiddleware, async (req: AuthRequest, res: Response) => {
+  app.get("/api/challenges/public", optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const dbChallenges = await storage.getActiveChallenges();
       const sliced = dbChallenges.slice(0, 10);

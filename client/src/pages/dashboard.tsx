@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { financialQueryOptions } from "@/lib/queryClient";
 import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
-import StadiumHome from "@/components/home/stadium-home";
+import { StadiumHome } from "@/components/home/stadium-home";
 
 interface DashboardStats {
   totalUsers: number;
