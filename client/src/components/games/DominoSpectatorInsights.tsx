@@ -189,6 +189,9 @@ export function DominoSpectatorInsights({
                                         {endgameSummary.reason === "blocked" && (
                                             <div className="text-muted-foreground">{t("domino.blocked")}</div>
                                         )}
+                                        {endgameSummary.reason === "domino_drawn" && (
+                                            <div className="text-muted-foreground">{t("domino.scoreReason.dominoDrawn")}</div>
+                                        )}
                                         {typeof endgameSummary.winningTeamPips === "number" && (
                                             <div className="text-muted-foreground">{t("domino.score")}: {endgameSummary.winningTeamPips}</div>
                                         )}

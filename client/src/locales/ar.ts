@@ -1930,6 +1930,7 @@ const ar: Record<string, string> = {
   'domino.youWon': 'لقد فزت!',
   'domino.youLost': 'لقد خسرت',
   'domino.blocked': 'اللعبة مسدودة',
+  'domino.scoreReason.dominoDrawn': 'أُغلِقت اليد بعد السحب — تُحتسب فروق النقاط فقط',
   'domino.connecting': 'جاري الاتصال...',
   'domino.loadingGame': 'جاري تحميل اللعبة...',
   'domino.invalidSession': 'جلسة لعب غير صالحة',

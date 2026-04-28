@@ -1930,6 +1930,7 @@ const en: Record<string, string> = {
   'domino.youWon': 'You Won!',
   'domino.youLost': 'You Lost',
   'domino.blocked': 'Game Blocked',
+  'domino.scoreReason.dominoDrawn': 'Closed after drawing — pip difference scored',
   'domino.connecting': 'Connecting to game...',
   'domino.loadingGame': 'Loading game...',
   'domino.invalidSession': 'Invalid game session',

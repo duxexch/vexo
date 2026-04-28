@@ -200,6 +200,299 @@ function main(): void {
     }
 
     logPass("valid move applies and advances state");
+
+    // ---------------------------------------------------------------------------
+    // Pure domino-out scoring rule
+    // ---------------------------------------------------------------------------
+
+    type SmokeTile = { left: number; right: number; id: string };
+    type SmokeState = {
+        board: SmokeTile[];
+        leftEnd: number;
+        rightEnd: number;
+        hands: Record<string, SmokeTile[]>;
+        boneyard: SmokeTile[];
+        currentPlayer: string;
+        playerOrder: string[];
+        passCount: number;
+        drawsThisTurn: number;
+        drewThisRound: string[];
+        gameOver: boolean;
+        targetScore: number;
+        roundNumber: number;
+        scores: Record<string, number>;
+        winner?: string | null;
+        winningTeam?: number;
+        isDraw?: boolean;
+        reason?: string;
+        lastAction?: { type: string; playerId: string; tile?: SmokeTile; end?: string };
+    };
+
+    const allTiles: SmokeTile[] = [];
+    for (let i = 0; i <= 6; i++) {
+        for (let j = i; j <= 6; j++) {
+            allTiles.push({ left: i, right: j, id: `${i}-${j}` });
+        }
+    }
+
+    function takeTile(pool: SmokeTile[], id: string): SmokeTile {
+        const idx = pool.findIndex((t) => t.id === id);
+        assertCondition(idx !== -1, `Fixture missing tile ${id}`);
+        return pool.splice(idx, 1)[0];
+    }
+
+    function buildScoringFixture(opts: {
+        players: string[];
+        winner: string;
+        winningTile: SmokeTile;
+        drewThisRound: string[];
+        targetScore?: number;
+    }): SmokeState {
+        const pool = allTiles.map((t) => ({ ...t }));
+        // Board with a single spinner so winningTile attaches cleanly via a matching pip.
+        const seedId = `${opts.winningTile.left}-${opts.winningTile.left}`;
+        const seed = takeTile(pool, seedId);
+        const winnerHandTile = takeTile(pool, opts.winningTile.id);
+        const hands: Record<string, SmokeTile[]> = {};
+        for (const pid of opts.players) {
+            hands[pid] = [];
+        }
+        hands[opts.winner] = [winnerHandTile];
+        // Distribute six tiles to each opponent so opponent pip totals are non-trivial.
+        const opponents = opts.players.filter((p) => p !== opts.winner);
+        for (const pid of opponents) {
+            for (let n = 0; n < 6; n++) {
+                hands[pid].push(pool.shift()!);
+            }
+        }
+        const boneyard = pool;
+        return {
+            board: [seed],
+            leftEnd: seed.left,
+            rightEnd: seed.right,
+            hands,
+            boneyard,
+            currentPlayer: opts.winner,
+            playerOrder: opts.players,
+            passCount: 0,
+            drawsThisTurn: 0,
+            drewThisRound: opts.drewThisRound,
+            gameOver: false,
+            targetScore: opts.targetScore ?? 101,
+            roundNumber: 1,
+            scores: Object.fromEntries(opts.players.map((p) => [p, 0])),
+        };
+    }
+
+    function sumPips(tiles: SmokeTile[]): number {
+        return tiles.reduce((s, t) => s + t.left + t.right, 0);
+    }
+
+    // Scenario A: 2-player clean domino-out — winner never drew, scores full opponent pips.
+    {
+        const players = ["smoke-p1", "smoke-p2"];
+        const winner = "smoke-p1";
+        const opponent = "smoke-p2";
+        const winningTile: SmokeTile = { left: 3, right: 5, id: "3-5" };
+        const fixture = buildScoringFixture({
+            players,
+            winner,
+            winningTile,
+            drewThisRound: [],
+        });
+        const opponentPips = sumPips(fixture.hands[opponent]);
+        const result = engine.applyMove(JSON.stringify(fixture), winner, {
+            type: "play",
+            tile: { left: winningTile.left, right: winningTile.right, id: winningTile.id },
+            end: "left",
+        });
+        assertCondition(result.success, "Clean domino-out apply must succeed", result.error);
+        const scoreEvent = result.events.find((e) => e.type === "score" || e.type === "game_over");
+        assertCondition(scoreEvent, "Expected score or game_over event for clean domino-out");
+        assertEqual(scoreEvent!.data.reason, "domino", "Clean win reason must be 'domino'");
+        assertEqual(scoreEvent!.data.score, opponentPips, "Clean win scores full opponent pips");
+        logPass("clean domino-out scores full opponent pips with reason 'domino'");
+    }
+
+    // Scenario B: 2-player drawn-then-closed — winner drew earlier, scores pip difference only.
+    {
+        const players = ["smoke-p1", "smoke-p2"];
+        const winner = "smoke-p1";
+        const opponent = "smoke-p2";
+        const winningTile: SmokeTile = { left: 4, right: 6, id: "4-6" };
+        const fixture = buildScoringFixture({
+            players,
+            winner,
+            winningTile,
+            drewThisRound: [winner],
+        });
+        const opponentPips = sumPips(fixture.hands[opponent]);
+        const expectedDelta = Math.max(0, opponentPips - 0); // winner hand is empty after play
+        const result = engine.applyMove(JSON.stringify(fixture), winner, {
+            type: "play",
+            tile: { left: winningTile.left, right: winningTile.right, id: winningTile.id },
+            end: "left",
+        });
+        assertCondition(result.success, "Drawn domino-out apply must succeed", result.error);
+        const scoreEvent = result.events.find((e) => e.type === "score" || e.type === "game_over");
+        assertCondition(scoreEvent, "Expected score or game_over event for drawn domino-out");
+        assertEqual(scoreEvent!.data.reason, "domino_drawn", "Drawn win reason must be 'domino_drawn'");
+        assertEqual(scoreEvent!.data.score, expectedDelta, "Drawn win scores pip difference (opp - winner)");
+        logPass("drawn domino-out scores pip difference with reason 'domino_drawn'");
+    }
+
+    // Scenario C: 4-player team mode — drawn winner credits team via blocked-style scoring.
+    {
+        const players = ["smoke-t-a1", "smoke-t-b1", "smoke-t-a2", "smoke-t-b2"];
+        const winner = "smoke-t-a1";
+        const teammate = "smoke-t-a2";
+        const winningTile: SmokeTile = { left: 2, right: 6, id: "2-6" };
+        const fixture = buildScoringFixture({
+            players,
+            winner,
+            winningTile,
+            drewThisRound: [winner],
+        });
+        // 4p has zero boneyard; rebalance hands so all 28 tiles land in hands/board.
+        const remainder = fixture.boneyard.splice(0);
+        // Spread leftover tiles across opponents to keep total at 28 without growing winner hand.
+        const opponents = players.filter((p) => p !== winner);
+        let cursor = 0;
+        for (const tile of remainder) {
+            fixture.hands[opponents[cursor % opponents.length]].push(tile);
+            cursor += 1;
+        }
+        const teamB = [players[1], players[3]];
+        // Winner hand becomes empty after play, so teamA pips post-play equals teammate pips only.
+        const teamApipsAfter = sumPips(fixture.hands[teammate]);
+        const teamBpipsAfter = teamB.reduce((s, p) => s + sumPips(fixture.hands[p]), 0);
+        const expectedTeamDelta = Math.max(0, teamBpipsAfter - teamApipsAfter);
+        const result = engine.applyMove(JSON.stringify(fixture), winner, {
+            type: "play",
+            tile: { left: winningTile.left, right: winningTile.right, id: winningTile.id },
+            end: "left",
+        });
+        assertCondition(result.success, "4p drawn domino-out apply must succeed", result.error);
+        const scoreEvent = result.events.find((e) => e.type === "score" || e.type === "game_over");
+        assertCondition(scoreEvent, "Expected score event for 4p drawn domino-out");
+        assertEqual(scoreEvent!.data.reason, "domino_drawn", "4p drawn win reason must be 'domino_drawn'");
+        assertEqual(scoreEvent!.data.score, expectedTeamDelta, "4p drawn win uses team pip difference");
+        const newScores = scoreEvent!.data.scores as Record<string, number>;
+        assertEqual(newScores[winner], expectedTeamDelta, "Winner credited team delta");
+        assertEqual(newScores[teammate], expectedTeamDelta, "Teammate credited team delta");
+        logPass("4p drawn domino-out uses blocked-style team scoring with reason 'domino_drawn'");
+    }
+
+    // Scenario D: round reset — drewThisRound clears when a new round begins.
+    {
+        const players = ["smoke-p1", "smoke-p2"];
+        const winner = "smoke-p1";
+        const winningTile: SmokeTile = { left: 1, right: 2, id: "1-2" };
+        const fixture = buildScoringFixture({
+            players,
+            winner,
+            winningTile,
+            drewThisRound: [winner, "smoke-p2"],
+            targetScore: 201, // ensure game does not end so a new round starts.
+        });
+        const result = engine.applyMove(JSON.stringify(fixture), winner, {
+            type: "play",
+            tile: { left: winningTile.left, right: winningTile.right, id: winningTile.id },
+            end: "left",
+        });
+        assertCondition(result.success, "Round-reset apply must succeed", result.error);
+        const after = JSON.parse(result.newState) as SmokeState;
+        assertCondition(!after.gameOver, "Round-reset scenario should not end the game");
+        assertEqual(after.roundNumber, 2, "Round number should advance");
+        assertCondition(Array.isArray(after.drewThisRound), "drewThisRound must remain an array after reset");
+        assertEqual(after.drewThisRound.length, 0, "drewThisRound must be empty in the new round");
+        logPass("drewThisRound resets to [] on new round");
+    }
+
+    // Scenario E: hydrate sanitizes malformed drewThisRound rather than corrupting the round.
+    {
+        const baseState = JSON.parse(initialState) as SmokeState;
+        baseState.drewThisRound = ["not-a-real-player", baseState.currentPlayer, baseState.currentPlayer];
+        const validation = engine.validateMove(JSON.stringify(baseState), baseState.currentPlayer, { type: "pass" });
+        // Sanitized to [currentPlayer] only → integrity passes → cannotPass fires (current player has playable tiles).
+        assertCondition(!validation.valid, "Sanitized state should still validate moves");
+        assertEqual(validation.errorKey, "domino.cannotPass", "Sanitized drewThisRound must reach cannotPass, not invalidState");
+        const view = engine.getPlayerView(JSON.stringify(baseState), baseState.currentPlayer);
+        assertCondition(view.gamePhase !== "error", "Sanitized state must produce a non-error player view");
+        logPass("hydrate strips unknown ids and dedupes drewThisRound");
+    }
+
+    {
+        const baseState = JSON.parse(initialState) as SmokeState;
+        // @ts-expect-error intentionally non-array; hydrate must coerce to [].
+        baseState.drewThisRound = "not-an-array";
+        const validation = engine.validateMove(JSON.stringify(baseState), baseState.currentPlayer, { type: "pass" });
+        assertCondition(!validation.valid, "Coerced state should still validate moves");
+        assertEqual(validation.errorKey, "domino.cannotPass", "Non-array drewThisRound must coerce to [] then surface cannotPass");
+        logPass("hydrate coerces non-array drewThisRound to empty array");
+    }
+
+    // Scenario F: legacy persisted states without drewThisRound stay playable (hydrate backfills []).
+    {
+        const legacyState = JSON.parse(initialState) as SmokeState & { drewThisRound?: unknown };
+        delete (legacyState as { drewThisRound?: unknown }).drewThisRound;
+        const validation = engine.validateMove(JSON.stringify(legacyState), legacyState.currentPlayer, { type: "pass" });
+        // Legacy state with playable tiles still rejects pass via cannotPass — that proves hydrate ran past integrity.
+        assertCondition(!validation.valid, "Legacy state should still validate moves");
+        assertEqual(validation.errorKey, "domino.cannotPass", "Legacy state must hydrate then surface cannotPass (not invalidState)");
+        const view = engine.getPlayerView(JSON.stringify(legacyState), legacyState.currentPlayer);
+        assertCondition(view.gamePhase !== "error", "Legacy state must produce a non-error player view");
+        logPass("legacy states without drewThisRound hydrate cleanly and remain playable");
+    }
+
+    // Scenario G: auto-draw via autoPassUnplayableTurns also marks the player in drewThisRound.
+    {
+        const players = ["smoke-p1", "smoke-p2"];
+        const playFirst = "smoke-p1";
+        const autoDrawer = "smoke-p2";
+        const pool = allTiles.map((t) => ({ ...t }));
+        const seed = takeTile(pool, "0-0");
+        const playFirstTile = takeTile(pool, "0-1"); // plays on seed → ends become 0/1
+        const playFirstSpare = takeTile(pool, "5-5"); // keeps round alive
+        const autoDrawerHandTile = takeTile(pool, "6-6"); // no match for 0 or 1
+        // Boneyard keeps every other tile; some match 0 or 1 so autoDrawer eventually becomes playable.
+        const fixture: SmokeState = {
+            board: [seed],
+            leftEnd: seed.left,
+            rightEnd: seed.right,
+            hands: {
+                [playFirst]: [playFirstTile, playFirstSpare],
+                [autoDrawer]: [autoDrawerHandTile],
+            },
+            boneyard: pool,
+            currentPlayer: playFirst,
+            playerOrder: players,
+            passCount: 0,
+            drawsThisTurn: 0,
+            drewThisRound: [],
+            gameOver: false,
+            targetScore: 201,
+            roundNumber: 1,
+            scores: { [playFirst]: 0, [autoDrawer]: 0 },
+        };
+        const result = engine.applyMove(JSON.stringify(fixture), playFirst, {
+            type: "play",
+            tile: { left: playFirstTile.left, right: playFirstTile.right, id: playFirstTile.id },
+            end: "right",
+        });
+        assertCondition(result.success, "AutoPass-trigger play must succeed", result.error);
+        const after = JSON.parse(result.newState) as SmokeState;
+        const drawEvents = result.events.filter(
+            (e) => e.type === "move" && (e.data as { action?: string }).action === "draw" && (e.data as { playerId?: string }).playerId === autoDrawer
+        );
+        assertCondition(drawEvents.length > 0, "Expected at least one auto-draw event for autoDrawer");
+        assertCondition(after.drewThisRound.includes(autoDrawer), "autoDrawer must appear in drewThisRound after autoPass forced draws");
+        const occurrences = after.drewThisRound.filter((p) => p === autoDrawer).length;
+        assertEqual(occurrences, 1, "drewThisRound must dedupe even when autoPass draws several tiles");
+        assertCondition(!after.drewThisRound.includes(playFirst), "playFirst did not draw — must stay out of drewThisRound");
+        logPass("autoPass forced draws record drewThisRound (deduped)");
+    }
+
     console.log("[smoke:domino-contract] All checks passed.");
 }
 

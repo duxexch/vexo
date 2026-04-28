@@ -92,6 +92,20 @@ export function validateDominoStateIntegrity(state: DominoState): DominoIntegrit
     return { code: 'invalid_draw_count', message: 'drawsThisTurn must be a non-negative integer' };
   }
 
+  if (!Array.isArray(state.drewThisRound)) {
+    return { code: 'invalid_drew_this_round', message: 'drewThisRound must be an array' };
+  }
+  const drewSeen = new Set<string>();
+  for (const drewId of state.drewThisRound) {
+    if (typeof drewId !== 'string' || !state.playerOrder.includes(drewId)) {
+      return { code: 'invalid_drew_this_round_entry', message: `drewThisRound contains invalid player id (${String(drewId)})` };
+    }
+    if (drewSeen.has(drewId)) {
+      return { code: 'invalid_drew_this_round_entry', message: `drewThisRound contains duplicate player id (${drewId})` };
+    }
+    drewSeen.add(drewId);
+  }
+
   const tileIdCounts = new Map<string, number>();
   let totalTiles = 0;
 

@@ -14,6 +14,9 @@ export interface DominoState {
   playerOrder: string[];
   passCount: number;
   drawsThisTurn: number;
+  /** Player IDs who drew at least once during the current round. Reset every round.
+   *  Used to enforce pure domino-out scoring: only winners who never drew score full opponent pips. */
+  drewThisRound: string[];
   gameOver: boolean;
   targetScore: number;
   roundNumber: number;

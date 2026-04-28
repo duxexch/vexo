@@ -143,6 +143,22 @@ export class DominoEngine implements GameEngine {
         state.scores[playerId] = 0;
       }
     }
+    // Backward-compat: legacy persisted rounds predate drewThisRound. Default to [] and
+    // filter to valid player IDs without duplicates so integrity check stays consistent.
+    if (!Array.isArray(state.drewThisRound)) {
+      state.drewThisRound = [];
+    } else {
+      const seen = new Set<string>();
+      const sanitized: string[] = [];
+      for (const entry of state.drewThisRound) {
+        if (typeof entry !== 'string' || !state.playerOrder.includes(entry) || seen.has(entry)) {
+          continue;
+        }
+        seen.add(entry);
+        sanitized.push(entry);
+      }
+      state.drewThisRound = sanitized;
+    }
   }
 
   private getWinningTeam(state: DominoState, winnerId: string): number | undefined {
@@ -243,7 +259,7 @@ export class DominoEngine implements GameEngine {
     events: GameEvent[],
     roundResult: {
       winner: string | null;
-      reason: 'domino' | 'blocked' | 'draw';
+      reason: 'domino' | 'domino_drawn' | 'blocked' | 'draw';
       scoreDelta: number;
       lowestPips?: number;
       winningTeamPips?: number;
@@ -326,6 +342,7 @@ export class DominoEngine implements GameEngine {
       }
 
       // Auto-draw immediately when no playable tile exists.
+      let autoDrewAny = false;
       while (
         state.boneyard.length > 0 &&
         (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length)
@@ -335,6 +352,7 @@ export class DominoEngine implements GameEngine {
         state.hands[currentPlayer].push(drawnTile);
         state.drawsThisTurn = (state.drawsThisTurn || 0) + 1;
         state.lastAction = { type: 'draw', playerId: currentPlayer };
+        autoDrewAny = true;
 
         events.push({
           type: 'move',
@@ -348,6 +366,16 @@ export class DominoEngine implements GameEngine {
 
         if (getPlayableTiles(state, currentPlayer).length > 0) {
           break;
+        }
+      }
+
+      // Pure domino-out: auto-draws also disqualify the player from full-pip scoring.
+      if (autoDrewAny) {
+        if (!Array.isArray(state.drewThisRound)) {
+          state.drewThisRound = [];
+        }
+        if (!state.drewThisRound.includes(currentPlayer)) {
+          state.drewThisRound.push(currentPlayer);
         }
       }
 
@@ -423,6 +451,7 @@ export class DominoEngine implements GameEngine {
       playerOrder: playerIds,
       passCount: 0,
       drawsThisTurn: 0,
+      drewThisRound: [],
       gameOver: false,
       targetScore: normalizedTargetScore,
       roundNumber: safeRoundNumber,
@@ -814,6 +843,16 @@ export class DominoEngine implements GameEngine {
         });
       }
 
+      // Pure domino-out: track that this player drew during the round.
+      if (drewAtLeastOne) {
+        if (!Array.isArray(state.drewThisRound)) {
+          state.drewThisRound = [];
+        }
+        if (!state.drewThisRound.includes(playerId)) {
+          state.drewThisRound.push(playerId);
+        }
+      }
+
       if (!drewAtLeastOne) {
         return { success: false, events: [], error: 'Cannot draw right now' };
       }
@@ -904,10 +943,17 @@ export class DominoEngine implements GameEngine {
       events.push({ type: 'move', data: { action: 'play', playerId, tile, end } });
 
       if (state.hands[playerId].length === 0) {
-        const winnerScore = this.scoreWinner(state, playerId);
+        // Pure domino-out: only winners who never drew this round score full opponent pips.
+        // Winners who drew at least once score the blocked-style pip difference instead.
+        const drewThisRound = Array.isArray(state.drewThisRound) ? state.drewThisRound : [];
+        const winnerDrew = drewThisRound.includes(playerId);
+        const reason: 'domino' | 'domino_drawn' = winnerDrew ? 'domino_drawn' : 'domino';
+        const winnerScore = winnerDrew
+          ? this.scoreBlockedWinnerByDifference(state, playerId)
+          : this.scoreWinner(state, playerId);
         this.finalizeRound(state, events, {
           winner: playerId,
-          reason: 'domino',
+          reason,
           scoreDelta: winnerScore,
         });
       } else {
