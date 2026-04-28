@@ -70,11 +70,37 @@ export function mockupPreviewPlugin(): Plugin {
     }));
   }
 
+  // Strict allowlist for paths we will embed into generated source code.
+  // Only the characters that legitimately appear in mockup component file
+  // paths are accepted: alphanumerics, dot, dash, underscore, slash and
+  // (for relative imports) the leading `./` or `../`. Any path containing
+  // anything else — quotes, backslashes, parens, NUL, line terminators
+  // (including U+2028 / U+2029, which JSON.stringify does NOT escape and
+  // which terminate JS source lines) — is rejected outright instead of
+  // being interpolated into the generated module. This closes CodeQL
+  // alert #144 (improper code sanitization).
+  const SAFE_PATH_RE = /^(?:\.{1,2}\/)?[A-Za-z0-9._\-/]+$/;
+
+  function safeStringifyPath(value: string): string {
+    if (!SAFE_PATH_RE.test(value)) {
+      throw new Error(
+        `mockupPreviewPlugin: refusing to embed unsafe path ${JSON.stringify(value)} ` +
+          `into generated module (only [A-Za-z0-9._\\-/] and a leading ./ or ../ are allowed)`,
+      );
+    }
+    // Belt-and-braces: escape U+2028/U+2029 in case the regex above is
+    // ever loosened — JSON.stringify leaves these characters untouched
+    // even though they are valid line terminators in JS source.
+    return JSON.stringify(value)
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+  }
+
   function generateSource(components: Array<DiscoveredComponent>): string {
     const entries = components
       .map(
         (c) =>
-          `  ${JSON.stringify(c.globKey)}: () => import(${JSON.stringify(c.importPath)})`,
+          `  ${safeStringifyPath(c.globKey)}: () => import(${safeStringifyPath(c.importPath)})`,
       )
       .join(",\n");
 

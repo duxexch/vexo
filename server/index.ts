@@ -284,10 +284,28 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
       if (res.headersSent) {
         return next(err);
       }
-      res.status(503).type("text/plain").send(
-        `Download unavailable: ${err.code} on ${path.basename(offendingPath)}. ` +
-          `Operator: re-run refresh-android-binaries.sh and verify file mode is 0644.`,
-      );
+      // Sanitize the basename before echoing it back to the client. The
+      // path ultimately derives from `req.path`, so any character that
+      // could be interpreted as HTML/JS (or as a control character that
+      // would corrupt log scrapers) is stripped — only the alphanumerics,
+      // dot, dash, underscore and tilde that legitimately appear in our
+      // download filenames survive. Combined with the explicit
+      // `text/plain` content-type and `X-Content-Type-Options: nosniff`
+      // below, this closes CodeQL alert #143 (reflected XSS).
+      const rawBasename = path.basename(offendingPath);
+      const safeBasename =
+        rawBasename.replace(/[^A-Za-z0-9._\-~]/g, "_").slice(0, 128) ||
+        "unknown";
+      const safeCode = String(err.code).replace(/[^A-Z]/g, "").slice(0, 16) ||
+        "EUNKNOWN";
+      res
+        .status(503)
+        .type("text/plain")
+        .setHeader("X-Content-Type-Options", "nosniff")
+        .send(
+          `Download unavailable: ${safeCode} on ${safeBasename}. ` +
+            `Operator: re-run refresh-android-binaries.sh and verify file mode is 0644.`,
+        );
     },
   );
 }
