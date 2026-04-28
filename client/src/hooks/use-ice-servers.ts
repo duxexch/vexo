@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef } from "react";
 import type { IceServersResponse } from "@shared/socketio-events";
+import { apiRequest } from "@/lib/queryClient";
 
 const DEFAULT_FALLBACK: IceServersResponse = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -13,10 +14,12 @@ const MIN_REFETCH_MS = 5 * 60_000;
 const MAX_REFETCH_MS = 60 * 60_000;
 
 async function fetchIceServers(): Promise<IceServersResponse> {
-  const res = await fetch("/api/rtc/ice-servers", { credentials: "include" });
-  if (!res.ok) {
-    throw new Error(`ice-servers failed: ${res.status}`);
-  }
+  // Use the shared apiRequest helper so the request carries the Authorization
+  // Bearer token (and CSRF header) every other authenticated query uses. A
+  // raw fetch with credentials:"include" only works while the cookie path is
+  // valid, which would silently 401 → STUN-only fallback for token-only
+  // sessions.
+  const res = await apiRequest("GET", "/api/rtc/ice-servers");
   return (await res.json()) as IceServersResponse;
 }
 

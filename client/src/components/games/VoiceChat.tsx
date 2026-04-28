@@ -65,7 +65,7 @@ export function VoiceChat({
   const { token } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
-  const { rtcConfiguration, hasRelay } = useIceServers();
+  const { rtcConfiguration } = useIceServers();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   // Tracks the most recent voice_error so the mic-icon tooltip can surface
   // the actual reason (pricing gate vs. not a participant vs. generic) instead

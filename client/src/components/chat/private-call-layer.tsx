@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { useSettings } from "@/lib/settings";
 import { useIceServers } from "@/hooks/use-ice-servers";
 import {
   createQueuedEndOperation,
@@ -126,7 +125,6 @@ function isNonEmptyString(value: unknown): value is string {
 export function PrivateCallLayerProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const { token, user } = useAuth();
-  const { settings } = useSettings();
   const { toast } = useToast();
 
   const [phase, setPhase] = useState<CallPhase>("idle");
