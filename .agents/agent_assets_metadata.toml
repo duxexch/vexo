@@ -1,0 +1,44 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "xjArHx-F12S4gD4P1MW08"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-platform-square.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "MaO4wlgWso9hTvmqPp9K3"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-platform-portrait.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Ff0j4JrPRBHQ1ctSZdilS"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-platform-story.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "a-OFP2ixefPo2CVSlku44"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-platform-landscape.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "qJl0JUvHLdb71tsGGvVRm"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-domino.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "DjJp2eCvNarksmsdP41MP"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-baloot.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "iLTxjpPztLp0kd3775q1k"
+uri = "file://artifacts/mockup-sandbox/public/images/ad-chess.png"
+type = "image"
+title = "generated_image"
