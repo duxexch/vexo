@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Memory Battle</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .mb-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 4/4;
+    margin: 0 auto;
+    padding: 4px;
+  }
+  .mb-card {
+    perspective: 800px;
+    cursor: pointer;
+    position: relative;
+  }
+  .mb-card-inner {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transition: transform 0.45s ease;
+    border-radius: 10px;
+  }
+  .mb-card.flipped .mb-card-inner { transform: rotateY(180deg); }
+  .mb-card.matched .mb-card-inner { transform: rotateY(180deg); }
+  .mb-card-face {
+    position: absolute; inset: 0;
+    border-radius: 10px;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    display: grid; place-items: center;
+    font-size: 1.7rem;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .mb-card-back {
+    background: linear-gradient(135deg,#a855f7,#5b21b6);
+    box-shadow: inset 0 -3px 10px rgba(0,0,0,0.3);
+  }
+  .mb-card-back::after {
+    content: ''; width:60%; height:60%; border-radius:8px;
+    background: rgba(255,255,255,0.06);
+    border: 1px dashed rgba(255,255,255,0.18);
+  }
+  .mb-card-front {
+    background: linear-gradient(135deg,#1a2440,#0f1730);
+    transform: rotateY(180deg);
+  }
+  .mb-card.matched .mb-card-front { box-shadow: 0 0 18px rgba(34,197,94,0.55); border-color: rgba(34,197,94,0.55); }
+  .mb-card.wrong .mb-card-front { box-shadow: 0 0 16px rgba(239,68,68,0.55); border-color: rgba(239,68,68,0.55); animation: vexShake 0.4s ease-in-out; }
+
+  .mb-players { display:flex; gap:8px; justify-content:center; margin-bottom:10px; }
+  .mb-player {
+    flex:1; padding:10px 12px; border-radius:12px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    transition: all 0.25s ease; opacity: 0.65; min-width:0;
+  }
+  .mb-player.active { opacity:1; transform: translateY(-2px); }
+  .mb-player.p1.active { background: linear-gradient(135deg,rgba(168,85,247,0.25),rgba(91,33,182,0.15)); border-color: rgba(168,85,247,0.55); box-shadow: 0 0 18px -4px #a855f7; }
+  .mb-player.p2.active { background: linear-gradient(135deg,rgba(34,211,238,0.25),rgba(8,145,178,0.15)); border-color: rgba(34,211,238,0.55); box-shadow: 0 0 18px -4px #22d3ee; }
+  .mb-name { font-size:0.78rem; color:var(--vex-text-dim); margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+  .mb-name::before { content:''; width:8px; height:8px; border-radius:50%; }
+  .mb-player.p1 .mb-name::before { background: #a855f7; }
+  .mb-player.p2 .mb-name::before { background: #22d3ee; }
+  .mb-pts { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; line-height:1; }
+  .mb-player.p1 .mb-pts { color:#c084fc; }
+  .mb-player.p2 .mb-pts { color:#67e8f9; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge" style="background:linear-gradient(135deg,#a855f7,#5b21b6);box-shadow:0 0 30px -5px #a855f7;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </div>
+      <span id="title">نزال الذاكرة</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="mb-players">
+    <div class="mb-player p1 active" id="p1Card">
+      <div class="mb-name" id="p1Name">اللاعب 1</div>
+      <div class="mb-pts" id="p1Score">0</div>
+    </div>
+    <div class="mb-player p2" id="p2Card">
+      <div class="mb-name" id="p2Name">اللاعب 2</div>
+      <div class="mb-pts" id="p2Score">0</div>
+    </div>
+  </div>
+
+  <div class="vex-board" style="padding:10px;">
+    <div class="mb-board" id="board"></div>
+  </div>
+
+  <div class="vex-hint" id="hint">اقلب بطاقتين بدورك. زوج صحيح = نقطة ودور إضافي. زوج خطأ = ينتقل الدور.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#a855f7,#5b21b6);box-shadow:0 0 30px -5px #a855f7;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.4 7.2L12 16.4l-6.4 4.4 2.4-7.2L2 9.2h7.6z"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle"></div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinal1">اللاعب 1</div><div class="vex-overlay-stat-value" id="finalP1">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinal2">اللاعب 2</div><div class="vex-overlay-stat-value" id="finalP2">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#a855f7,#5b21b6);box-shadow:0 0 18px -3px #a855f7;">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'نزال الذاكرة', p1:'اللاعب 1', p2:'اللاعب 2', reset:'إعادة',
+      end:'انتهت اللعبة!', winP1:'اللاعب 1 يفوز!', winP2:'اللاعب 2 يفوز!', tie:'تعادل!',
+      newRound:'جولة جديدة',
+      hint:'اقلب بطاقتين بدورك. زوج صحيح = نقطة ودور إضافي. زوج خطأ = ينتقل الدور.',
+    },
+    en: { title:'Memory Battle', p1:'Player 1', p2:'Player 2', reset:'Reset',
+      end:'Game Over!', winP1:'Player 1 wins!', winP2:'Player 2 wins!', tie:"It's a tie!",
+      newRound:'New Round',
+      hint:'Flip two cards on your turn. Match = point + bonus turn. Miss = next player.',
+    },
+  };
+  const SYMBOLS = ['🔥','⚡','🌟','🎯','🎲','🎮','💎','🏆'];
+  let lang = 'ar';
+  let cards, flipped, locked, currentP, scores, matched;
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board');
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('p1Name').textContent = s.p1; $('p2Name').textContent = s.p2;
+    $('resetBtnLabel').textContent = s.reset; $('hint').textContent = s.hint;
+    $('endRestart').textContent = s.newRound;
+    $('lblFinal1').textContent = s.p1; $('lblFinal2').textContent = s.p2;
+  }
+
+  function shuffle(arr){
+    for (let i = arr.length-1; i > 0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+    return arr;
+  }
+
+  function reset(){
+    cards = shuffle([...SYMBOLS, ...SYMBOLS]);
+    flipped = []; locked = false; currentP = 1;
+    scores = { 1: 0, 2: 0 }; matched = 0;
+    $('p1Score').textContent = '0'; $('p2Score').textContent = '0';
+    updateActive();
+    render();
+    $('endOverlay').classList.remove('show');
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    cards.forEach((sym, i) => {
+      const c = document.createElement('div');
+      c.className = 'mb-card'; c.dataset.idx = i; c.dataset.sym = sym;
+      c.innerHTML = `<div class="mb-card-inner">
+        <div class="mb-card-face mb-card-back"></div>
+        <div class="mb-card-face mb-card-front">${sym}</div>
+      </div>`;
+      c.addEventListener('click', () => flip(c, i));
+      boardEl.appendChild(c);
+    });
+  }
+
+  function flip(c, i){
+    if (locked) return;
+    if (c.classList.contains('flipped') || c.classList.contains('matched')) return;
+    if (flipped.length >= 2) return;
+    c.classList.add('flipped');
+    flipped.push({ card: c, idx: i, sym: cards[i] });
+    if (flipped.length === 2){
+      locked = true;
+      const [a, b] = flipped;
+      if (a.sym === b.sym){
+        setTimeout(() => {
+          a.card.classList.add('matched'); b.card.classList.add('matched');
+          a.card.classList.remove('flipped'); b.card.classList.remove('flipped');
+          scores[currentP]++; matched++;
+          $('p'+currentP+'Score').textContent = scores[currentP];
+          flipped = []; locked = false;
+          if (typeof VexGame !== 'undefined'){
+            const rect = b.card.getBoundingClientRect();
+            VexGame.popScore(document.body, '+1', rect.left + rect.width/2 + 'px', rect.top + 'px',
+              currentP===1 ? '' : 'blue');
+          }
+          if (matched === SYMBOLS.length) endGame();
+        }, 380);
+      } else {
+        a.card.classList.add('wrong'); b.card.classList.add('wrong');
+        setTimeout(() => {
+          a.card.classList.remove('flipped','wrong');
+          b.card.classList.remove('flipped','wrong');
+          flipped = []; locked = false;
+          currentP = currentP === 1 ? 2 : 1;
+          updateActive();
+        }, 800);
+      }
+    }
+  }
+
+  function updateActive(){
+    $('p1Card').classList.toggle('active', currentP === 1);
+    $('p2Card').classList.toggle('active', currentP === 2);
+  }
+
+  function endGame(){
+    const s = STRINGS[lang];
+    const winner = scores[1] > scores[2] ? 1 : (scores[2] > scores[1] ? 2 : 0);
+    $('endTitle').textContent = s.end;
+    $('endSubtitle').textContent = winner===0 ? s.tie : (winner===1 ? s.winP1 : s.winP2);
+    $('finalP1').textContent = scores[1]; $('finalP2').textContent = scores[2];
+    setTimeout(() => $('endOverlay').classList.add('show'), 500);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(1100);
+      VexGame.setBest(Math.max(scores[1], scores[2]));
+      VexGame.endSession({
+        score: Math.max(scores[1], scores[2]),
+        result: winner===0 ? 'draw' : 'win',
+        metadata: { p1:scores[1], p2:scores[2], winner },
+      });
+    }
+  }
+
+  $('resetBtn').addEventListener('click', reset);
+  $('endRestart').addEventListener('click', reset);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'memory-battle',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

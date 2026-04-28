@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Connect 4</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .c4-board {
+    background: linear-gradient(180deg,#0d2755,#0a1d3f);
+    border: 1px solid rgba(30,136,255,0.35);
+    border-radius: 14px;
+    padding: 8px;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 7/6;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 4px;
+    box-shadow: inset 0 4px 16px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .c4-cell {
+    background: rgba(0,0,0,0.55);
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .c4-disc {
+    position: absolute;
+    inset: 6%;
+    border-radius: 50%;
+    box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3), inset 0 3px 4px rgba(255,255,255,0.25);
+    animation: c4-drop 0.32s cubic-bezier(0.34,1.2,0.64,1);
+  }
+  @keyframes c4-drop { 0%{transform:translateY(-260%)} 70%{transform:translateY(10%)} 100%{transform:translateY(0)} }
+  .c4-disc.r { background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b); }
+  .c4-disc.y { background: radial-gradient(circle at 30% 30%, #ffd24d, #d18800); }
+  .c4-disc.win { animation: c4-glow 0.7s ease-in-out infinite alternate; }
+  @keyframes c4-glow { from{box-shadow:0 0 0 rgba(34,197,94,0)} to{box-shadow:0 0 18px 4px rgba(34,197,94,0.7)} }
+  .col-arrow {
+    position: absolute;
+    top: -4px; left: 0; right: 0; height: 12px;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s ease;
+    display: flex; justify-content: center;
+  }
+  .col-arrow.show { opacity: 1; }
+
+  .turn-indicator { display:flex; gap:8px; justify-content:center; margin-bottom:10px; }
+  .turn-pill {
+    padding: 6px 14px; border-radius: 99px; font-size:0.85rem; font-weight:600;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    transition: all 0.25s ease; opacity:0.55; display:flex; align-items:center; gap:6px;
+  }
+  .turn-pill.active { opacity:1; transform:scale(1.05); }
+  .turn-pill.r.active { background: linear-gradient(135deg,#ef4444,#7f1d1d); color:#fff; border-color:transparent; box-shadow: 0 0 18px -3px #ef4444; }
+  .turn-pill.y.active { background: linear-gradient(135deg,#ffb627,#a86b00); color:#000; border-color:transparent; box-shadow: 0 0 18px -3px #ffb627; }
+  .turn-dot { width:14px; height:14px; border-radius:50%; }
+  .turn-dot.r { background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b); }
+  .turn-dot.y { background: radial-gradient(circle at 30% 30%, #ffd24d, #d18800); }
+  .mode-tabs { display:flex; gap:6px; justify-content:center; margin-bottom:10px; }
+  .mode-tab {
+    padding:8px 16px; border-radius:99px; font-size:0.78rem; font-weight:600;
+    background: var(--vex-surface); border:1px solid var(--vex-border); color:var(--vex-text-dim);
+    cursor:pointer; transition: all 0.18s ease;
+  }
+  .mode-tab.active { background: linear-gradient(135deg,#1e88ff,#0a4d9c); color:#fff; border-color:transparent; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18" r="2"/></svg>
+      </div>
+      <span id="title">وصل 4</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblP1">أحمر</div><div class="vex-stat-value rose" id="scoreR">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblDraw">تعادل</div><div class="vex-stat-value" id="scoreD" style="color:var(--vex-text-dim)">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblP2">أصفر</div><div class="vex-stat-value" id="scoreY">0</div></div>
+  </div>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="ai" id="modeAi"><span id="modeAiLabel">ضد الذكاء</span></button>
+    <button class="mode-tab" data-mode="2p" id="mode2p"><span id="mode2pLabel">لاعبان</span></button>
+  </div>
+
+  <div class="turn-indicator">
+    <div class="turn-pill r active" id="turnR"><span class="turn-dot r"></span><span id="turnRLbl">دور أحمر</span></div>
+    <div class="turn-pill y" id="turnY"><span class="turn-dot y"></span><span id="turnYLbl">دور أصفر</span></div>
+  </div>
+
+  <div class="c4-board" id="board"></div>
+
+  <div class="vex-hint" id="hint" style="margin-top:14px">انقر عموداً لإسقاط القرص. اربط 4 متتاليين لتفوز.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" id="endIcon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.4 7.2L12 16.4l-6.4 4.4 2.4-7.2L2 9.2h7.6z"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت الجولة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'وصل 4', red:'أحمر', yellow:'أصفر', draw:'تعادل', reset:'إعادة',
+      modeAi:'ضد الذكاء', mode2p:'لاعبان',
+      turnR:'دور أحمر', turnY:'دور أصفر', winR:'الأحمر يفوز!', winY:'الأصفر يفوز!',
+      tie:'تعادل!', winAI:'الذكاء فاز!', winYou:'فوز رائع!',
+      hint:'انقر عموداً لإسقاط القرص. اربط 4 متتاليين لتفوز.', newRound:'جولة جديدة',
+    },
+    en: { title:'Connect 4', red:'Red', yellow:'Yellow', draw:'Draws', reset:'Reset',
+      modeAi:'vs AI', mode2p:'2 Players',
+      turnR:"Red's turn", turnY:"Yellow's turn", winR:'Red wins!', winY:'Yellow wins!',
+      tie:"It's a draw!", winAI:'AI wins!', winYou:'You win!',
+      hint:'Tap a column to drop. Connect 4 in a row to win.', newRound:'New Round',
+    },
+  };
+  let lang = 'ar';
+  let mode = 'ai';
+  const ROWS = 6, COLS = 7;
+  let board, turn, gameOver, busy, scoreR=0, scoreY=0, scoreD=0, aiTimer=null;
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), endOverlay = $('endOverlay');
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('lblP1').textContent = s.red; $('lblP2').textContent = s.yellow;
+    $('lblDraw').textContent = s.draw; $('resetBtnLabel').textContent = s.reset;
+    $('modeAiLabel').textContent = s.modeAi; $('mode2pLabel').textContent = s.mode2p;
+    $('turnRLbl').textContent = s.turnR; $('turnYLbl').textContent = s.turnY;
+    $('hint').textContent = s.hint; $('endRestart').textContent = s.newRound;
+  }
+
+  function reset(){
+    if (aiTimer){ clearTimeout(aiTimer); aiTimer = null; }
+    board = Array.from({length:ROWS}, () => Array(COLS).fill(null));
+    turn = 'R'; gameOver = false; busy = false;
+    render(); updateTurn(); endOverlay.classList.remove('show');
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    for (let r=0; r<ROWS; r++){
+      for (let c=0; c<COLS; c++){
+        const cell = document.createElement('div');
+        cell.className = 'c4-cell';
+        cell.dataset.col = c;
+        cell.addEventListener('click', () => onColClick(c));
+        if (board[r][c]){
+          const d = document.createElement('div');
+          d.className = 'c4-disc ' + board[r][c].toLowerCase();
+          cell.appendChild(d);
+        }
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function lowestEmptyRow(c){
+    for (let r=ROWS-1; r>=0; r--) if (board[r][c]===null) return r;
+    return -1;
+  }
+
+  function onColClick(c){
+    if (busy || gameOver) return;
+    if (mode==='ai' && turn==='Y') return;
+    drop(c, turn);
+  }
+
+  function drop(c, p){
+    const r = lowestEmptyRow(c);
+    if (r < 0) return;
+    board[r][c] = p;
+    render();
+    const winLine = checkWin(board, p);
+    if (winLine){ return endRound(p, winLine); }
+    if (board.every(row => row.every(v => v !== null))){ return endRound('tie', null); }
+    turn = (turn==='R') ? 'Y' : 'R';
+    updateTurn();
+    if (mode==='ai' && turn==='Y' && !gameOver){
+      busy = true;
+      if (aiTimer) clearTimeout(aiTimer);
+      aiTimer = setTimeout(() => {
+        aiTimer = null;
+        if (gameOver || turn !== 'Y'){ busy = false; return; }
+        const move = pickAI();
+        drop(move, 'Y');
+        busy = false;
+      }, 380 + Math.random()*220);
+    }
+  }
+
+  function checkWin(b, p){
+    // horizontal, vertical, diag-down-right, diag-up-right
+    const dirs = [[0,1],[1,0],[1,1],[-1,1]];
+    for (let r=0; r<ROWS; r++){
+      for (let c=0; c<COLS; c++){
+        if (b[r][c] !== p) continue;
+        for (const [dr, dc] of dirs){
+          const cells = [[r,c]];
+          for (let k=1; k<4; k++){
+            const nr=r+dr*k, nc=c+dc*k;
+            if (nr<0||nr>=ROWS||nc<0||nc>=COLS||b[nr][nc]!==p) break;
+            cells.push([nr,nc]);
+          }
+          if (cells.length===4) return cells;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Heuristic: depth-3 minimax with alpha-beta
+  function evalLine(line, p, opp){
+    let pc=0, oc=0, ec=0;
+    for (const v of line){ if (v===p) pc++; else if (v===opp) oc++; else ec++; }
+    if (oc>0 && pc>0) return 0;
+    if (pc===4) return 100000;
+    if (pc===3 && ec===1) return 100;
+    if (pc===2 && ec===2) return 5;
+    if (oc===4) return -100000;
+    if (oc===3 && ec===1) return -120;
+    if (oc===2 && ec===2) return -5;
+    return 0;
+  }
+  function evalBoard(b, p){
+    const opp = p==='Y' ? 'R' : 'Y';
+    let score = 0;
+    // center pref
+    for (let r=0;r<ROWS;r++) if (b[r][3]===p) score+=3;
+    // all 4-windows
+    const dirs = [[0,1],[1,0],[1,1],[-1,1]];
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+      for (const [dr,dc] of dirs){
+        const er=r+dr*3, ec=c+dc*3;
+        if (er<0||er>=ROWS||ec<0||ec>=COLS) continue;
+        const line = [b[r][c], b[r+dr][c+dc], b[r+dr*2][c+dc*2], b[r+dr*3][c+dc*3]];
+        score += evalLine(line, p, opp);
+      }
+    }
+    return score;
+  }
+  function validCols(b){
+    const r = [];
+    for (let c=0;c<COLS;c++) if (b[0][c]===null) r.push(c);
+    return r;
+  }
+  function minimax(b, depth, alpha, beta, isMax, aiP){
+    const oppP = aiP==='Y' ? 'R' : 'Y';
+    const winA = checkWin(b, aiP), winO = checkWin(b, oppP);
+    if (winA) return 1000000 - (3-depth);
+    if (winO) return -1000000 + (3-depth);
+    if (depth===0 || validCols(b).length===0) return evalBoard(b, aiP);
+    const cols = validCols(b);
+    if (isMax){
+      let best = -Infinity;
+      for (const c of cols){
+        const r = lowestEmptyRow(c);
+        b[r][c] = aiP;
+        const sc = minimax(b, depth-1, alpha, beta, false, aiP);
+        b[r][c] = null;
+        best = Math.max(best, sc);
+        alpha = Math.max(alpha, sc);
+        if (beta <= alpha) break;
+      }
+      return best;
+    } else {
+      let best = Infinity;
+      for (const c of cols){
+        const r = lowestEmptyRow(c);
+        b[r][c] = oppP;
+        const sc = minimax(b, depth-1, alpha, beta, true, aiP);
+        b[r][c] = null;
+        best = Math.min(best, sc);
+        beta = Math.min(beta, sc);
+        if (beta <= alpha) break;
+      }
+      return best;
+    }
+  }
+  function pickAI(){
+    const cols = validCols(board);
+    // Immediate win
+    for (const c of cols){
+      const r = lowestEmptyRow(c); board[r][c]='Y';
+      if (checkWin(board,'Y')){ board[r][c]=null; return c; }
+      board[r][c]=null;
+    }
+    // Block immediate threat
+    for (const c of cols){
+      const r = lowestEmptyRow(c); board[r][c]='R';
+      if (checkWin(board,'R')){ board[r][c]=null; return c; }
+      board[r][c]=null;
+    }
+    let best = -Infinity, bestCol = cols[0];
+    for (const c of cols){
+      const r = lowestEmptyRow(c);
+      board[r][c] = 'Y';
+      const sc = minimax(board, 3, -Infinity, Infinity, false, 'Y');
+      board[r][c] = null;
+      if (sc > best){ best = sc; bestCol = c; }
+    }
+    return bestCol;
+  }
+
+  function updateTurn(){
+    $('turnR').classList.toggle('active', turn==='R');
+    $('turnY').classList.toggle('active', turn==='Y');
+  }
+
+  function endRound(winner, line){
+    gameOver = true;
+    if (line){
+      // mark winning discs
+      line.forEach(([r,c]) => {
+        const idx = r*COLS + c;
+        const cell = boardEl.children[idx];
+        const disc = cell && cell.querySelector('.c4-disc');
+        if (disc) disc.classList.add('win');
+      });
+    }
+    const s = STRINGS[lang];
+    if (winner==='tie'){
+      scoreD++; $('scoreD').textContent = scoreD;
+      $('endTitle').textContent = s.tie; $('endSubtitle').textContent='';
+    } else if (winner==='R'){
+      scoreR++; $('scoreR').textContent = scoreR;
+      $('endTitle').textContent = (mode==='ai') ? s.winYou : s.winR;
+      $('endSubtitle').textContent = '';
+      if (typeof VexGame !== 'undefined') VexGame.confetti(900);
+    } else {
+      scoreY++; $('scoreY').textContent = scoreY;
+      $('endTitle').textContent = (mode==='ai') ? s.winAI : s.winY;
+      $('endSubtitle').textContent = '';
+      if (mode!=='ai' && typeof VexGame !== 'undefined') VexGame.confetti(900);
+    }
+    setTimeout(() => endOverlay.classList.add('show'), 850);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.setBest(scoreR);
+      VexGame.endSession({
+        score: scoreR,
+        result: winner==='R' ? 'win' : (winner==='tie' ? 'draw' : 'loss'),
+        metadata: { mode, r:scoreR, y:scoreY, d:scoreD },
+      });
+    }
+  }
+
+  $('resetBtn').addEventListener('click', () => {
+    scoreR=scoreY=scoreD=0;
+    $('scoreR').textContent='0'; $('scoreY').textContent='0'; $('scoreD').textContent='0';
+    reset();
+  });
+  $('endRestart').addEventListener('click', reset);
+  document.querySelectorAll('.mode-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active'); mode = t.dataset.mode;
+      scoreR=scoreY=scoreD=0;
+      $('scoreR').textContent='0'; $('scoreY').textContent='0'; $('scoreD').textContent='0';
+      reset();
+    });
+  });
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'connect-4',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

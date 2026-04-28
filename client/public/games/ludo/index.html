@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Ludo</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .ludo-wrap { width: 100%; max-width: 420px; margin: 0 auto; }
+  .ludo-board {
+    display: grid;
+    grid-template-columns: repeat(15, 1fr);
+    grid-template-rows: repeat(15, 1fr);
+    aspect-ratio: 1;
+    width: 100%;
+    background: #0a1020;
+    border-radius: 12px;
+    padding: 4px;
+    gap: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  .ludo-cell { position: relative; border: 0.5px solid rgba(255,255,255,0.04); }
+  .ludo-cell.path { background: rgba(255,255,255,0.08); }
+  .ludo-cell.start-r { background: #ef4444; }
+  .ludo-cell.start-g { background: #22c55e; }
+  .ludo-cell.start-y { background: #ffb627; }
+  .ludo-cell.start-b { background: #1e88ff; }
+  .ludo-cell.safe { background: rgba(255,255,255,0.18); }
+  .ludo-cell.safe::before {
+    content: ''; position: absolute; inset: 18%;
+    background: rgba(255,255,255,0.25);
+    clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+  }
+  .ludo-cell.home-r { background: rgba(239,68,68,0.65); }
+  .ludo-cell.home-g { background: rgba(34,197,94,0.65); }
+  .ludo-cell.home-y { background: rgba(255,182,39,0.65); }
+  .ludo-cell.home-b { background: rgba(30,136,255,0.65); }
+  .ludo-cell.yard-r { background: rgba(239,68,68,0.92); }
+  .ludo-cell.yard-g { background: rgba(34,197,94,0.92); }
+  .ludo-cell.yard-y { background: rgba(255,182,39,0.92); }
+  .ludo-cell.yard-b { background: rgba(30,136,255,0.92); }
+  .ludo-cell.center { background: linear-gradient(135deg,#0f1730,#10172a); }
+  .ludo-yard-inner {
+    position: absolute; inset: 14%;
+    background: #0a1020; border-radius: 10px;
+  }
+
+  .ludo-token {
+    position: absolute;
+    width: 6.5%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 5;
+    transition: top 0.32s ease, left 0.32s ease, transform 0.18s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 3px rgba(255,255,255,0.4);
+    border: 1.5px solid #fff;
+  }
+  .ludo-token.r { background: radial-gradient(circle at 30% 30%, #ff7676, #c0392b); }
+  .ludo-token.g { background: radial-gradient(circle at 30% 30%, #4ade80, #14532d); }
+  .ludo-token.y { background: radial-gradient(circle at 30% 30%, #fde68a, #d97706); }
+  .ludo-token.b { background: radial-gradient(circle at 30% 30%, #60a5fa, #1e3a8a); }
+  .ludo-token.movable { animation: ludo-pulse 1s ease-in-out infinite; cursor: pointer; }
+  .ludo-token.movable::after {
+    content:''; position:absolute; inset:-30%;
+    border-radius: 50%; border: 2px solid currentColor; opacity: 0.6;
+    animation: ludo-ring 1.4s ease-out infinite;
+  }
+  .ludo-token.r.movable { color: #ff7676; }
+  .ludo-token.g.movable { color: #4ade80; }
+  .ludo-token.y.movable { color: #fde68a; }
+  .ludo-token.b.movable { color: #60a5fa; }
+  @keyframes ludo-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.15) } }
+  @keyframes ludo-ring { 0% {transform:scale(0.8); opacity:0.7} 100%{transform:scale(1.5);opacity:0} }
+
+  .ludo-controls {
+    display: flex; gap: 10px; align-items: center; justify-content: space-between;
+    padding: 12px;
+    background: var(--vex-surface);
+    border: 1px solid var(--vex-border);
+    border-radius: 14px;
+    margin-top: 10px;
+  }
+  .ludo-turn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+  .ludo-turn-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    box-shadow: 0 0 10px currentColor;
+  }
+  .ludo-turn-dot.r { background:#ef4444; color:#ef4444; }
+  .ludo-turn-dot.g { background:#22c55e; color:#22c55e; }
+  .ludo-turn-dot.y { background:#ffb627; color:#ffb627; }
+  .ludo-turn-dot.b { background:#1e88ff; color:#1e88ff; }
+  .ludo-turn-name { font-size: 0.95rem; font-weight: 600; color: #fff; }
+  .ludo-turn-sub { font-size: 0.7rem; color: var(--vex-text-dim); margin-top: 2px; }
+
+  .dice-btn {
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg,#fff,#e5e7eb);
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    color: #000;
+    position: relative;
+    overflow: hidden;
+  }
+  .dice-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .dice-btn:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.5); }
+  .dice-btn.rolling { animation: dice-spin 0.6s linear infinite; }
+  @keyframes dice-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+  .dice-face {
+    width: 80%; height: 80%;
+    position: relative;
+  }
+  .dice-pip {
+    position: absolute;
+    width: 22%; height: 22%;
+    background: #000;
+    border-radius: 50%;
+  }
+  .ludo-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+  .ludo-stat {
+    background: var(--vex-surface);
+    border: 1px solid var(--vex-border);
+    border-radius: 8px;
+    padding: 6px 4px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .ludo-stat::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .ludo-stat.r::before { background:#ef4444; }
+  .ludo-stat.g::before { background:#22c55e; }
+  .ludo-stat.y::before { background:#ffb627; }
+  .ludo-stat.b::before { background:#1e88ff; }
+  .ludo-stat.dim { opacity: 0.4; }
+  .ludo-stat-label { font-size: 0.6rem; color: var(--vex-text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .ludo-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; line-height: 1; margin-top: 2px; color: #fff; }
+
+  .setup-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+  .setup-row {
+    background: var(--vex-surface);
+    border: 1px solid var(--vex-border);
+    border-radius: 10px;
+    padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; transition: all 0.18s ease;
+  }
+  .setup-row.off { opacity: 0.45; }
+  .setup-dot { width: 18px; height: 18px; border-radius: 50%; }
+  .setup-dot.r { background:#ef4444; }
+  .setup-dot.g { background:#22c55e; }
+  .setup-dot.y { background:#ffb627; }
+  .setup-dot.b { background:#1e88ff; }
+  .setup-state { font-size: 0.7rem; color: var(--vex-text-dim); text-transform: uppercase; }
+  .setup-name { font-size: 0.85rem; font-weight: 600; color: #fff; }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell" style="max-width: 460px;">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge emerald">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+      </div>
+      <span id="title">لودو</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="ludo-stats" id="statsBar"></div>
+
+  <div class="ludo-wrap">
+    <div class="ludo-board" id="board"></div>
+  </div>
+
+  <div class="ludo-controls">
+    <div class="ludo-turn">
+      <div class="ludo-turn-dot r" id="turnDot"></div>
+      <div style="min-width:0;flex:1">
+        <div class="ludo-turn-name" id="turnName">دور أحمر</div>
+        <div class="ludo-turn-sub" id="turnSub">اضغط النرد</div>
+      </div>
+    </div>
+    <button class="dice-btn" id="diceBtn" aria-label="dice">
+      <div class="dice-face" id="diceFace"></div>
+    </button>
+  </div>
+
+  <div class="vex-hint" id="hint">ارمِ النرد، اختر عملة لتحريكها. اطلع 6 لإخراج عملة جديدة. أدخل البيت بعدد دقيق.</div>
+</div>
+
+<div class="vex-overlay show" id="setupOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon emerald">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="setupTitle">إعداد اللاعبين</div>
+    <div class="vex-overlay-subtitle" id="setupSub">اضغط لتغيير الحالة (لاعب / ذكاء / مغلق)</div>
+    <div class="setup-grid" id="setupGrid"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="startBtn" style="flex:1;background:linear-gradient(135deg,#22c55e,#14532d);box-shadow:0 0 18px -3px #22c55e;">ابدأ</button>
+    </div>
+  </div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" id="endIcon" style="background:linear-gradient(135deg,#22c55e,#14532d);box-shadow:0 0 30px -5px #22c55e;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.4 7.2L12 16.4l-6.4 4.4 2.4-7.2L2 9.2h7.6z"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#22c55e,#14532d);box-shadow:0 0 18px -3px #22c55e;">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { title:'لودو', reset:'إعادة',
+      colors:{ r:'أحمر', g:'أخضر', y:'أصفر', b:'أزرق' },
+      turn:'دور', tapDice:'اضغط النرد', pickToken:'اختر عملة', noMoves:'لا حركات…',
+      thinking:'يفكر…', sixRoll:'+6 جولة إضافية',
+      hint:'ارمِ النرد، اختر عملة لتحريكها. اطلع 6 لإخراج عملة جديدة. أدخل البيت بعدد دقيق.',
+      setupTitle:'إعداد اللاعبين', setupSub:'اضغط لتغيير الحالة (لاعب / ذكاء / مغلق)',
+      start:'ابدأ', states:{human:'لاعب', ai:'ذكاء', off:'مغلق'},
+      end:'انتهت اللعبة!', wins:'يفوز!', newRound:'جولة جديدة', captured:'أسر عملة!',
+    },
+    en: { title:'Ludo', reset:'Reset',
+      colors:{ r:'Red', g:'Green', y:'Yellow', b:'Blue' },
+      turn:"'s turn", tapDice:'Tap the dice', pickToken:'Pick a token', noMoves:'No moves…',
+      thinking:'Thinking…', sixRoll:'+6 bonus roll',
+      hint:'Roll the dice, tap a token to move. Roll 6 to release a new token. Exact roll to enter home.',
+      setupTitle:'Player Setup', setupSub:'Tap to toggle state (Human / AI / Off)',
+      start:'Start', states:{human:'Human', ai:'AI', off:'Off'},
+      end:'Game over!', wins:'wins!', newRound:'New game', captured:'Captured a token!',
+    },
+  };
+  let lang = 'ar';
+  const $ = (id) => document.getElementById(id);
+
+  // ─── Path coordinates (52 squares around the cross), [row, col] ───
+  const PATH = [
+    [6,1],[6,2],[6,3],[6,4],[6,5],
+    [5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
+    [0,7],
+    [0,8],[1,8],[2,8],[3,8],[4,8],[5,8],
+    [6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
+    [7,14],
+    [8,14],[8,13],[8,12],[8,11],[8,10],[8,9],
+    [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],
+    [14,7],
+    [14,6],[13,6],[12,6],[11,6],[10,6],[9,6],
+    [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],
+    [7,0],
+    [6,0],
+  ];
+  const STARTS = { r:0, g:13, y:26, b:39 };
+  // safe squares: each player's start + 4 mid-arm stars (path 8, 21, 34, 47)
+  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+
+  // Home columns from each player's "home turn-in" toward center
+  const HOME = {
+    r: [[7,1],[7,2],[7,3],[7,4],[7,5]],
+    g: [[1,7],[2,7],[3,7],[4,7],[5,7]],
+    y: [[7,13],[7,12],[7,11],[7,10],[7,9]],
+    b: [[13,7],[12,7],[11,7],[10,7],[9,7]],
+  };
+  // 4 yard slot positions for each color
+  const YARD = {
+    r: [[1.5,1.5],[1.5,3.5],[3.5,1.5],[3.5,3.5]],
+    g: [[1.5,10.5],[1.5,12.5],[3.5,10.5],[3.5,12.5]],
+    y: [[10.5,10.5],[10.5,12.5],[12.5,10.5],[12.5,12.5]],
+    b: [[10.5,1.5],[10.5,3.5],[12.5,1.5],[12.5,3.5]],
+  };
+  // Yard area cell origins (top-left) for the 6x6 colored block
+  const YARD_AREA = {
+    r: [0,0], g: [0,9], y: [9,9], b: [9,0],
+  };
+  const COLOR_ORDER = ['r','g','y','b'];
+
+  let players, turnIdx, dice, phase, pendingMoves, setupCfg, gameOver;
+
+  function defaultSetup(){
+    return {
+      r: 'human',
+      g: 'ai',
+      y: 'human',
+      b: 'ai',
+    };
+  }
+
+  function buildBoard(){
+    const board = $('board');
+    board.innerHTML = '';
+    // place 15x15 cells
+    const cells = Array.from({length: 15}, () => Array(15).fill(null));
+    for (let r=0; r<15; r++){
+      for (let c=0; c<15; c++){
+        const d = document.createElement('div');
+        d.className = 'ludo-cell';
+        d.style.gridArea = `${r+1}/${c+1}/${r+2}/${c+2}`;
+        cells[r][c] = d;
+        board.appendChild(d);
+      }
+    }
+    // mark yards (corner 6x6)
+    const yardCells = (sr, sc, color) => {
+      for (let r=sr; r<sr+6; r++) for (let c=sc; c<sc+6; c++){
+        cells[r][c].classList.add('yard-' + color);
+      }
+      // inner card
+      const inner = document.createElement('div');
+      inner.className = 'ludo-yard-inner';
+      inner.style.gridArea = `${sr+2}/${sc+2}/${sr+6}/${sc+6}`;
+      board.appendChild(inner);
+    };
+    yardCells(0,0,'r'); yardCells(0,9,'g'); yardCells(9,9,'y'); yardCells(9,0,'b');
+
+    // mark path cells
+    PATH.forEach((p, i) => {
+      const [r,c] = p;
+      cells[r][c].classList.add('path');
+      if (SAFE.has(i)) cells[r][c].classList.add('safe');
+      if (i === STARTS.r) cells[r][c].classList.add('start-r');
+      if (i === STARTS.g) cells[r][c].classList.add('start-g');
+      if (i === STARTS.y) cells[r][c].classList.add('start-y');
+      if (i === STARTS.b) cells[r][c].classList.add('start-b');
+    });
+    // home columns
+    HOME.r.forEach(([r,c]) => cells[r][c].classList.add('home-r'));
+    HOME.g.forEach(([r,c]) => cells[r][c].classList.add('home-g'));
+    HOME.y.forEach(([r,c]) => cells[r][c].classList.add('home-y'));
+    HOME.b.forEach(([r,c]) => cells[r][c].classList.add('home-b'));
+    // center 3x3
+    for (let r=6; r<=8; r++) for (let c=6; c<=8; c++) cells[r][c].classList.add('center');
+    // center finish triangles
+    const finishMark = document.createElement('div');
+    finishMark.style.position = 'absolute';
+    finishMark.style.gridArea = '7/7/10/10';
+    finishMark.style.display = 'grid';
+    finishMark.style.placeItems = 'center';
+    finishMark.style.fontSize = '1.5rem';
+    finishMark.style.color = '#fff';
+    finishMark.style.opacity = '0.5';
+    finishMark.style.pointerEvents = 'none';
+    finishMark.textContent = '★';
+    board.appendChild(finishMark);
+  }
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('hint').textContent = s.hint;
+    $('setupTitle').textContent = s.setupTitle; $('setupSub').textContent = s.setupSub;
+    $('startBtn').textContent = s.start;
+    $('endRestart').textContent = s.newRound;
+  }
+
+  // ─── Setup overlay ────────────────────────────────────────────────────
+  function renderSetup(){
+    const s = STRINGS[lang];
+    const grid = $('setupGrid');
+    grid.innerHTML = '';
+    COLOR_ORDER.forEach(col => {
+      const row = document.createElement('div');
+      row.className = 'setup-row' + (setupCfg[col] === 'off' ? ' off' : '');
+      row.innerHTML = `<span class="setup-dot ${col}"></span>
+        <span class="setup-name">${s.colors[col]}</span>
+        <span class="setup-state">${s.states[setupCfg[col]]}</span>`;
+      row.addEventListener('click', () => {
+        const cycle = { human:'ai', ai:'off', off:'human' };
+        setupCfg[col] = cycle[setupCfg[col]];
+        renderSetup();
+      });
+      grid.appendChild(row);
+    });
+  }
+
+  function buildPlayers(){
+    players = [];
+    COLOR_ORDER.forEach(col => {
+      if (setupCfg[col] === 'off') return;
+      players.push({
+        color: col,
+        isAI: setupCfg[col] === 'ai',
+        start: STARTS[col],
+        tokens: [-1,-1,-1,-1], // -1 = yard, 0..51 = relative path, 52..56 = home column, 57 = finished
+      });
+    });
+  }
+
+  function colorName(c){ return STRINGS[lang].colors[c]; }
+
+  // ─── Token positioning ──────────────────────────────────────────────────
+  function tokenCellPos(player, t){
+    // returns [rowFloat, colFloat] in 0-14 range
+    const pos = player.tokens[t];
+    if (pos === -1){
+      const [r, c] = YARD[player.color][t];
+      return [r, c];
+    }
+    if (pos < 52){
+      const [r, c] = PATH[(player.start + pos) % 52];
+      return [r, c];
+    }
+    if (pos < 57){
+      const [r, c] = HOME[player.color][pos - 52];
+      return [r, c];
+    }
+    // Finished — stack at center
+    const order = ['r','g','y','b'].indexOf(player.color);
+    const offsets = [[6.5,7],[7,6.5],[7.5,7],[7,7.5]];
+    return offsets[order];
+  }
+
+  function renderTokens(){
+    const board = $('board');
+    // remove old tokens
+    board.querySelectorAll('.ludo-token').forEach(t => t.remove());
+    const cur = currentPlayer();
+    // For movable highlight: which (player,token) can move with current dice
+    const movable = (phase === 'pick' && !cur.isAI) ? validMoves(cur, dice) : new Set();
+    players.forEach(p => {
+      p.tokens.forEach((pos, t) => {
+        const el = document.createElement('div');
+        el.className = 'ludo-token ' + p.color;
+        el.dataset.color = p.color; el.dataset.t = t;
+        const [r, c] = tokenCellPos(p, t);
+        // Each cell is (1/15)*100% wide. Cell origin offsets by 4px padding.
+        // We'll position by left/top in % within the board.
+        const pct = (n) => `calc(${(n / 15) * 100}% + ${4 / 15}px)`;
+        el.style.left = `calc(${(c / 15) * 100}% + 4px)`;
+        el.style.top = `calc(${(r / 15) * 100}% + 4px)`;
+        el.style.width = `calc(${(1 / 15) * 100}% - 4px)`;
+        if (p === cur && movable.has(t)){
+          el.classList.add('movable');
+          el.addEventListener('click', () => moveToken(t));
+        }
+        board.appendChild(el);
+      });
+    });
+  }
+
+  // ─── Dice render ─────────────────────────────────────────────────────────
+  const PIP_LAYOUTS = {
+    1: [[50,50]],
+    2: [[25,25],[75,75]],
+    3: [[25,25],[50,50],[75,75]],
+    4: [[25,25],[25,75],[75,25],[75,75]],
+    5: [[25,25],[25,75],[50,50],[75,25],[75,75]],
+    6: [[25,25],[25,50],[25,75],[75,25],[75,50],[75,75]],
+  };
+  function renderDice(value){
+    const f = $('diceFace');
+    f.innerHTML = '';
+    if (!value){ return; }
+    PIP_LAYOUTS[value].forEach(([y,x]) => {
+      const p = document.createElement('div');
+      p.className = 'dice-pip';
+      p.style.left = (x-11) + '%';
+      p.style.top = (y-11) + '%';
+      f.appendChild(p);
+    });
+  }
+
+  // ─── Game state ─────────────────────────────────────────────────────────
+  function currentPlayer(){ return players[turnIdx]; }
+
+  function nextTurn(){
+    do { turnIdx = (turnIdx + 1) % players.length; } while (false);
+    dice = 0;
+    phase = 'roll';
+    renderDice(0);
+    refreshHud();
+    renderTokens();
+    if (currentPlayer().isAI && !gameOver){
+      setTimeout(rollDice, 600);
+    }
+  }
+
+  function refreshHud(){
+    const cur = currentPlayer();
+    const s = STRINGS[lang];
+    $('turnDot').className = 'ludo-turn-dot ' + cur.color;
+    $('turnName').textContent = colorName(cur.color) + (lang==='ar' ? ' — دوره' : s.turn);
+    let sub = '';
+    if (cur.isAI) sub = s.thinking;
+    else if (phase === 'roll') sub = s.tapDice;
+    else if (phase === 'pick') sub = s.pickToken;
+    $('turnSub').textContent = sub;
+    $('diceBtn').disabled = (cur.isAI || phase !== 'roll');
+    // Stats bar
+    const bar = $('statsBar');
+    bar.innerHTML = '';
+    COLOR_ORDER.forEach(col => {
+      const p = players.find(x => x.color === col);
+      const div = document.createElement('div');
+      div.className = 'ludo-stat ' + col + (p ? '' : ' dim');
+      const finished = p ? p.tokens.filter(t => t === 57).length : 0;
+      div.innerHTML = `<div class="ludo-stat-label">${colorName(col)}</div>
+                       <div class="ludo-stat-val">${finished} / 4</div>`;
+      bar.appendChild(div);
+    });
+  }
+
+  function rollDice(){
+    const cur = currentPlayer();
+    if (gameOver || phase !== 'roll') return;
+    phase = 'animate';
+    refreshHud();
+    $('diceBtn').classList.add('rolling');
+    let n = 0;
+    const tick = setInterval(() => {
+      renderDice(1 + Math.floor(Math.random()*6));
+      n++;
+      if (n > 8){
+        clearInterval(tick);
+        $('diceBtn').classList.remove('rolling');
+        dice = 1 + Math.floor(Math.random()*6);
+        renderDice(dice);
+        afterRoll();
+      }
+    }, 70);
+  }
+
+  function validMoves(p, d){
+    // Returns Set of token indices that have a legal move with dice d
+    const set = new Set();
+    p.tokens.forEach((pos, i) => {
+      if (pos === -1){
+        if (d === 6) set.add(i);
+      } else if (pos < 57){
+        if (pos + d <= 57) set.add(i);
+      }
+    });
+    return set;
+  }
+
+  function afterRoll(){
+    const cur = currentPlayer();
+    const moves = validMoves(cur, dice);
+    if (moves.size === 0){
+      // No legal move (e.g. all tokens in yard and dice<6, or no token can finish).
+      // Standard pass-and-play behaviour: turn passes even on a 6.
+      const s = STRINGS[lang];
+      $('turnSub').textContent = s.noMoves;
+      setTimeout(() => nextTurn(), 800);
+      return;
+    }
+    if (moves.size === 1){
+      const only = [...moves][0];
+      phase = 'pick';
+      setTimeout(() => moveToken(only), 350);
+      return;
+    }
+    phase = 'pick';
+    refreshHud();
+    renderTokens();
+    if (cur.isAI){
+      setTimeout(() => moveToken(aiPick(cur, [...moves])), 380);
+    }
+  }
+
+  function aiPick(p, options){
+    // Heuristic: prefer captures, then advancing toward home, then leaving yard, else random
+    let best = options[0], bestScore = -Infinity;
+    options.forEach(t => {
+      const sc = scoreMove(p, t, dice);
+      if (sc > bestScore){ bestScore = sc; best = t; }
+    });
+    return best;
+  }
+  function scoreMove(p, t, d){
+    const pos = p.tokens[t];
+    let s = 0;
+    if (pos === -1 && d === 6){ s += 25; }
+    let newPos = pos === -1 ? 0 : pos + d;
+    // capture chance
+    if (newPos < 52){
+      const absPath = (p.start + newPos) % 52;
+      const isSafe = SAFE.has(absPath);
+      if (!isSafe){
+        for (const op of players){
+          if (op === p) continue;
+          op.tokens.forEach(op_pos => {
+            if (op_pos >= 0 && op_pos < 52){
+              const opAbs = (op.start + op_pos) % 52;
+              if (opAbs === absPath){ s += 50; }
+            }
+          });
+        }
+      }
+    }
+    if (newPos === 57) s += 60;
+    if (newPos >= 52) s += 10;
+    s += newPos;
+    return s;
+  }
+
+  function moveToken(tIdx){
+    const cur = currentPlayer();
+    const oldPos = cur.tokens[tIdx];
+    let newPos = oldPos === -1 ? 0 : oldPos + dice;
+    if (newPos > 57) return; // sanity
+    cur.tokens[tIdx] = newPos;
+    let captured = false;
+    // Capture check
+    if (newPos < 52){
+      const absPath = (cur.start + newPos) % 52;
+      const isSafe = SAFE.has(absPath);
+      if (!isSafe){
+        for (const op of players){
+          if (op === cur) continue;
+          op.tokens.forEach((op_pos, oi) => {
+            if (op_pos >= 0 && op_pos < 52){
+              const opAbs = (op.start + op_pos) % 52;
+              if (opAbs === absPath){
+                op.tokens[oi] = -1;
+                captured = true;
+              }
+            }
+          });
+        }
+      }
+    }
+    renderTokens();
+    if (captured && typeof VexGame !== 'undefined'){
+      VexGame.toast(STRINGS[lang].captured || 'Captured!', 'success');
+    }
+    // Win check
+    if (cur.tokens.every(p => p === 57)){
+      gameOver = true;
+      const s = STRINGS[lang];
+      $('endTitle').textContent = colorName(cur.color) + ' ' + s.wins;
+      $('endSubtitle').textContent = '';
+      setTimeout(() => $('endOverlay').classList.add('show'), 800);
+      if (typeof VexGame !== 'undefined'){
+        VexGame.confetti(1200);
+        VexGame.setBest(1);
+        VexGame.endSession({ score: 1, result: 'win', metadata: { winner: cur.color, players: players.map(p => p.color) } });
+      }
+      return;
+    }
+    setTimeout(() => {
+      const sixBonus = dice === 6 || captured;
+      if (sixBonus){
+        phase = 'roll';
+        dice = 0;
+        renderDice(0);
+        refreshHud();
+        if (cur.isAI && !gameOver) setTimeout(rollDice, 500);
+      } else {
+        nextTurn();
+      }
+    }, 360);
+  }
+
+  function startGame(){
+    buildPlayers();
+    if (players.length < 2){
+      // need at least 2; force at least red+yellow human
+      setupCfg.r = 'human'; setupCfg.y = 'human'; renderSetup(); return;
+    }
+    turnIdx = 0; dice = 0; phase = 'roll'; gameOver = false;
+    $('setupOverlay').classList.remove('show');
+    $('endOverlay').classList.remove('show');
+    refreshHud();
+    renderTokens();
+    renderDice(0);
+    if (currentPlayer().isAI) setTimeout(rollDice, 700);
+  }
+
+  function fullReset(){
+    setupCfg = defaultSetup();
+    renderSetup();
+    $('setupOverlay').classList.add('show');
+    $('endOverlay').classList.remove('show');
+  }
+
+  $('diceBtn').addEventListener('click', () => { if (!gameOver && !currentPlayer().isAI) rollDice(); });
+  $('resetBtn').addEventListener('click', fullReset);
+  $('startBtn').addEventListener('click', startGame);
+  $('endRestart').addEventListener('click', fullReset);
+
+  // Boot
+  setupCfg = defaultSetup();
+  buildBoard();
+  renderSetup();
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'ludo',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang(); renderSetup();
+      },
+    });
+  }
+  applyLang();
+})();
+</script>
+</body>
+</html>

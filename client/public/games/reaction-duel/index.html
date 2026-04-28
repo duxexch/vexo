@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Reaction Duel</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .rd-arena {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    background: var(--vex-bg-0);
+  }
+  .rd-pane {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    text-align: center; cursor: pointer; position: relative;
+    overflow: hidden;
+    transition: background 0.18s ease;
+    user-select: none;
+  }
+  .rd-pane.top { background: linear-gradient(180deg,#1a0707,#3b0a0a); border-bottom: 3px solid var(--vex-bg-0); transform: scaleY(-1); }
+  .rd-pane.bot { background: linear-gradient(180deg,#091830,#06122a); }
+  .rd-pane.ready { background: linear-gradient(135deg,#7f1d1d,#450a0a); }
+  .rd-pane.bot.ready { background: linear-gradient(135deg,#0a4d9c,#1e3a8a); }
+  .rd-pane.go { background: linear-gradient(135deg,#ffb627,#a86b00); animation: rd-flash 0.4s ease-out; }
+  @keyframes rd-flash { 0%{box-shadow:inset 0 0 0 #ffb627} 100%{box-shadow:inset 0 0 60px #ffd24d} }
+  .rd-pane.win { background: linear-gradient(135deg,#22c55e,#14532d); }
+  .rd-pane.fault { background: linear-gradient(135deg,#7f1d1d,#450a0a); animation: vexShake 0.4s ease-in-out; }
+  .rd-content {
+    color: white;
+    text-align: center;
+    pointer-events: none;
+    padding: 16px;
+  }
+  .rd-status {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.06em;
+    font-size: 2.4rem;
+    line-height: 1;
+    margin-bottom: 8px;
+    text-shadow: 0 4px 18px rgba(0,0,0,0.6);
+  }
+  .rd-sub {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.5;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+  .rd-rt {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: #fff;
+    text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    margin-top: 4px;
+  }
+  .rd-score {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.4);
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.06em;
+    font-size: 1.1rem;
+    color: #fff;
+    pointer-events: none;
+  }
+  .rd-score.right { left: auto; right: 16px; }
+
+  .rd-back {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 20; background: rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15);
+    color: #fff; padding: 6px 12px; border-radius: 10px; font-size:0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .rd-pane.dim { opacity: 0.45; }
+</style>
+</head>
+<body class="vex-game">
+
+<div class="rd-arena" id="arena">
+  <div class="rd-pane top" id="paneTop">
+    <div class="rd-score" id="scoreTop" style="transform: scaleY(-1) translateY(50%);">0 / 0</div>
+    <div class="rd-content" style="transform: scaleY(-1);">
+      <div class="rd-status" id="statusTop">اضغط للاستعداد</div>
+      <div class="rd-sub" id="subTop">انتظر اللون الذهبي</div>
+      <div class="rd-rt" id="rtTop"></div>
+    </div>
+  </div>
+  <div class="rd-pane bot" id="paneBot">
+    <div class="rd-score right" id="scoreBot">0 / 0</div>
+    <div class="rd-content">
+      <div class="rd-status" id="statusBot">اضغط للاستعداد</div>
+      <div class="rd-sub" id="subBot">انتظر اللون الذهبي</div>
+      <div class="rd-rt" id="rtBot"></div>
+    </div>
+  </div>
+</div>
+<button class="rd-back" id="resetBtn">إعادة</button>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon rose">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهى النزال!</div>
+    <div class="vex-overlay-subtitle" id="endSubtitle"></div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblTopScore">العلوي</div><div class="vex-overlay-stat-value" id="finalTop">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblBotScore">السفلي</div><div class="vex-overlay-stat-value blue" id="finalBot">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#ef4444,#7f1d1d);box-shadow:0 0 18px -3px #ef4444;">نزال جديد</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar: { tapReady:'اضغط للاستعداد', waitGold:'انتظر اللون الذهبي…', waiting:'بانتظار الخصم…',
+      tapNow:'اضغط الآن!', falseStart:'انطلاق مبكر!', win:'فوز!', loss:'خسرت',
+      ms:'مللي ثانية', round:'الجولة', topName:'العلوي', botName:'السفلي',
+      end:'انتهى النزال!', winTop:'الفائز: العلوي', winBot:'الفائز: السفلي', tie:'تعادل!',
+      newDuel:'نزال جديد', reset:'إعادة',
+    },
+    en: { tapReady:'Tap to ready', waitGold:'Wait for gold…', waiting:'Waiting for opponent…',
+      tapNow:'Tap now!', falseStart:'False start!', win:'Win!', loss:'Lost',
+      ms:'ms', round:'Round', topName:'Top', botName:'Bottom',
+      end:'Duel finished!', winTop:'Winner: Top', winBot:'Winner: Bottom', tie:"It's a tie!",
+      newDuel:'New duel', reset:'Reset',
+    },
+  };
+  const ROUNDS_TO_WIN = 3;
+  let lang = 'ar';
+  let state = 'idle'; // idle, ready, armed, go, ended
+  let readyTop = false, readyBot = false;
+  let scoreTop = 0, scoreBot = 0;
+  let goTimer = null, goAt = 0;
+  let roundOver = false;
+  const $ = (id) => document.getElementById(id);
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('resetBtn').textContent = s.reset;
+    $('endRestart').textContent = s.newDuel;
+    $('lblTopScore').textContent = s.topName; $('lblBotScore').textContent = s.botName;
+    refreshPanes();
+  }
+
+  function setPane(side, status, sub, rt){
+    $('status'+side).textContent = status;
+    $('sub'+side).textContent = sub || '';
+    $('rt'+side).textContent = rt || '';
+  }
+
+  function refreshPanes(){
+    const s = STRINGS[lang];
+    $('scoreTop').textContent = scoreTop + ' / ' + ROUNDS_TO_WIN;
+    $('scoreBot').textContent = scoreBot + ' / ' + ROUNDS_TO_WIN;
+    if (state === 'idle'){
+      setPane('Top', s.tapReady, ''); setPane('Bot', s.tapReady, '');
+      [$('paneTop'),$('paneBot')].forEach(p => { p.className = p.className.replace(/ ready| go| win| fault| dim/g,''); });
+    }
+  }
+
+  function resetRound(){
+    state = 'ready';
+    readyTop = readyBot = false;
+    roundOver = false;
+    if (goTimer){ clearTimeout(goTimer); goTimer = null; }
+    [$('paneTop'),$('paneBot')].forEach(p => { p.classList.remove('ready','go','win','fault','dim'); });
+    const s = STRINGS[lang];
+    setPane('Top', s.tapReady, '');
+    setPane('Bot', s.tapReady, '');
+  }
+
+  function tryArm(){
+    if (readyTop && readyBot && state === 'ready'){
+      state = 'armed';
+      const delay = 1400 + Math.random()*2800;
+      const s = STRINGS[lang];
+      setPane('Top', '…', s.waitGold);
+      setPane('Bot', '…', s.waitGold);
+      goTimer = setTimeout(() => {
+        if (state !== 'armed') return;
+        state = 'go';
+        goAt = performance.now();
+        $('paneTop').classList.add('go'); $('paneBot').classList.add('go');
+        setPane('Top', s.tapNow, ''); setPane('Bot', s.tapNow, '');
+      }, delay);
+    }
+  }
+
+  function paneTap(side){
+    if (roundOver) return;
+    const s = STRINGS[lang];
+    if (state === 'idle'){ resetRound(); }
+    if (state === 'ready'){
+      if (side==='Top'){ readyTop = true; $('paneTop').classList.add('ready'); setPane('Top', s.waiting, ''); }
+      else { readyBot = true; $('paneBot').classList.add('ready'); setPane('Bot', s.waiting, ''); }
+      tryArm();
+      return;
+    }
+    if (state === 'armed'){
+      // false start
+      roundOver = true;
+      if (side==='Top'){ scoreBot++; $('paneTop').classList.add('fault'); $('paneBot').classList.add('win');
+        setPane('Top', s.falseStart, ''); setPane('Bot', s.win, '');
+      } else { scoreTop++; $('paneBot').classList.add('fault'); $('paneTop').classList.add('win');
+        setPane('Bot', s.falseStart, ''); setPane('Top', s.win, '');
+      }
+      if (goTimer){ clearTimeout(goTimer); goTimer = null; }
+      finalizeRound();
+      return;
+    }
+    if (state === 'go'){
+      const rt = Math.round(performance.now() - goAt);
+      roundOver = true;
+      if (side==='Top'){
+        scoreTop++;
+        $('paneTop').classList.add('win'); $('paneBot').classList.add('dim');
+        setPane('Top', s.win, '', rt + ' ' + s.ms);
+        setPane('Bot', s.loss, '');
+      } else {
+        scoreBot++;
+        $('paneBot').classList.add('win'); $('paneTop').classList.add('dim');
+        setPane('Bot', s.win, '', rt + ' ' + s.ms);
+        setPane('Top', s.loss, '');
+      }
+      $('paneTop').classList.remove('go'); $('paneBot').classList.remove('go');
+      finalizeRound();
+    }
+  }
+
+  function finalizeRound(){
+    refreshPanes();
+    if (scoreTop >= ROUNDS_TO_WIN || scoreBot >= ROUNDS_TO_WIN){
+      state = 'ended';
+      const s = STRINGS[lang];
+      $('endTitle').textContent = s.end;
+      $('endSubtitle').textContent = scoreTop > scoreBot ? s.winTop : (scoreBot > scoreTop ? s.winBot : s.tie);
+      $('finalTop').textContent = scoreTop; $('finalBot').textContent = scoreBot;
+      setTimeout(() => $('endOverlay').classList.add('show'), 700);
+      if (typeof VexGame !== 'undefined'){
+        VexGame.confetti(900);
+        VexGame.setBest(Math.max(scoreTop, scoreBot));
+        VexGame.endSession({
+          score: Math.max(scoreTop, scoreBot),
+          result: 'win',
+          metadata: { top:scoreTop, bot:scoreBot, winner: scoreTop>scoreBot?'top':(scoreBot>scoreTop?'bot':'tie') },
+        });
+      }
+    } else {
+      setTimeout(() => { if (state !== 'ended') resetRound(); }, 1200);
+    }
+  }
+
+  function fullReset(){
+    scoreTop = 0; scoreBot = 0; state = 'idle';
+    if (goTimer){ clearTimeout(goTimer); goTimer = null; }
+    $('endOverlay').classList.remove('show');
+    refreshPanes();
+    resetRound();
+  }
+
+  $('paneTop').addEventListener('click', () => paneTap('Top'));
+  $('paneBot').addEventListener('click', () => paneTap('Bot'));
+  $('resetBtn').addEventListener('click', fullReset);
+  $('endRestart').addEventListener('click', fullReset);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'reaction-duel',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang(); fullReset();
+      },
+    });
+  }
+  applyLang();
+  fullReset();
+})();
+</script>
+</body>
+</html>
