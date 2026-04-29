@@ -152,11 +152,21 @@ export function registerAdminAgentsRoutes(app: Express): void {
         const allowed = normalizeCurrencyList(allowedCurrencies);
         if (!allowed.includes(defaultCur)) allowed.push(defaultCur);
 
+        const emailStr = email ? String(email).trim().toLowerCase() : null;
+        if (emailStr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
+          return res.status(400).json({ error: "invalid email format" });
+        }
+
         const existingByCode = await getAgentByCode(codeStr);
         if (existingByCode) return res.status(409).json({ error: "agentCode already exists" });
 
         const existingUser = await db.select({ id: users.id }).from(users).where(eq(users.username, usernameStr)).limit(1);
         if (existingUser.length > 0) return res.status(409).json({ error: "username already exists" });
+
+        if (emailStr) {
+          const existingByEmail = await db.select({ id: users.id }).from(users).where(eq(users.email, emailStr)).limit(1);
+          if (existingByEmail.length > 0) return res.status(409).json({ error: "email already exists" });
+        }
 
         const passwordHash = await bcrypt.hash(passwordStr, 12);
         const initialDepositNum = clampDecimal(initialDeposit, 0, 1_000_000_000, 0);
@@ -170,7 +180,7 @@ export function registerAdminAgentsRoutes(app: Express): void {
             .insert(users)
             .values({
               username: usernameStr,
-              email: email ? String(email).trim().toLowerCase() : null,
+              email: emailStr,
               firstName: firstNamePart ?? null,
               lastName: lastNamePart,
               password: passwordHash,

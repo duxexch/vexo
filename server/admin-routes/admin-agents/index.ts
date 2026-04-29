@@ -155,11 +155,21 @@ export function registerAdminAgentsRoutes(app: Express) {
         if (!allowed.includes(defaultCur)) allowed.push(defaultCur);
 
         // ---- Uniqueness checks ----
+        const emailStr = email ? String(email).trim().toLowerCase() : null;
+        if (emailStr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
+          return res.status(400).json({ error: "invalid email format" });
+        }
+
         const existingByCode = await getAgentByCode(codeStr);
         if (existingByCode) return res.status(409).json({ error: "agentCode already exists" });
 
         const existingUser = await db.select({ id: users.id }).from(users).where(eq(users.username, usernameStr)).limit(1);
         if (existingUser.length > 0) return res.status(409).json({ error: "username already exists" });
+
+        if (emailStr) {
+          const existingByEmail = await db.select({ id: users.id }).from(users).where(eq(users.email, emailStr)).limit(1);
+          if (existingByEmail.length > 0) return res.status(409).json({ error: "email already exists" });
+        }
 
         const passwordHash = await bcrypt.hash(passwordStr, 12);
         const initialDepositNum = clampDecimal(initialDeposit, 0, 1_000_000_000, 0);
@@ -178,7 +188,7 @@ export function registerAdminAgentsRoutes(app: Express) {
             .insert(users)
             .values({
               username: usernameStr,
-              email: email ? String(email).trim().toLowerCase() : null,
+              email: emailStr,
               firstName: firstNamePart ?? null,
               lastName: lastNamePart,
               password: passwordHash,
@@ -244,6 +254,17 @@ export function registerAdminAgentsRoutes(app: Express) {
 
         return res.status(201).json({ agent: created.agent });
       } catch (error: unknown) {
+        // Handle Postgres unique constraint races (something snuck in
+        // between our pre-check and the insert).
+        if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505") {
+          const constraint = String((error as { constraint?: string }).constraint ?? "");
+          if (constraint.includes("email")) return res.status(409).json({ error: "email already exists" });
+          if (constraint.includes("username")) return res.status(409).json({ error: "username already exists" });
+          if (constraint.includes("agent_code")) return res.status(409).json({ error: "agentCode already exists" });
+          if (constraint.includes("nickname")) return res.status(409).json({ error: "nickname already exists" });
+          if (constraint.includes("phone")) return res.status(409).json({ error: "phone already exists" });
+          return res.status(409).json({ error: "duplicate value violates a unique constraint" });
+        }
         return res.status(500).json({ error: getErrorMessage(error) });
       }
     },
