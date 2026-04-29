@@ -66,16 +66,111 @@ const DRAW_LINES: ArcadeBanterLine[] = [
     { key: "arcade_draw_2", text: "نتيجة محترمة، نلتقي في الجولة الجاية.", mood: "warm_welcome" },
 ];
 
+/**
+ * Reward-aware banter pools. Sam9 reacts not only to win/loss but to
+ * the *size* of the payout — jackpots get celebrated, pity refunds
+ * get acknowledged with grace, and misses are softened so the player
+ * doesn't tilt.
+ */
+const JACKPOT_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_jackpot_1", text: "جاكبوت! يوم استثنائي، استمتع بمكافأتك تستاهلها.", mood: "playful" },
+    { key: "arcade_jackpot_2", text: "الحظ والمهارة اجتمعوا في جولة واحدة، تهانينا.", mood: "encouraging" },
+    { key: "arcade_jackpot_3", text: "هذه الجائزة كبيرة، خبر سار للرصيد. شرف لي أكون شاهد.", mood: "respectful" },
+];
+
+const BIG_WIN_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_big_1", text: "جائزة محترمة، حركاتك أثبتت نفسها.", mood: "respectful" },
+    { key: "arcade_big_2", text: "أداء يستحق المكافأة، استمر بنفس الأسلوب.", mood: "encouraging" },
+    { key: "arcade_big_3", text: "الرصيد ارتفع وأنت تستحق، رمز الفائز.", mood: "professional" },
+];
+
+const MEDIUM_WIN_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_medium_1", text: "ربح طيب، الإيقاع في صالحك.", mood: "respectful" },
+    { key: "arcade_medium_2", text: "مكافأة لطيفة، الجولة الجاية ممكن تكون أكبر.", mood: "encouraging" },
+];
+
+const SMALL_WIN_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_small_1", text: "ربح صغير لكنه بداية جيدة، الإيقاع يبني نفسه.", mood: "encouraging" },
+    { key: "arcade_small_2", text: "نقاط فوق المراهنة، استمر.", mood: "playful" },
+];
+
+const REFUND_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_refund_1", text: "استرديت رهانك، خذها فرصة للمحاولة من جديد.", mood: "respectful" },
+    { key: "arcade_refund_2", text: "تعادل عادل، الجولة الجاية تفرق.", mood: "encouraging" },
+];
+
+const PITY_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_pity_1", text: "حظك بيتغير، استرجاع للرهان وانطلاقة جديدة.", mood: "warm_welcome" },
+    { key: "arcade_pity_2", text: "كل لاعب يستحق فرصة جديدة، خذها.", mood: "encouraging" },
+];
+
+const COMEBACK_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_comeback_1", text: "العودة بقوة، كنت أنتظر منك هذه الجولة.", mood: "encouraging" },
+    { key: "arcade_comeback_2", text: "بعد كل الخسائر، مستحقها. المثابرة تكافأ.", mood: "respectful" },
+];
+
+const COOLDOWN_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_cool_1", text: "جولة هادية، الإيقاع المتزن أهم من السرعة.", mood: "professional" },
+    { key: "arcade_cool_2", text: "ليس كل جولة فوز، لكن الانضباط يبقى.", mood: "respectful" },
+];
+
+const MISS_LINES: ArcadeBanterLine[] = [
+    { key: "arcade_miss_1", text: "ما اشتغلت هذه المرة، الجولة الجاية فرصتك.", mood: "encouraging" },
+    { key: "arcade_miss_2", text: "خسارة بكرامة، اللاعب الكبير يعرف يعود.", mood: "respectful" },
+    { key: "arcade_miss_3", text: "حركة طيش بسيطة، بتحلها في الجولة الجاية.", mood: "playful" },
+];
+
 function pick<T>(pool: T[]): T {
     if (pool.length === 0) throw new Error("Sam9 arcade banter pool empty");
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**
- * Choose a banter line for a finished arcade run. Always returns a
- * non-null line so the result UI has something to show.
+ * Reward rarity emitted by `sam9-arcade-economy.ts`. Re-declared as a
+ * string union here to avoid a circular import at build time.
  */
-export function chooseArcadeBanter(ctx: ArcadeBanterContext): ArcadeBanterLine {
+export type RewardRarityForBanter =
+    | "miss"
+    | "refund"
+    | "small"
+    | "medium"
+    | "big"
+    | "jackpot";
+export type RewardPsychologyMode =
+    | "honeymoon"
+    | "comeback"
+    | "pity_refund"
+    | "cooldown"
+    | "jackpot_surprise"
+    | "neutral";
+
+/**
+ * Choose a banter line for a finished arcade run, taking the economic
+ * outcome into account when available. The economic context (rarity +
+ * psychology mode) wins over raw win/loss because what the player
+ * actually feels is the size of the reward, not the technical "result"
+ * field. Falls back to legacy win/loss/draw banter when reward info is
+ * absent (e.g. older clients or future score-only modes).
+ */
+export function chooseArcadeBanter(ctx: ArcadeBanterContext & {
+    rarity?: RewardRarityForBanter;
+    psychologyMode?: RewardPsychologyMode;
+}): ArcadeBanterLine {
+    // 1. Prioritise reward-aware banter if the economy ran.
+    if (ctx.rarity) {
+        if (ctx.psychologyMode === "pity_refund") return pick(PITY_LINES);
+        if (ctx.psychologyMode === "comeback" && ctx.rarity !== "miss") return pick(COMEBACK_LINES);
+        if (ctx.psychologyMode === "cooldown") return pick(COOLDOWN_LINES);
+        switch (ctx.rarity) {
+            case "jackpot": return pick(JACKPOT_LINES);
+            case "big": return pick(BIG_WIN_LINES);
+            case "medium": return pick(MEDIUM_WIN_LINES);
+            case "small": return pick(SMALL_WIN_LINES);
+            case "refund": return pick(REFUND_LINES);
+            case "miss": return pick(MISS_LINES);
+        }
+    }
+    // 2. Fall back to PB / first-run / outcome banter.
     if (ctx.isPersonalBest && ctx.outcome !== "loss") {
         return pick(PERSONAL_BEST_LINES);
     }

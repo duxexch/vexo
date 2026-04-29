@@ -14,6 +14,19 @@ interface ArcadeBanter {
   mood: string;
 }
 
+interface ArcadeEconomy {
+  rewardVex: number;
+  netVex: number;
+  multiplier: number;
+  rarity: "miss" | "refund" | "small" | "medium" | "big" | "jackpot";
+  psychologyMode: string;
+  reason: string;
+  entryCostVex: number;
+  freePlay: boolean;
+  balanceBefore: number;
+  balanceAfter: number;
+}
+
 interface ArcadeSubmitResponse {
   ok: boolean;
   session?: { id: string; score: number; result: string; isPersonalBest: boolean };
@@ -21,6 +34,7 @@ interface ArcadeSubmitResponse {
   previousBest?: number;
   totalRuns?: number;
   banter?: ArcadeBanter;
+  economy?: ArcadeEconomy;
 }
 
 type Phase = "boot" | "playing" | "ended" | "error";
@@ -42,6 +56,7 @@ export default function ArcadePlayPage() {
     previousBest: number;
     personalBest: number;
     banter?: ArcadeBanter;
+    economy?: ArcadeEconomy;
   } | null>(null);
 
   const game = useMemo(() => (rawKey ? getArcadeGame(rawKey) : null), [rawKey]);
@@ -75,6 +90,7 @@ export default function ArcadePlayPage() {
             previousBest: data.previousBest ?? 0,
             personalBest: data.personalBest ?? data.session.score,
             banter: data.banter,
+            economy: data.economy,
           });
           setPhase("ended");
         } else {
@@ -306,6 +322,97 @@ export default function ArcadePlayPage() {
                 <div className="text-2xl font-bold text-white">{resultUi.personalBest}</div>
               </div>
             </div>
+            {resultUi.economy && !resultUi.economy.freePlay && (
+              <div
+                className={`rounded-xl p-4 my-3 border ${
+                  resultUi.economy.netVex > 0
+                    ? "bg-gradient-to-br from-[#ffb627]/15 to-[#ffb627]/5 border-[#ffb627]/40"
+                    : resultUi.economy.netVex === 0
+                      ? "bg-white/5 border-white/15"
+                      : "bg-rose-500/10 border-rose-500/30"
+                }`}
+                data-testid="card-arcade-economy"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-300">
+                      {lang === "ar" ? "المكافأة" : "Reward"}
+                    </span>
+                    {resultUi.economy.rarity !== "miss" && resultUi.economy.rarity !== "refund" && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full uppercase font-bold"
+                        style={{
+                          background:
+                            resultUi.economy.rarity === "jackpot"
+                              ? "#ffb627"
+                              : resultUi.economy.rarity === "big"
+                                ? "#1e88ff"
+                                : "rgba(255,255,255,0.15)",
+                          color: resultUi.economy.rarity === "jackpot" ? "#0a0e1a" : "#fff",
+                        }}
+                      >
+                        {resultUi.economy.rarity === "jackpot"
+                          ? lang === "ar"
+                            ? "جاكبوت"
+                            : "JACKPOT"
+                          : resultUi.economy.rarity === "big"
+                            ? lang === "ar"
+                              ? "ربح كبير"
+                              : "BIG WIN"
+                            : resultUi.economy.rarity === "medium"
+                              ? lang === "ar"
+                                ? "ربح متوسط"
+                                : "MEDIUM"
+                              : lang === "ar"
+                                ? "ربح صغير"
+                                : "SMALL"}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="text-2xl font-bold tabular-nums"
+                    style={{
+                      color:
+                        resultUi.economy.netVex > 0
+                          ? "#ffb627"
+                          : resultUi.economy.netVex < 0
+                            ? "#fb7185"
+                            : "#fff",
+                    }}
+                  >
+                    {resultUi.economy.netVex > 0 ? "+" : ""}
+                    {resultUi.economy.netVex.toFixed(2)} VEX
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>
+                    {lang === "ar" ? "الرسوم" : "Entry"}: {resultUi.economy.entryCostVex} VEX
+                  </span>
+                  <span>
+                    {lang === "ar" ? "صافي الجائزة" : "Payout"}:{" "}
+                    {resultUi.economy.rewardVex.toFixed(2)} VEX
+                  </span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">
+                    {lang === "ar" ? "الرصيد" : "Balance"}
+                  </span>
+                  <span className="text-white font-semibold tabular-nums">
+                    {resultUi.economy.balanceAfter.toFixed(2)} VEX
+                  </span>
+                </div>
+              </div>
+            )}
+            {resultUi.economy?.freePlay && (
+              <div
+                className="rounded-xl p-3 my-3 border border-blue-500/30 bg-blue-500/10 text-center text-xs text-blue-200"
+                data-testid="badge-arcade-freeplay"
+              >
+                {lang === "ar"
+                  ? "وضع اللعب المجاني — لا يوجد خصم أو مكافأة"
+                  : "Free play mode — no entry fee or reward"}
+              </div>
+            )}
             {resultUi.banter && (
               <div className="text-sm text-slate-200 mb-4 px-2 py-3 rounded-xl bg-white/5 border border-white/10 flex gap-2 items-start">
                 <Sparkles className="h-4 w-4 text-[#ffb627] shrink-0 mt-0.5" />

@@ -1127,12 +1127,12 @@ export default function AdminUnifiedGames() {
     const seenSlugs = new Set<string>();
     const merged: UnifiedGame[] = [];
     for (const g of mpGames.map(toUnifiedGame)) {
-      const slug = (g.gameType || g.id || "").toLowerCase();
+      const slug = (g.key || g.id || "").toLowerCase();
       if (slug) seenSlugs.add(slug);
       merged.push(g);
     }
     for (const g of spGames.map(toUnifiedGameFromSingle)) {
-      const slug = (g.gameType || g.id || "").toLowerCase();
+      const slug = (g.key || g.id || "").toLowerCase();
       if (slug && seenSlugs.has(slug)) continue;
       if (slug) seenSlugs.add(slug);
       merged.push(g);

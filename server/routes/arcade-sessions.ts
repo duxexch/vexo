@@ -9,11 +9,16 @@ import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { arcadeSessions } from "@shared/schema";
+import { arcadeSessions, users } from "@shared/schema";
 import { ARCADE_GAME_KEYS, getArcadeGame } from "@shared/arcade-games";
 import { authMiddleware } from "./middleware";
 import { logger } from "../lib/logger";
 import { chooseArcadeBanter, sam9KnowsArcadeGame, arcadeGameLabel } from "../lib/sam9-arcade-banter";
+import {
+    decideArcadeReward,
+    ARCADE_ENTRY_COST_VEX,
+    type PlayerArcadeState,
+} from "../lib/sam9-arcade-economy";
 
 const submitSchema = z.object({
     gameKey: z.enum(ARCADE_GAME_KEYS as [string, ...string[]]),
@@ -92,7 +97,7 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                 return;
             }
 
-            // Compute personal best vs the player's previous max.
+            // Per-game stats (best score + runs) for personal-best detection.
             const [prev] = await db
                 .select({ best: sql<number>`COALESCE(MAX(${arcadeSessions.score}), 0)::int`, runs: sql<number>`COUNT(*)::int` })
                 .from(arcadeSessions)
@@ -101,18 +106,157 @@ export function registerArcadeSessionsRoutes(app: Express): void {
             const previousRuns = Number(prev?.runs ?? 0);
             const isPersonalBest = score > previousBest && score > 0;
 
-            const [row] = await db
-                .insert(arcadeSessions)
-                .values({
-                    userId,
-                    gameKey,
-                    score,
-                    result,
-                    durationMs,
-                    isPersonalBest,
-                    metadata: (metadata ?? {}) as Record<string, unknown>,
+            // ---- Sam9 Arcade Economy: gather lifetime + recent state ----
+            // We aggregate across ALL arcade games (not just this one) because
+            // the player's wallet is shared and their psychology travels with
+            // them between games. Recent run history drives streak detection.
+            const [userRow] = await db
+                .select({ balance: users.balance })
+                .from(users)
+                .where(eq(users.id, userId))
+                .limit(1);
+            const balance = Number.parseFloat(String(userRow?.balance ?? "0")) || 0;
+
+            const [lifetime] = await db
+                .select({
+                    totalRuns: sql<number>`COUNT(*)::int`,
+                    lifetimeWon: sql<number>`COALESCE(SUM((${arcadeSessions.metadata}->>'rewardVex')::numeric), 0)::float`,
                 })
-                .returning();
+                .from(arcadeSessions)
+                .where(eq(arcadeSessions.userId, userId));
+            const totalLifetimeRuns = Number(lifetime?.totalRuns ?? 0);
+            const lifetimeWon = Number(lifetime?.lifetimeWon ?? 0);
+            const lifetimeWagered = totalLifetimeRuns * ARCADE_ENTRY_COST_VEX;
+
+            const recentRows = await db
+                .select({
+                    score: arcadeSessions.score,
+                    result: arcadeSessions.result,
+                    metadata: arcadeSessions.metadata,
+                    createdAt: arcadeSessions.createdAt,
+                })
+                .from(arcadeSessions)
+                .where(eq(arcadeSessions.userId, userId))
+                .orderBy(desc(arcadeSessions.createdAt))
+                .limit(20);
+
+            const playerState: PlayerArcadeState = {
+                balance,
+                totalRuns: totalLifetimeRuns,
+                lifetimeWagered,
+                lifetimeWon,
+                recentRuns: recentRows.map((r) => ({
+                    score: Number(r.score ?? 0),
+                    rewardVex: Number((r.metadata as Record<string, unknown> | null)?.rewardVex ?? 0),
+                    result: (r.result as "win" | "loss" | "draw") ?? "draw",
+                    createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(),
+                })),
+            };
+
+            // ---- Decide reward & settle wallet ATOMICALLY ----
+            // Free-play guard: if the player can't even afford the entry cost
+            // we run the game in "free mode" (no debit, no reward). This keeps
+            // the game playable for broke users without giving them free VEX.
+            const canAffordEntry = balance >= ARCADE_ENTRY_COST_VEX;
+
+            let decision = decideArcadeReward(playerState, score, gameKey);
+            if (!canAffordEntry) {
+                decision = {
+                    rewardVex: 0,
+                    netVex: 0,
+                    multiplier: 0,
+                    rarity: "miss",
+                    psychologyMode: "neutral",
+                    reason: "Free-play mode (insufficient balance for entry).",
+                    debug: decision.debug,
+                };
+            }
+
+            // Wrap balance mutation + session insert in a single DB
+            // transaction. If either side fails, both roll back — so the
+            // wallet ledger and session history can never diverge. Use
+            // an in-tx UPDATE that re-reads & checks the balance to
+            // prevent double-spend under concurrent runs (no read-then-
+            // write race because the row is locked for the duration of
+            // the tx via the conditional WHERE clause + RETURNING).
+            const txResult = await db.transaction(async (tx) => {
+                let newBalance = balance;
+                let txDecision = decision;
+
+                if (canAffordEntry && txDecision.netVex !== 0) {
+                    const net = txDecision.netVex;
+                    if (net > 0) {
+                        const [updated] = await tx
+                            .update(users)
+                            .set({
+                                balance: sql`CAST(CAST(${users.balance} AS DECIMAL) + ${net} AS TEXT)`,
+                                updatedAt: new Date(),
+                            })
+                            .where(eq(users.id, userId))
+                            .returning({ balance: users.balance });
+                        newBalance = Number.parseFloat(String(updated?.balance ?? balance)) || balance;
+                    } else {
+                        // net < 0 → debit. Conditional UPDATE ensures we
+                        // never push the balance below zero even under
+                        // concurrent runs — the WHERE filters out the row
+                        // if the funds aren't there anymore.
+                        const debit = Math.abs(net);
+                        const [updated] = await tx
+                            .update(users)
+                            .set({
+                                balance: sql`CAST(CAST(${users.balance} AS DECIMAL) - ${debit} AS TEXT)`,
+                                updatedAt: new Date(),
+                            })
+                            .where(and(
+                                eq(users.id, userId),
+                                sql`CAST(${users.balance} AS DECIMAL) >= ${debit}`,
+                            ))
+                            .returning({ balance: users.balance });
+                        if (!updated) {
+                            // Concurrent debit raced and emptied the wallet.
+                            // Convert this run to free play inside the tx so
+                            // the session row reflects reality.
+                            txDecision = {
+                                ...txDecision,
+                                rewardVex: 0,
+                                netVex: 0,
+                                multiplier: 0,
+                                rarity: "miss",
+                                reason: "Concurrent wallet race — converted to free play.",
+                            };
+                        } else {
+                            newBalance = Number.parseFloat(String(updated.balance)) || balance;
+                        }
+                    }
+                }
+
+                const [row] = await tx
+                    .insert(arcadeSessions)
+                    .values({
+                        userId,
+                        gameKey,
+                        score,
+                        result,
+                        durationMs,
+                        isPersonalBest,
+                        metadata: {
+                            ...(metadata ?? {}),
+                            rewardVex: txDecision.rewardVex,
+                            netVex: txDecision.netVex,
+                            rarity: txDecision.rarity,
+                            psychologyMode: txDecision.psychologyMode,
+                            rewardReason: txDecision.reason,
+                            entryCostVex: canAffordEntry ? ARCADE_ENTRY_COST_VEX : 0,
+                        } as Record<string, unknown>,
+                    })
+                    .returning();
+
+                return { row, newBalance, decision: txDecision };
+            });
+
+            const row = txResult.row;
+            const newBalance = txResult.newBalance;
+            decision = txResult.decision;
 
             const banter = chooseArcadeBanter({
                 gameKey,
@@ -120,6 +264,8 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                 score,
                 isPersonalBest,
                 totalRuns: previousRuns + 1,
+                rarity: decision.rarity,
+                psychologyMode: decision.psychologyMode,
             });
 
             res.json({
@@ -138,6 +284,18 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                 totalRuns: previousRuns + 1,
                 banter,
                 game: getArcadeGame(gameKey) ?? null,
+                economy: {
+                    rewardVex: decision.rewardVex,
+                    netVex: decision.netVex,
+                    multiplier: decision.multiplier,
+                    rarity: decision.rarity,
+                    psychologyMode: decision.psychologyMode,
+                    reason: decision.reason,
+                    entryCostVex: canAffordEntry ? ARCADE_ENTRY_COST_VEX : 0,
+                    freePlay: !canAffordEntry,
+                    balanceBefore: balance,
+                    balanceAfter: newBalance,
+                },
             });
         } catch (err) {
             logger.error?.(`[arcade-sessions] submit failed: ${(err as Error).message}`);

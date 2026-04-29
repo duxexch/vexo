@@ -108,6 +108,60 @@ uri = "file://artifacts/mockup-sandbox/public/images/vex-home-livefeed-grain-bg.
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "sZ8z0nqfNoeNblRjys3hh"
+uri = "file://client/public/games/snake/icon.png"
+type = "image"
+title = "vex arcade snake"
+
+[[generated]]
+id = "sqQZY8J8T8Ugiif1_lwF0"
+uri = "file://client/public/games/stack-tower/icon.png"
+type = "image"
+title = "vex arcade stack-tower"
+
+[[generated]]
+id = "Oniu9LSk5z0VZGeW8n-za"
+uri = "file://client/public/games/aim-trainer/icon.png"
+type = "image"
+title = "vex arcade aim-trainer"
+
+[[generated]]
+id = "ptPiZb2h8ZX6b97jBTXEH"
+uri = "file://client/public/games/pong/icon.png"
+type = "image"
+title = "vex arcade pong"
+
+[[generated]]
+id = "s_l5KSHpI6IiKFtgsaN2L"
+uri = "file://client/public/games/air-hockey/icon.png"
+type = "image"
+title = "vex arcade air-hockey"
+
+[[generated]]
+id = "Lj4ab8dffLA7npu4V_UBX"
+uri = "file://client/public/games/typing-duel/icon.png"
+type = "image"
+title = "vex arcade typing-duel"
+
+[[generated]]
+id = "FxEu8DKsdiu3EVPVN6_dj"
+uri = "file://client/public/games/bomb-pass/icon.png"
+type = "image"
+title = "vex arcade bomb-pass"
+
+[[generated]]
+id = "sgk-8DjWs_WCaRNsvnPEz"
+uri = "file://client/public/games/quiz-rush/icon.png"
+type = "image"
+title = "vex arcade quiz-rush"
+
+[[generated]]
+id = "-PGJIa4Y2ABlZ2aOYErC9"
+uri = "file://client/public/games/dice-battle/icon.png"
+type = "image"
+title = "vex arcade dice-battle"
+
 [[outputs]]
 id = "ca4K4aFlyoLyJjWP6qFUk"
 uri = "file://client/public/marketing/ad-platform-square.png"
