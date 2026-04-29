@@ -164,6 +164,14 @@ export function registerAdminAgentsRoutes(app: Express) {
         const passwordHash = await bcrypt.hash(passwordStr, 12);
         const initialDepositNum = clampDecimal(initialDeposit, 0, 1_000_000_000, 0);
 
+        // Split free-form "fullName" coming from the admin UI into the
+        // first/last columns the users schema actually stores. This keeps
+        // the existing admin form unchanged while writing to the real
+        // schema (no `fullName` / `language` columns exist on `users`).
+        const fullNameStr = fullName ? String(fullName).trim() : "";
+        const [firstNamePart, ...restName] = fullNameStr.split(/\s+/).filter(Boolean);
+        const lastNamePart = restName.join(" ").trim() || null;
+
         // ---- Create user + agent + wallet inside a single transaction ----
         const created = await db.transaction(async (tx) => {
           const newUserRows = await tx
@@ -171,11 +179,11 @@ export function registerAdminAgentsRoutes(app: Express) {
             .values({
               username: usernameStr,
               email: email ? String(email).trim().toLowerCase() : null,
-              fullName: fullName ? String(fullName).trim() : null,
-              passwordHash,
+              firstName: firstNamePart ?? null,
+              lastName: lastNamePart,
+              password: passwordHash,
               role: "agent",
               status: "active",
-              language: "ar",
             })
             .returning();
           const newUser = newUserRows[0];

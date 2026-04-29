@@ -51,12 +51,13 @@ export function registerAgentPaymentRoutes(app: Express): void {
         const userInsert: InsertUser = {
           username: String(username),
           usernameSelectedAt: new Date(),
-          passwordHash: hashedPassword,
+          password: hashedPassword,
           email: email ? String(email) : null,
-          fullName: [firstName, lastName].filter(Boolean).join(" ").trim() || null,
+          firstName: firstName ? String(firstName).trim() : null,
+          lastName: lastName ? String(lastName).trim() : null,
           role: "agent",
           status: "active",
-        } as unknown as InsertUser;
+        };
 
         const [user] = await db.insert(users).values(userInsert).returning();
 

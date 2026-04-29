@@ -161,17 +161,21 @@ export function registerAdminAgentsRoutes(app: Express): void {
         const passwordHash = await bcrypt.hash(passwordStr, 12);
         const initialDepositNum = clampDecimal(initialDeposit, 0, 1_000_000_000, 0);
 
+        const fullNameStr = fullName ? String(fullName).trim() : "";
+        const [firstNamePart, ...restName] = fullNameStr.split(/\s+/).filter(Boolean);
+        const lastNamePart = restName.join(" ").trim() || null;
+
         const created = await db.transaction(async (tx) => {
           const newUserRows = await tx
             .insert(users)
             .values({
               username: usernameStr,
               email: email ? String(email).trim().toLowerCase() : null,
-              fullName: fullName ? String(fullName).trim() : null,
-              passwordHash,
+              firstName: firstNamePart ?? null,
+              lastName: lastNamePart,
+              password: passwordHash,
               role: "agent",
               status: "active",
-              language: "ar",
             })
             .returning();
           const newUser = newUserRows[0];
