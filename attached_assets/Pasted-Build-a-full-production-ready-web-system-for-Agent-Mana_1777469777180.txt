@@ -1,0 +1,100 @@
+Build a full production-ready web system for "Agent Management & Payment Routing Platform" with high scalability, security, and real-time processing.
+
+Core Concept:
+System manages agents handling deposits, withdrawals, and complaints with intelligent routing and financial ledger.
+
+Architecture:
+- Backend: Node.js (NestJS)
+- Database: PostgreSQL
+- Cache/Queue: Redis (BullMQ)
+- Realtime: WebSocket (Socket.io)
+- Frontend: React / Next.js
+- Storage: Secure file storage
+
+Agent System:
+- Admin creates agents (username, password, country, status, min balance, commissions)
+- Each agent has main account + up to 4 sub-accounts
+- Sub-accounts have roles and all actions are logged per user
+
+Financial System:
+- Use strict Ledger system (no direct balance edits)
+- Every transaction = debit/credit + balance_after
+- Use DB transactions (ACID)
+- Add idempotency keys
+
+Logic:
+- Deposit approval → deduct from agent
+- Withdrawal approval → add to agent
+
+Queue System:
+- All requests go to queue
+- Workers process asynchronously
+- Prevent duplication and race conditions
+
+Traffic Routing:
+- Assign requests based on:
+  - country
+  - payment method
+  - balance
+  - load
+- Use load balancing (weighted or load-based)
+
+Payment Methods:
+- Assign per agent and per country
+- Control visibility
+
+Notifications:
+- Real-time alerts (requests, complaints, balance)
+- Sound + UI alerts
+- Optional email/Telegram
+
+Auto Refresh:
+- Toggle button:
+  - ON = realtime updates
+  - OFF = manual refresh
+
+Complaints System:
+- User → Agent → Admin review
+- Admin can approve/reject/reassign
+- Adjust balances if needed
+
+Reports:
+- Daily/weekly/monthly stats per agent
+- Deposits, withdrawals, commissions, profit
+- Complaint stats
+
+Auto Control:
+- Disable agent if low balance or high complaints
+- Admin override allowed
+
+Audit Logs:
+- Track all actions (who, what, before/after, time, IP)
+- No deletion allowed
+
+Security:
+- bcrypt passwords
+- JWT auth
+- RBAC roles
+- Rate limiting
+- 2FA for admin
+
+KYC:
+- Store agent documents securely
+
+UI/UX:
+- Fully responsive
+- Fast and optimized
+- Pagination + lazy loading
+
+Performance:
+- Handle high traffic
+- Use Redis caching
+- Async processing
+
+Extras:
+- Failover (reassign requests)
+- Settlement system (verify balances)
+- Advanced search filters
+
+Goal:
+Fast, secure, scalable, and fraud-resistant system.
