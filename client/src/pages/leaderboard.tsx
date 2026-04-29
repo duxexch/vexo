@@ -51,13 +51,13 @@ const SORT_TABS: {
   accent: string;
   glow: string;
 }[] = [
-  { key: "wins", icon: Trophy, accent: "from-brand-blue to-brand-blue-dark", glow: "shadow-[0_0_30px_-5px_#1e88ff]" },
-  { key: "earnings", icon: DollarSign, accent: "from-brand-gold to-[#a86b00]", glow: "shadow-[0_0_30px_-5px_#ffb627]" },
+  { key: "wins", icon: Trophy, accent: "from-brand-blue to-brand-blue-dark", glow: "shadow-[0_0_30px_-5px_hsl(var(--brand-blue))]" },
+  { key: "earnings", icon: DollarSign, accent: "from-brand-gold to-[#a86b00]", glow: "shadow-[0_0_30px_-5px_hsl(var(--brand-gold))]" },
   { key: "streak", icon: Flame, accent: "from-rose-500 to-rose-900", glow: "shadow-[0_0_30px_-5px_#ef4444]" },
 ];
 
 const RANK_MEDAL = [
-  { bg: "from-brand-gold to-[#a86b00]", icon: Crown, glow: "shadow-[0_0_24px_-6px_#ffb627]" },
+  { bg: "from-brand-gold to-[#a86b00]", icon: Crown, glow: "shadow-[0_0_24px_-6px_hsl(var(--brand-gold))]" },
   { bg: "from-slate-300 to-slate-500", icon: Medal, glow: "shadow-[0_0_18px_-6px_#cbd5e1]" },
   { bg: "from-amber-700 to-amber-900", icon: Medal, glow: "shadow-[0_0_18px_-6px_#92400e]" },
 ];
@@ -108,11 +108,11 @@ export default function LeaderboardPage() {
     >
       {/* Hero header */}
       <div className="relative overflow-hidden border-b border-slate-200 dark:border-white/5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,#1e88ff33,transparent_55%),radial-gradient(circle_at_top_left,#ffb62733,transparent_55%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--brand-blue)/0.2),transparent_55%),radial-gradient(circle_at_top_left,hsl(var(--brand-gold)/0.2),transparent_55%)] pointer-events-none" />
         <div className="relative max-w-5xl mx-auto px-4 md:px-6 pt-4 pb-6 md:pt-6 md:pb-8">
           <div className="flex items-center gap-3 mb-4">
             <BackButton />
-            <span className="grid place-items-center w-10 h-10 rounded-md bg-gradient-to-br from-brand-gold to-[#a86b00] shadow-[0_0_30px_-5px_#ffb627] text-black">
+            <span className="grid place-items-center w-10 h-10 rounded-md bg-gradient-to-br from-brand-gold to-[#a86b00] shadow-[0_0_30px_-5px_hsl(var(--brand-gold))] text-black">
               <Trophy className="w-5 h-5" />
             </span>
             <div className="min-w-0">
@@ -127,13 +127,13 @@ export default function LeaderboardPage() {
 
           {myRank && (
             <Card
-              className="border-0 bg-gradient-to-r from-brand-blue/15 via-brand-blue/8 to-transparent dark:from-brand-blue/20 dark:via-brand-blue/10 dark:to-transparent shadow-[0_0_40px_-10px_#1e88ff]"
+              className="border-0 bg-gradient-to-r from-brand-blue/15 via-brand-blue/8 to-transparent dark:from-brand-blue/20 dark:via-brand-blue/10 dark:to-transparent shadow-[0_0_40px_-10px_hsl(var(--brand-blue))]"
               data-testid="card-my-rank"
             >
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="grid place-items-center w-12 h-12 rounded-md bg-gradient-to-br from-brand-blue to-brand-blue-dark shadow-[0_0_20px_-5px_#1e88ff] text-white">
+                    <div className="grid place-items-center w-12 h-12 rounded-md bg-gradient-to-br from-brand-blue to-brand-blue-dark shadow-[0_0_20px_-5px_hsl(var(--brand-blue))] text-white">
                       <Medal className="w-6 h-6" />
                     </div>
                     <div>
@@ -285,7 +285,7 @@ export default function LeaderboardPage() {
                         data-testid={`row-player-${player.id}`}
                         className={`group flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all duration-200 ${
                           isCurrentUser
-                            ? "border-brand-blue/40 bg-brand-blue/8 dark:bg-brand-blue/12 shadow-[0_0_24px_-8px_#1e88ff]"
+                            ? "border-brand-blue/40 bg-brand-blue/8 dark:bg-brand-blue/12 shadow-[0_0_24px_-8px_hsl(var(--brand-blue))]"
                             : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/10 hover:bg-white dark:hover:bg-white/[0.05]"
                         }`}
                       >

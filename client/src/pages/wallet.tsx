@@ -870,7 +870,7 @@ export default function WalletPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-right font-bold" data-testid={`text-user-balance-${w.currency}`}>
+                    <div className="text-end font-bold" data-testid={`text-user-balance-${w.currency}`}>
                       {symbol}{Number.parseFloat(w.balance).toFixed(2)}
                     </div>
                   </div>

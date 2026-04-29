@@ -39,6 +39,23 @@ interface ArcadeSubmitResponse {
 
 type Phase = "boot" | "playing" | "ended" | "error";
 
+const RARITY_BADGE_BG = {
+  jackpot: "#ffb627",
+  big: "#1e88ff",
+  default: "rgba(255,255,255,0.15)",
+} as const;
+
+const RARITY_BADGE_FG = {
+  jackpot: "#0a0e1a",
+  default: "#fff",
+} as const;
+
+const NET_VEX_FG = {
+  positive: "#ffb627",
+  negative: "#fb7185",
+  zero: "#fff",
+} as const;
+
 export default function ArcadePlayPage() {
   const { gameKey: rawKey } = useParams<{ gameKey: string }>();
   const [, navigate] = useLocation();
@@ -408,11 +425,11 @@ export default function ArcadePlayPage() {
                         style={{
                           background:
                             resultUi.economy.rarity === "jackpot"
-                              ? "#ffb627"
+                              ? RARITY_BADGE_BG.jackpot
                               : resultUi.economy.rarity === "big"
-                                ? "#1e88ff"
-                                : "rgba(255,255,255,0.15)",
-                          color: resultUi.economy.rarity === "jackpot" ? "#0a0e1a" : "#fff",
+                                ? RARITY_BADGE_BG.big
+                                : RARITY_BADGE_BG.default,
+                          color: resultUi.economy.rarity === "jackpot" ? RARITY_BADGE_FG.jackpot : RARITY_BADGE_FG.default,
                         }}
                       >
                         {resultUi.economy.rarity === "jackpot"
@@ -438,10 +455,10 @@ export default function ArcadePlayPage() {
                     style={{
                       color:
                         resultUi.economy.netVex > 0
-                          ? "#ffb627"
+                          ? NET_VEX_FG.positive
                           : resultUi.economy.netVex < 0
-                            ? "#fb7185"
-                            : "#fff",
+                            ? NET_VEX_FG.negative
+                            : NET_VEX_FG.zero,
                     }}
                   >
                     {resultUi.economy.netVex > 0 ? "+" : ""}

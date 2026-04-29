@@ -245,8 +245,8 @@ function Rail({
   const { t } = useI18n();
   const railRef = useRef<HTMLDivElement>(null);
   const accentMap = {
-    blue: "from-brand-blue to-brand-blue-dark shadow-[0_0_30px_-5px_#1e88ff]",
-    gold: "from-brand-gold to-[#a86b00] shadow-[0_0_30px_-5px_#ffb627]",
+    blue: "from-brand-blue to-brand-blue-dark shadow-[0_0_30px_-5px_hsl(var(--brand-blue))]",
+    gold: "from-brand-gold to-[#a86b00] shadow-[0_0_30px_-5px_hsl(var(--brand-gold))]",
     red: "from-rose-500 to-rose-900 shadow-[0_0_30px_-5px_#ef4444]",
   }[accent];
 
@@ -1241,7 +1241,7 @@ function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
                 isPassed
                   ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
                   : isCurrent
-                  ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-[0_0_20px_-5px_#ffb627]"
+                  ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-[0_0_20px_-5px_hsl(var(--brand-gold))]"
                   : "bg-white/[0.03] border-white/10 text-slate-500"
               }`}
             >
@@ -1330,7 +1330,7 @@ function HighlightsSection({
     <section className="px-4 md:px-6">
       <div className="flex items-end justify-between mb-3">
         <div className="flex items-center gap-3">
-          <span className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-brand-blue to-brand-blue-dark text-white shadow-[0_0_30px_-5px_#1e88ff]">
+          <span className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-brand-blue to-brand-blue-dark text-white shadow-[0_0_30px_-5px_hsl(var(--brand-blue))]">
             <Activity className="w-4 h-4" />
           </span>
           <div>

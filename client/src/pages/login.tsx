@@ -2202,10 +2202,10 @@ export default function LoginPage() {
                   className={nicknameError ? "border-destructive" : ""}
                 />
                 {isCheckingNickname && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                  <Loader2 className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
                 )}
                 {!isCheckingNickname && isNicknameAvailable && !nicknameError && (
-                  <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500 drop-shadow-[0_0_4px_rgba(34,197,94,0.5)]" />
+                  <CheckCircle2 className="absolute end-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500 drop-shadow-[0_0_4px_rgba(34,197,94,0.5)]" />
                 )}
               </div>
               {nicknameError && (
