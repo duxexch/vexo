@@ -3,7 +3,23 @@ import { multiplayerGames, users, liveGameSessions } from "@shared/schema";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const SEO_GAME_KEYS = ["chess", "backgammon", "domino", "tarneeb", "baloot", "languageduel"] as const;
+export const SEO_GAME_KEYS = [
+  "chess",
+  "backgammon",
+  "domino",
+  "tarneeb",
+  "baloot",
+  "languageduel",
+  "snake",
+  "stack_tower",
+  "aim_trainer",
+  "air_hockey",
+  "bomb_pass",
+  "dice_battle",
+  "pong",
+  "quiz_rush",
+  "typing_duel",
+] as const;
 export type SeoGameKey = typeof SEO_GAME_KEYS[number];
 
 export const SEO_CATEGORIES: Record<string, { slugs: string[]; titleAr: string; titleEn: string; descriptionAr: string; descriptionEn: string }> = {
@@ -22,11 +38,32 @@ export const SEO_CATEGORIES: Record<string, { slugs: string[]; titleAr: string; 
     descriptionEn: "Play Tarneeb and Baloot online with real teammates and opponents.",
   },
   language: {
-    slugs: ["languageduel"],
-    titleAr: "ألعاب اللغة - تحدي اللغات",
-    titleEn: "Language Games - Language Duel",
-    descriptionAr: "تحدى أصدقاءك في تعلم اللغات والمفردات.",
-    descriptionEn: "Challenge friends in vocabulary and language duels.",
+    slugs: ["languageduel", "typing_duel"],
+    titleAr: "ألعاب اللغة - تحدي اللغات والكتابة",
+    titleEn: "Language Games - Language & Typing Duel",
+    descriptionAr: "تحدى أصدقاءك في تعلم اللغات والمفردات وسرعة الكتابة.",
+    descriptionEn: "Challenge friends in vocabulary, language and typing duels.",
+  },
+  arcade: {
+    slugs: ["snake", "stack_tower", "pong", "air_hockey"],
+    titleAr: "ألعاب أركيد - سنيك، برج المكعبات، بونغ، هوكي الهواء",
+    titleEn: "Arcade Games - Snake, Stack Tower, Pong, Air Hockey",
+    descriptionAr: "العب أفضل ألعاب الأركيد الكلاسيكية والمعاصرة على VEX، تحديات سريعة وبطولات يومية.",
+    descriptionEn: "Play classic and modern arcade games on VEX with fast challenges and daily tournaments.",
+  },
+  party: {
+    slugs: ["bomb_pass", "quiz_rush", "dice_battle"],
+    titleAr: "ألعاب الجماعة - بومب باس، كويز راش، معركة النرد",
+    titleEn: "Party Games - Bomb Pass, Quiz Rush, Dice Battle",
+    descriptionAr: "ألعاب جماعية ممتعة لإثارة جلساتك مع الأصدقاء عبر VEX.",
+    descriptionEn: "Fun party games to spice up your sessions with friends on VEX.",
+  },
+  skill: {
+    slugs: ["aim_trainer"],
+    titleAr: "ألعاب المهارات - تمرين التصويب",
+    titleEn: "Skill Games - Aim Trainer",
+    descriptionAr: "طور دقتك وردة فعلك بألعاب المهارة الاحترافية على VEX.",
+    descriptionEn: "Sharpen your accuracy and reflexes with VEX skill-based games.",
   },
 };
 
@@ -37,6 +74,15 @@ export const SEO_GAME_LABELS: Record<string, { ar: string; en: string; descripti
   tarneeb: { ar: "الطرنيب", en: "Tarneeb", description: { ar: "العب الطرنيب أونلاين مع شركاء حقيقيين.", en: "Play Tarneeb online with real teammates." } },
   baloot: { ar: "البلوت", en: "Baloot", description: { ar: "العب البلوت أونلاين بأسلوب احترافي.", en: "Play Baloot online with professional gameplay." } },
   languageduel: { ar: "تحدي اللغات", en: "Language Duel", description: { ar: "تحدى أصدقاءك في تعلم اللغات.", en: "Challenge friends in language learning duels." } },
+  snake: { ar: "سنيك (الثعبان)", en: "Snake", description: { ar: "العب سنيك الكلاسيكية أونلاين، تحديات سرعة وأطول ذيل ضد لاعبين حقيقيين.", en: "Play classic Snake online with speed challenges and longest-tail duels against real players." } },
+  stack_tower: { ar: "برج المكعبات", en: "Stack Tower", description: { ar: "ابنِ أعلى برج بمكعبات متراصة دون أن يسقط، تحدى أصدقاءك في برج المكعبات.", en: "Stack blocks to build the tallest tower without toppling, challenge friends in Stack Tower." } },
+  aim_trainer: { ar: "تمرين التصويب", en: "Aim Trainer", description: { ar: "طور دقتك وسرعة ردة فعلك في لعبة تمرين التصويب التنافسية على VEX.", en: "Sharpen your accuracy and reaction time in the competitive Aim Trainer on VEX." } },
+  air_hockey: { ar: "هوكي الهواء", en: "Air Hockey", description: { ar: "العب هوكي الهواء أونلاين 1v1 على VEX بمباريات سريعة وحماسية.", en: "Play 1v1 Air Hockey online on VEX with fast and intense matches." } },
+  bomb_pass: { ar: "تمرير القنبلة", en: "Bomb Pass", description: { ar: "لعبة جماعية ممتعة، مرر القنبلة قبل أن تنفجر بين يديك.", en: "A fun party game — pass the bomb before it explodes in your hands." } },
+  dice_battle: { ar: "معركة النرد", en: "Dice Battle", description: { ar: "تحدى الحظ والاستراتيجية في معركة النرد متعددة اللاعبين على VEX.", en: "Battle luck and strategy in multiplayer Dice Battle on VEX." } },
+  pong: { ar: "بونغ", en: "Pong", description: { ar: "العب لعبة البونغ الكلاسيكية أونلاين 1v1 ضد لاعبين حقيقيين على VEX.", en: "Play classic Pong online 1v1 against real players on VEX." } },
+  quiz_rush: { ar: "كويز راش", en: "Quiz Rush", description: { ar: "تحدّ معلوماتك في كويز راش، أسئلة سريعة وجوائز فورية.", en: "Test your knowledge in Quiz Rush — fast questions and instant rewards." } },
+  typing_duel: { ar: "تحدي الكتابة", en: "Typing Duel", description: { ar: "اختبر سرعة ودقة الكتابة في مبارزات تحدي الكتابة المباشر.", en: "Test your typing speed and accuracy in live Typing Duel matches." } },
 };
 
 type CachedXml = { xml: string; expiresAt: number };
@@ -497,7 +543,11 @@ export function isSeoLandingPath(pagePath: string): boolean {
 // IMPORTANT: column names are derived from `game`. To eliminate any SQL-injection
 // surface (even via internal callers), we resolve them through a strict whitelist
 // keyed by the SeoGameKey union before passing to sql.raw.
-const LEADERBOARD_COLUMNS: Record<SeoGameKey, { wins: string; played: string }> = {
+// Only games with dedicated `<key>_won` / `<key>_played` columns in the
+// `users` table are listed here. Other game keys (added later for SEO/sitemap
+// purposes) have no leaderboard columns yet and will safely fall through to
+// `return []` in `getPublicLeaderboard`.
+const LEADERBOARD_COLUMNS: Partial<Record<SeoGameKey, { wins: string; played: string }>> = {
   chess: { wins: "chess_won", played: "chess_played" },
   backgammon: { wins: "backgammon_won", played: "backgammon_played" },
   domino: { wins: "domino_won", played: "domino_played" },

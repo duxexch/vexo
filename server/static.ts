@@ -245,6 +245,30 @@ const SEO_PAGES: Record<string, { title: string; description: string; keywords: 
     keywords: "سياسة الخصوصية, privacy policy, حماية البيانات, data protection",
     canonicalUrl: `${CANONICAL_ORIGIN}/privacy`
   },
+  "/coin": {
+    title: "عملة VEX - Project Coin بأسعار مباشرة | VEX Coin",
+    description: "عملة VEX الرسمية: العملة الموحدة داخل المنصة، تفتح بطولات وجوائز وشراكات حصرية. أسعار وحركة سوقية مباشرة. The official VEX project coin powering tournaments, prizes and partnerships — live price feed.",
+    keywords: "VEX Coin, عملة VEX, عملة المشروع, project coin, crypto gaming, gaming token, العملة الرسمية, live price",
+    canonicalUrl: `${CANONICAL_ORIGIN}/coin`
+  },
+  "/agents-program": {
+    title: "برنامج الوكلاء التجاريين - فرصة دخل حقيقي | VEX Agents Program",
+    description: "انضم لشبكة وكلاء VEX المعتمدين واربح عمولات على كل عملية. شروط واضحة، دعم مباشر، ومستويات مكافآت متعددة. Join VEX certified commercial agents and earn commissions on every transaction.",
+    keywords: "وكلاء تجاريون, برنامج الوكلاء, commercial agents, VEX agents, agent program, شراكة, partnership, agent commissions",
+    canonicalUrl: `${CANONICAL_ORIGIN}/agents-program`
+  },
+  "/affiliates": {
+    title: "برنامج الإحالة والشراكة - أربح من دعوات أصدقائك | VEX Affiliates",
+    description: "ادعُ أصدقاءك ومجتمعك إلى منصة VEX واربح نسبة من كل عملية يقومون بها مدى الحياة. لوحة تحكم متقدمة وروابط تتبع فورية. Refer friends to VEX and earn lifetime commissions with real-time tracking.",
+    keywords: "برنامج الإحالة, شراكة, affiliate program, referral commissions, VEX affiliates, ربح من الإحالة, marketing partner",
+    canonicalUrl: `${CANONICAL_ORIGIN}/affiliates`
+  },
+  "/invest": {
+    title: "فرصة استثمارية حصرية - ساهم في رحلة VEX | Invest in VEX",
+    description: "فرصة استثمارية محدودة في منصة VEX. شارك في بناء مستقبل الألعاب والتداول في المنطقة العربية. اطلع على التوزيع والمزايا الحصرية. Limited investment opportunity to be part of the VEX journey — see allocation, terms and exclusive benefits.",
+    keywords: "استثمار VEX, فرصة استثمارية, invest in VEX, VEX investment, gaming startup, Arab gaming, MENA tech investment",
+    canonicalUrl: `${CANONICAL_ORIGIN}/invest`
+  },
 };
 
 type SeoLocaleField = "siteTitle" | "siteDescription" | "siteKeywords" | "ogTitle" | "ogDescription";
@@ -808,6 +832,89 @@ export async function renderHtmlWithSeo(
         `<meta property="og:locale" content="${escapedOgLocale}"`
       );
 
+      // ==================== hreflang alternates (AR / EN / x-default) ====================
+      // The platform serves the same canonical URL for both AR and EN via i18n,
+      // so we point all alternates at the same canonical URL. This signals to
+      // Google that the page is bilingual rather than duplicate content.
+      const hreflangBlock = [
+        `<link rel="alternate" hreflang="ar" href="${escapedUrl}" />`,
+        `<link rel="alternate" hreflang="en" href="${escapedUrl}" />`,
+        `<link rel="alternate" hreflang="x-default" href="${escapedUrl}" />`,
+      ].join("\n    ");
+      if (!/<link rel="alternate" hreflang=/i.test(html)) {
+        html = html.replace(
+          /(<link rel="canonical" href="[^"]*"\s*\/?>)/,
+          `$1\n    ${hreflangBlock}`,
+        );
+      }
+
+      // ==================== Global JSON-LD (Organization + WebSite + Breadcrumbs) ====================
+      // Emit on every SSR'd HTML response so each indexable page carries strong
+      // entity signals and a breadcrumb trail. Dynamic-route JSON-LD (e.g.
+      // VideoGame) is appended afterwards and does not replace these blocks.
+      // JSON.stringify handles all value escaping; the </script>-injection
+      // guard happens in the .replace below.
+      const organizationJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": `${baseUrlForRoute}/#organization`,
+        name: "VEX",
+        url: baseUrlForRoute,
+        logo: `${baseUrlForRoute}/logo-512.png`,
+        sameAs: [],
+      } as Record<string, unknown>;
+
+      const websiteJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": `${baseUrlForRoute}/#website`,
+        name: runtimeSeo.siteTitle || "VEX",
+        url: baseUrlForRoute,
+        inLanguage: ["ar", "en"],
+        publisher: { "@id": `${baseUrlForRoute}/#organization` },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${baseUrlForRoute}/games?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
+      } as Record<string, unknown>;
+
+      // Build a breadcrumb trail from the path segments for non-root routes.
+      const ar = arabicLocale(locale);
+      const breadcrumbItems: Array<{ "@type": "ListItem"; position: number; name: string; item: string }> = [
+        { "@type": "ListItem", position: 1, name: ar ? "الرئيسية" : "Home", item: `${baseUrlForRoute}/` },
+      ];
+      if (pagePath !== "/") {
+        const segments = pagePath.split("/").filter(Boolean);
+        let acc = "";
+        segments.forEach((seg, idx) => {
+          acc += `/${seg}`;
+          breadcrumbItems.push({
+            "@type": "ListItem",
+            position: idx + 2,
+            name: seg
+              .replace(/-/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase()),
+            item: `${baseUrlForRoute}${acc}`,
+          });
+        });
+      }
+      const breadcrumbJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems,
+      } as Record<string, unknown>;
+
+      const baseLdBlocks = [organizationJsonLd, websiteJsonLd, breadcrumbJsonLd]
+        .map((obj) => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`)
+        .join("\n");
+
+      // Inject base JSON-LD blocks (Organization + WebSite + Breadcrumbs) before </head>
+      html = html.replace("</head>", `${baseLdBlocks}\n</head>`);
+
       // Inject JSON-LD for dynamic SEO routes (programmatic landing pages)
       if (dynamicRouteSeo?.jsonLd) {
         const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(dynamicRouteSeo.jsonLd).replace(/</g, "\\u003c")}</script>`;
@@ -816,4 +923,8 @@ export async function renderHtmlWithSeo(
   }
 
   return { html, robotsContent: runtimeSeo.robotsContent };
+}
+
+function arabicLocale(locale: string): boolean {
+  return locale.toLowerCase().split("-")[0] === "ar";
 }
