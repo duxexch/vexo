@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { isArcadeGameKey } from "@shared/arcade-games";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -802,14 +803,29 @@ function TournamentCard({ t, lang }: { t: ApiTournament; lang: string }) {
   );
 }
 
+/**
+ * Resolve the correct in-app destination for a game tile.
+ * Mirrors `handlePlayNow` in `games-catalog.tsx` so the home page,
+ * catalog, and admin all route the same way and we never fall through
+ * to the SEO `/games/:category` hub (which would render
+ * "تصنيف غير موجود" when the slug isn't a real category).
+ */
+function resolveGameHref(gameKey: string): string {
+  if (isArcadeGameKey(gameKey)) return `/arcade/${gameKey}`;
+  if (gameKey === "puzzle") return "/games/puzzle.html";
+  if (gameKey === "memory") return "/games/memory.html";
+  return `/lobby?game=${gameKey}`;
+}
+
 function GameTileCard({ g, lang }: { g: ApiGame; lang: string }) {
   void lang;
   const name = g.name;
   const cover = g.thumbnailUrl || g.imageUrl;
   const initial = name.trim().charAt(0).toUpperCase();
+  const href = resolveGameHref(g.id);
   return (
     <Card className="group relative shrink-0 w-[160px] sm:w-[200px] overflow-hidden border-white/10 bg-gradient-to-b from-[#10172a] to-[#0a0e1a] text-white p-0 rounded-xl transition-all hover:-translate-y-1 hover:shadow-[0_15px_40px_-10px_rgba(255,182,39,0.4)]">
-      <Link href={`/games/${g.id}`} className="block">
+      <Link href={href} className="block" data-testid={`tile-game-${g.id}`}>
         <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center">
           {cover ? (
             <img src={cover} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1070,9 +1086,10 @@ function TopPlayerCard({ p }: { p: ApiLeaderboardEntry }) {
 function MostPlayedCard({ g }: { g: ApiGame }) {
   const cover = g.thumbnailUrl || g.imageUrl;
   const initial = g.name.trim().charAt(0).toUpperCase();
+  const href = resolveGameHref(g.id);
   return (
     <Card className="group relative shrink-0 w-[200px] overflow-hidden border-white/10 bg-gradient-to-b from-[#10172a] to-[#0a0e1a] text-white p-0 rounded-xl transition-all hover:-translate-y-1 hover:shadow-[0_15px_40px_-10px_rgba(30,136,255,0.45)]">
-      <Link href={`/games/${g.id}`} className="block">
+      <Link href={href} className="block" data-testid={`tile-most-played-${g.id}`}>
         <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center">
           {cover ? (
             <img

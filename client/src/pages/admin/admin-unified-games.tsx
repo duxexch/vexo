@@ -1115,11 +1115,30 @@ export default function AdminUnifiedGames() {
 
   const isLoading = mpLoading || spLoading;
 
-  // Merge both types into unified array
-  const allGames: UnifiedGame[] = [
-    ...mpGames.map(toUnifiedGame),
-    ...spGames.map(toUnifiedGameFromSingle),
-  ];
+  // Merge both types into a unified array, deduplicated by slug.
+  // Many classic games (chess, backgammon, baloot, tarneeb, domino,
+  // languageduel, snake) historically exist in BOTH `multiplayer_games`
+  // and the legacy `games` table with the same slug. Showing both
+  // creates confusing visual duplicates in the admin grid, so we keep
+  // the multiplayer entry as canonical (it's the newer source of truth)
+  // and drop the legacy single-player row when slugs collide. The DB
+  // rows are untouched — only the admin display is deduped.
+  const allGames: UnifiedGame[] = (() => {
+    const seenSlugs = new Set<string>();
+    const merged: UnifiedGame[] = [];
+    for (const g of mpGames.map(toUnifiedGame)) {
+      const slug = (g.gameType || g.id || "").toLowerCase();
+      if (slug) seenSlugs.add(slug);
+      merged.push(g);
+    }
+    for (const g of spGames.map(toUnifiedGameFromSingle)) {
+      const slug = (g.gameType || g.id || "").toLowerCase();
+      if (slug && seenSlugs.has(slug)) continue;
+      if (slug) seenSlugs.add(slug);
+      merged.push(g);
+    }
+    return merged;
+  })();
 
   const deleteMutation = useMutation({
     mutationFn: ({ id, gameType }: { id: string; gameType: "multiplayer" | "single" }) => {
