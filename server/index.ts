@@ -11,6 +11,7 @@ import { getAllowedOrigins } from "@shared/runtime-config";
 import { createServer } from "http";
 import { setupGameWebSocket } from "./game-websocket";
 import { seedMultiplayerGames, seedGiftCatalog, seedFreePlaySettings } from "./seed";
+import { seedSoloGames } from "./seed/seed-solo-games";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -1021,6 +1022,10 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
           await seedMultiplayerGames();
           await seedGiftCatalog();
           await seedFreePlaySettings();
+          // Seed/refresh the 30+ HTML5 mini-games library so any newly added
+          // game appears in admin + player UI on next boot without manual steps.
+          const arcadeSeed = await seedSoloGames();
+          log(`Arcade games seeded: inserted=${arcadeSeed.inserted}, refreshed=${arcadeSeed.skipped}, total=${arcadeSeed.total}`, "seed");
         } catch (error: unknown) {
           log(`Seed error: ${getErrorMessage(error)}`, "seed");
         }

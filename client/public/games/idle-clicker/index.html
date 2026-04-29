@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Idle Clicker</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.ic-coin{width:160px;height:160px;margin:14px auto;border-radius:50%;display:grid;place-items:center;cursor:pointer;
+background:radial-gradient(circle at 30% 25%,#fde047,#ffb627 50%,#a86b00);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -4px 0 rgba(0,0,0,.3),0 14px 30px -8px rgba(255,182,39,.6);
+font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#3a1f00;letter-spacing:.05em;user-select:none;transition:transform .08s}
+.ic-coin:active{transform:scale(.94)}
+.ic-shop{display:grid;grid-template-columns:1fr;gap:8px;width:100%;margin-top:10px}
+.ic-up{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.25));border:1px solid rgba(255,255,255,.10);cursor:pointer;transition:all .15s}
+.ic-up:not(.locked):hover{background:linear-gradient(180deg,rgba(255,182,39,.15),rgba(0,0,0,.25))}
+.ic-up.locked{opacity:.45;cursor:not-allowed}
+.ic-up-name{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:1.05rem;color:#fff}
+.ic-up-info{font-size:.7rem;color:var(--vex-text-dim);margin-top:2px}
+.ic-up-cost{font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:1.1rem;color:var(--vex-gold)}
+.ic-pop{position:absolute;font-family:'Bebas Neue',sans-serif;color:#ffb627;font-size:1.4rem;pointer-events:none;animation:vexScoreFloat 1s ease-out forwards}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge gold"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><text x="12" y="16" text-anchor="middle" font-size="11" fill="#3a1f00">$</text></svg></div><span id="title">عداد الكسب</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">إعادة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label" id="lblCoins">العملات</div><div class="vex-stat-value" id="coins">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblPerClick">/ضغطة</div><div class="vex-stat-value emerald" id="perClick">1</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblPerSec">/ثانية</div><div class="vex-stat-value blue" id="perSec">0</div></div></div>
+<div style="position:relative;width:100%;text-align:center" id="coinHolder"><div class="ic-coin" id="coin">+1</div></div>
+<div class="ic-shop" id="shop"></div>
+<div class="vex-hint" id="hint">اضغط العملة لتكسب. اشترِ ترقيات لتزيد دخلك.</div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'عداد الكسب',reset:'إعادة',coins:'العملات',perClick:'/ضغطة',perSec:'/ثانية',hint:'اضغط العملة لتكسب. اشترِ ترقيات.',
+ups:[{n:'إصبع قوي',d:'+1 لكل ضغطة'},{n:'كرسي مريح',d:'+1 كل ثانية'},{n:'مدير ذكي',d:'+5 كل ثانية'},{n:'مصنع آلي',d:'+25 كل ثانية'},{n:'إمبراطورية',d:'+150 كل ثانية'}]},
+en:{title:'Idle Clicker',reset:'Reset',coins:'Coins',perClick:'/click',perSec:'/sec',hint:'Tap the coin. Buy upgrades to grow.',
+ups:[{n:'Strong Finger',d:'+1 per click'},{n:'Comfy Chair',d:'+1 per sec'},{n:'Smart Manager',d:'+5 per sec'},{n:'Auto Factory',d:'+25 per sec'},{n:'Empire',d:'+150 per sec'}]}};
+let lang='ar';const $=id=>document.getElementById(id);
+const KEY='vex.idle-clicker.state';
+const UPS=[{cost:10,inc:1,type:'click'},{cost:50,inc:1,type:'sec'},{cost:300,inc:5,type:'sec'},{cost:1500,inc:25,type:'sec'},{cost:10000,inc:150,type:'sec'}];
+let st;
+function load(){try{st=JSON.parse(localStorage.getItem(KEY));if(!st||typeof st.coins!=='number')throw 0;}catch(e){st={coins:0,perClick:1,perSec:0,bought:[0,0,0,0,0]};}}
+function save(){localStorage.setItem(KEY,JSON.stringify(st));}
+function fmt(n){if(n>=1e9)return(n/1e9).toFixed(2)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(2)+'K';return Math.floor(n);}
+function renderShop(){const s=S[lang];const sh=$('shop');sh.innerHTML='';
+UPS.forEach((u,i)=>{const cost=Math.ceil(u.cost*Math.pow(1.3,st.bought[i]));const can=st.coins>=cost;
+const d=document.createElement('div');d.className='ic-up'+(can?'':' locked');
+d.innerHTML='<div><div class="ic-up-name">'+s.ups[i].n+' x'+st.bought[i]+'</div><div class="ic-up-info">'+s.ups[i].d+'</div></div><div class="ic-up-cost">'+fmt(cost)+'</div>';
+d.addEventListener('click',()=>{if(!can)return;st.coins-=cost;st.bought[i]++;if(u.type==='click')st.perClick+=u.inc;else st.perSec+=u.inc;save();render();});
+sh.appendChild(d);});}
+function render(){$('coins').textContent=fmt(st.coins);$('perClick').textContent=fmt(st.perClick);$('perSec').textContent=fmt(st.perSec);
+$('coin').textContent='+'+fmt(st.perClick);renderShop();}
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblCoins').textContent=s.coins;$('lblPerClick').textContent=s.perClick;$('lblPerSec').textContent=s.perSec;$('hint').textContent=s.hint;render();}
+$('coin').addEventListener('click',e=>{st.coins+=st.perClick;save();render();
+const p=document.createElement('div');p.className='ic-pop';p.style.left='50%';p.style.top='30%';p.style.transform='translateX(-50%)';p.textContent='+'+fmt(st.perClick);
+$('coinHolder').appendChild(p);setTimeout(()=>p.remove(),1000);});
+$('resetBtn').addEventListener('click',()=>{if(confirm(lang==='ar'?'صفّر اللعبة؟':'Reset everything?')){localStorage.removeItem(KEY);load();render();}});
+setInterval(()=>{if(st.perSec>0){st.coins+=st.perSec;save();render();}},1000);
+load();
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'idle-clicker',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();})();</script></body></html>

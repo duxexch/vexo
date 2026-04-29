@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX King Of The Hill</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.koh-board{position:relative;width:100%;max-width:340px;aspect-ratio:1;margin:14px auto;background:radial-gradient(circle at 50% 50%,rgba(255,182,39,.20),transparent 60%),linear-gradient(180deg,#0c1530,#040912);border:1px solid rgba(255,182,39,.30);border-radius:50%;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.koh-zone{display:grid;place-items:center;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:#fff;letter-spacing:.06em;user-select:none;transition:background .15s,transform .08s;border:1px solid rgba(255,255,255,.05)}
+.koh-zone:active{transform:scale(.96)}
+.koh-zone[data-p="1"]{background:linear-gradient(135deg,rgba(239,68,68,.20),rgba(127,29,29,.10))}
+.koh-zone[data-p="2"]{background:linear-gradient(225deg,rgba(59,130,246,.20),rgba(30,58,138,.10))}
+.koh-zone[data-p="3"]{background:linear-gradient(45deg,rgba(34,197,94,.20),rgba(20,83,45,.10))}
+.koh-zone[data-p="4"]{background:linear-gradient(315deg,rgba(168,85,247,.20),rgba(76,29,149,.10))}
+.koh-king{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:70px;height:70px;border-radius:50%;display:grid;place-items:center;font-size:2rem;background:linear-gradient(135deg,#fde047,#a86b00);box-shadow:0 0 30px rgba(255,182,39,.6),inset 0 -3px 0 rgba(0,0,0,.3)}
+.koh-pcount{display:flex;gap:6px;justify-content:center;margin-bottom:8px;flex-wrap:wrap}
+.koh-pcount button{padding:6px 14px;border-radius:99px;border:1px solid var(--vex-border);background:var(--vex-surface);color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;cursor:pointer;font-size:.9rem}
+.koh-pcount button.active{background:linear-gradient(135deg,#1e88ff,#0a4d9c);border-color:transparent}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge gold"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9l4 6 5-7 5 7 4-6v10H3z"/></svg></div><span id="title">ملك التل</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="koh-pcount" id="pCount"></div>
+<div class="vex-stats" id="stats"></div>
+<div class="koh-board" id="board"><div class="koh-king" id="king">👑</div></div>
+<div class="vex-hint" id="hint">اضغط جهتك بسرعة لتسرق التاج. كل ضغطة على جهتك = +1 نقطة. الأكثر بعد 30 ث يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9l4 6 5-7 5 7 4-6v10H3z"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const COLORS=['#ef4444','#3b82f6','#22c55e','#a855f7'];
+const NAMES_AR=['أحمر','أزرق','أخضر','بنفسجي'],NAMES_EN=['Red','Blue','Green','Purple'];
+const S={ar:{title:'ملك التل',reset:'جديدة',hint:'اضغط جهتك بسرعة. الأكثر بعد 30 ث يفوز.',time:'الزمن',win:n=>'فاز '+n+'!',sub:'الأعلى نقاطاً يحصد التاج'},
+en:{title:'King Of The Hill',reset:'New',hint:'Tap your zone fast. Most after 30s wins.',time:'Time',win:n=>n+' wins!',sub:'Highest score gets the crown'}};
+let lang='ar';const $=id=>document.getElementById(id);
+let nP=4,scores=[0,0,0,0],time=30,timer,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('hint').textContent=s.hint;renderStats();renderPCount();}
+function renderPCount(){const wrap=$('pCount');wrap.innerHTML='';[2,3,4].forEach(n=>{const b=document.createElement('button');b.textContent=n+(lang==='ar'?' لاعبين':' players');if(n===nP)b.classList.add('active');
+b.addEventListener('click',()=>{nP=n;reset();});wrap.appendChild(b);});}
+function renderStats(){const wrap=$('stats');wrap.innerHTML='';const names=lang==='ar'?NAMES_AR:NAMES_EN;wrap.style.gridTemplateColumns='repeat('+(nP+1)+',1fr)';
+for(let i=0;i<nP;i++){const d=document.createElement('div');d.className='vex-stat';d.innerHTML='<div class="vex-stat-label" style="color:'+COLORS[i]+'">'+names[i]+'</div><div class="vex-stat-value" style="color:'+COLORS[i]+'" id="sc'+i+'">'+scores[i]+'</div>';wrap.appendChild(d);}
+const t=document.createElement('div');t.className='vex-stat';t.innerHTML='<div class="vex-stat-label">'+S[lang].time+'</div><div class="vex-stat-value" id="time">'+time+'</div>';wrap.appendChild(t);}
+function renderBoard(){const b=$('board');b.querySelectorAll('.koh-zone').forEach(z=>z.remove());
+const layout=nP===2?[[0,'col / span 2'],[1,'col / span 2']]:nP===3?[[0,''],[1,''],[2,'col / span 2']]:[[0,''],[1,''],[2,''],[3,'']];
+for(let i=0;i<nP;i++){const z=document.createElement('div');z.className='koh-zone';z.dataset.p=i+1;z.textContent='P'+(i+1);
+if(nP===2)z.style.gridColumn='span 2';if(nP===3&&i===2)z.style.gridColumn='span 2';
+z.addEventListener('click',()=>tap(i));b.insertBefore(z,$('king'));}}
+function tap(i){if(!running)return;scores[i]++;$('sc'+i).textContent=scores[i];
+const k=$('king');k.style.transform='translate(-50%,-50%) scale(1.15)';setTimeout(()=>k.style.transform='translate(-50%,-50%) scale(1)',100);
+if(typeof VexGame!=='undefined'){const r=$('board').getBoundingClientRect();VexGame.popScore(document.body,'+1',r.left+r.width/2+'px',r.top+r.height/2+'px','');}}
+function reset(){scores=[0,0,0,0];time=30;running=true;
+$('endOverlay').classList.remove('show');renderStats();renderBoard();renderPCount();
+clearInterval(timer);timer=setInterval(()=>{if(!running)return;time--;$('time').textContent=time;if(time<=0)endGame();},1000);}
+function endGame(){running=false;clearInterval(timer);const max=Math.max(...scores.slice(0,nP));
+const winners=scores.slice(0,nP).map((s,i)=>s===max?i:-1).filter(i=>i>=0);const names=lang==='ar'?NAMES_AR:NAMES_EN;
+const winName=winners.length===1?names[winners[0]]:winners.map(i=>names[i]).join(' + ');
+$('endTitle').textContent=S[lang].win(winName);$('endSub').textContent=scores.slice(0,nP).map((s,i)=>names[i]+': '+s).join(' • ');
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:max,result:'win',metadata:{winners,scores:scores.slice(0,nP),players:nP}});}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'king-of-the-hill',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

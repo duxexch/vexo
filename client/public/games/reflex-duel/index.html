@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Reflex Duel</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.rd-arena{display:grid;grid-template-rows:1fr 1fr;gap:10px;width:100%;max-width:380px;margin:14px auto;height:340px}
+.rd-side{border-radius:16px;display:grid;place-items:center;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:.06em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);user-select:none;
+background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.35));border:2px solid rgba(255,255,255,.08);transition:background .15s,transform .08s,box-shadow .2s}
+.rd-side[data-state="wait"]{background:linear-gradient(180deg,#374151,#0f172a)}
+.rd-side[data-state="ready"]{background:linear-gradient(180deg,#dc2626,#7f1d1d)}
+.rd-side[data-state="go"]{background:linear-gradient(180deg,#22c55e,#14532d);box-shadow:0 0 40px -5px #22c55e}
+.rd-side[data-state="win"]{background:linear-gradient(180deg,#fbbf24,#7c2d12);box-shadow:0 0 40px -5px #ffb627}
+.rd-side[data-state="lose"]{background:linear-gradient(180deg,#7f1d1d,#0f172a)}
+.rd-side:active{transform:scale(.98)}
+.rd-side[dir]{transform:rotate(180deg)}.rd-side[dir] *{display:inline-block;transform:rotate(180deg)}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge" style="background:linear-gradient(135deg,#fbbf24,#7c2d12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 L4 13 h6 l-2 9 9-12 h-6 z"/></svg></div><span id="title">نزال رد الفعل</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label" id="lblL">لاعب 1</div><div class="vex-stat-value rose" id="winL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblRound">الجولة</div><div class="vex-stat-value" id="round">0/5</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblR">لاعب 2</div><div class="vex-stat-value blue" id="winR">0</div></div></div>
+<div class="rd-arena"><div class="rd-side" dir id="sideR" data-state="wait"><span id="textR">انتظر…</span></div><div class="rd-side" id="sideL" data-state="wait"><span id="textL">انتظر…</span></div></div>
+<div class="vex-hint" id="hint">عندما يتحوّل اللون للأخضر، اضغط أولاً لتفوز. الضغط المبكر يخسرك الجولة.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'نزال رد الفعل',reset:'جديدة',l:'لاعب 1',r:'لاعب 2',round:'الجولة',hint:'عند الأخضر، اضغط أولاً. المبكر يخسر.',wait:'انتظر…',ready:'استعد!',go:'اضغط!',early:'مبكر! خسرت',win:'فزت!',final:t=>'فاز '+(t==='L'?'اللاعب 1':t==='R'?'اللاعب 2':'')+'!',sub:(a,b)=>'الجولات '+a+' × '+b},
+en:{title:'Reflex Duel',reset:'New',l:'P1',r:'P2',round:'Round',hint:'On green, tap first. Early tap loses.',wait:'Wait…',ready:'Ready!',go:'TAP!',early:'Too early!',win:'You won!',final:t=>(t==='L'?'P1':t==='R'?'P2':'')+' wins!',sub:(a,b)=>'Rounds '+a+' × '+b}};
+let lang='ar';const $=id=>document.getElementById(id);const ROUNDS=5;
+let winL=0,winR=0,round=0,phase='wait',timer,startedAt,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblRound').textContent=s.round;$('hint').textContent=s.hint;
+if(phase==='wait'){$('textL').textContent=s.wait;$('textR').textContent=s.wait;}}
+function setBoth(state,text){['sideL','sideR'].forEach(id=>{$(id).dataset.state=state;});$('textL').textContent=text;$('textR').textContent=text;}
+function nextRound(){if(round>=ROUNDS)return endGame();round++;$('round').textContent=round+'/'+ROUNDS;
+phase='ready';setBoth('ready',S[lang].ready);
+const wait=900+Math.random()*2200;
+clearTimeout(timer);timer=setTimeout(()=>{if(!running)return;phase='go';startedAt=Date.now();setBoth('go',S[lang].go);},wait);}
+function tap(side){if(!running)return;
+if(phase==='ready'){phase='ended';clearTimeout(timer);
+const losingSide=side;const winningSide=side==='L'?'R':'L';
+$('side'+losingSide).dataset.state='lose';$('text'+losingSide).textContent=S[lang].early;
+$('side'+winningSide).dataset.state='win';$('text'+winningSide).textContent=S[lang].win;
+if(winningSide==='L'){winL++;$('winL').textContent=winL;}else{winR++;$('winR').textContent=winR;}
+setTimeout(nextRound,1400);}
+else if(phase==='go'){phase='ended';
+const winSide=side,loseSide=side==='L'?'R':'L';const ms=Date.now()-startedAt;
+$('side'+winSide).dataset.state='win';$('text'+winSide).textContent=ms+'ms ✓';
+$('side'+loseSide).dataset.state='lose';$('text'+loseSide).textContent='—';
+if(winSide==='L'){winL++;$('winL').textContent=winL;}else{winR++;$('winR').textContent=winR;}
+setTimeout(nextRound,1400);}}
+function endGame(){running=false;const w=winL>winR?'L':winR>winL?'R':null;
+$('endTitle').textContent=w?S[lang].final(w):(lang==='ar'?'تعادل':'Draw');$('endSub').textContent=S[lang].sub(winL,winR);
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(winL,winR),result:w?'win':'tie',metadata:{winner:w,L:winL,R:winR}});}
+function reset(){winL=0;winR=0;round=0;running=true;
+$('winL').textContent=0;$('winR').textContent=0;$('round').textContent='0/'+ROUNDS;$('endOverlay').classList.remove('show');setBoth('wait',S[lang].wait);
+setTimeout(nextRound,400);}
+$('sideL').addEventListener('click',()=>tap('L'));$('sideR').addEventListener('click',()=>tap('R'));
+window.addEventListener('keydown',e=>{if(e.key==='a'||e.key==='A')tap('L');if(e.key==='l'||e.key==='L')tap('R');});
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'reflex-duel',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Fast Click Arena</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.fca-grid{display:grid;gap:10px;width:100%;max-width:380px;margin:14px auto}
+.fca-zone{padding:14px;border-radius:14px;border:2px solid rgba(255,255,255,.10);text-align:center;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.30))}
+.fca-name{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.06em;margin-bottom:6px}
+.fca-cnt{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;line-height:1;color:var(--vex-gold);text-shadow:0 0 14px rgba(255,182,39,.5);margin-bottom:8px}
+.fca-tap{width:100%;padding:24px 0;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em;border:none;border-radius:12px;color:#fff;cursor:pointer;
+box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 6px 0 #050912;transition:transform .04s}
+.fca-tap:active{transform:translateY(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 0 #050912}
+.fca-pc{display:flex;gap:6px;justify-content:center;margin-bottom:8px;flex-wrap:wrap}
+.fca-pc button{padding:6px 14px;border-radius:99px;border:1px solid var(--vex-border);background:var(--vex-surface);color:#fff;font-family:'Bebas Neue',sans-serif;cursor:pointer;font-size:.9rem}
+.fca-pc button.active{background:linear-gradient(135deg,#1e88ff,#0a4d9c);border-color:transparent}
+.fca-bar{width:100%;height:8px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden}
+.fca-fill{height:100%;background:linear-gradient(90deg,#22c55e,#fde047);transition:width .12s}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge rose"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l-5 9 9-5 5 5 5-5-5-5L13 5z"/></svg></div><span id="title">حلبة النقر السريع</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="fca-pc" id="pCount"></div>
+<div class="vex-stats"><div class="vex-stat" style="grid-column:1/-1"><div class="vex-stat-label" id="lblTime">الزمن المتبقي</div><div class="vex-stat-value" id="time">15</div><div class="fca-bar" style="margin-top:6px"><div class="fca-fill" id="bar" style="width:100%"></div></div></div></div>
+<div class="fca-grid" id="grid"></div>
+<div class="vex-hint" id="hint">انقر زرّك بأقصى سرعة في 15 ثانية. الأكثر نقرات يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const COLORS=[{n:'أحمر',e:'Red',c:'linear-gradient(180deg,#f87171,#7f1d1d)'},{n:'أزرق',e:'Blue',c:'linear-gradient(180deg,#60a5fa,#1e3a8a)'},{n:'أخضر',e:'Green',c:'linear-gradient(180deg,#4ade80,#14532d)'},{n:'بنفسجي',e:'Purple',c:'linear-gradient(180deg,#c084fc,#4c1d95)'}];
+const S={ar:{title:'حلبة النقر السريع',reset:'جديدة',hint:'انقر زرّك بأقصى سرعة في 15 ثانية.',time:'الزمن المتبقي',tap:'اضغط!',win:n=>'فاز '+n+'!'},
+en:{title:'Fast Click Arena',reset:'New',hint:'Tap your button as fast as you can for 15s.',time:'Time left',tap:'TAP!',win:n=>n+' wins!'}};
+let lang='ar';const $=id=>document.getElementById(id);const DUR=15;
+let nP=4,scores=[0,0,0,0],time=DUR,timer,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('hint').textContent=s.hint;$('lblTime').textContent=s.time;renderPCount();renderGrid();}
+function renderPCount(){const wrap=$('pCount');wrap.innerHTML='';[2,3,4].forEach(n=>{const b=document.createElement('button');b.textContent=n+(lang==='ar'?' لاعبين':' players');if(n===nP)b.classList.add('active');
+b.addEventListener('click',()=>{nP=n;reset();});wrap.appendChild(b);});}
+function renderGrid(){const g=$('grid');g.innerHTML='';g.style.gridTemplateColumns=nP===2?'1fr 1fr':nP===3?'1fr 1fr 1fr':'1fr 1fr';
+const names=lang==='ar'?COLORS.map(c=>c.n):COLORS.map(c=>c.e);
+for(let i=0;i<nP;i++){const z=document.createElement('div');z.className='fca-zone';
+z.innerHTML='<div class="fca-name">'+names[i]+'</div><div class="fca-cnt" id="sc'+i+'">'+scores[i]+'</div>';
+const b=document.createElement('button');b.className='fca-tap';b.style.background=COLORS[i].c;b.textContent=S[lang].tap;b.addEventListener('click',()=>tap(i));z.appendChild(b);g.appendChild(z);}}
+function tap(i){if(!running)return;scores[i]++;$('sc'+i).textContent=scores[i];}
+function endGame(){running=false;clearInterval(timer);const max=Math.max(...scores.slice(0,nP));const winners=scores.slice(0,nP).map((s,i)=>s===max?i:-1).filter(i=>i>=0);
+const names=lang==='ar'?COLORS.map(c=>c.n):COLORS.map(c=>c.e);const wn=winners.length===1?names[winners[0]]:winners.map(i=>names[i]).join(' + ');
+$('endTitle').textContent=S[lang].win(wn);$('endSub').textContent=scores.slice(0,nP).map((s,i)=>names[i]+': '+s).join(' • ');
+setTimeout(()=>$('endOverlay').classList.add('show'),300);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:max,result:'win',metadata:{winners,scores:scores.slice(0,nP),players:nP}});}
+function reset(){scores=[0,0,0,0];time=DUR;running=true;$('time').textContent=time;$('bar').style.width='100%';$('endOverlay').classList.remove('show');renderPCount();renderGrid();
+clearInterval(timer);timer=setInterval(()=>{if(!running)return;time--;$('time').textContent=time;$('bar').style.width=(time/DUR*100)+'%';if(time<=0)endGame();},1000);}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'fast-click-arena',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

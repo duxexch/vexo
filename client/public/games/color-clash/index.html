@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Color Clash</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.cc-arena{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px auto;width:100%;max-width:380px}
+.cc-side{aspect-ratio:.85;border-radius:16px;display:grid;place-items:center;font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#fff;letter-spacing:.06em;cursor:pointer;
+background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.30));border:2px solid rgba(255,255,255,.10);
+text-shadow:0 2px 8px rgba(0,0,0,.7);user-select:none;transition:transform .08s,box-shadow .15s}
+.cc-side:active{transform:scale(.97)}
+.cc-side.flash{animation:vexShake .25s}
+.cc-side.lwin{box-shadow:inset 0 0 0 4px #22c55e,0 0 30px rgba(34,197,94,.4)}
+.cc-side.lose{box-shadow:inset 0 0 0 4px #ef4444}
+.cc-target{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.06em;text-align:center;padding:12px;border-radius:12px;background:var(--vex-surface);border:1px solid var(--vex-border);margin:8px 0;color:var(--vex-gold);text-shadow:0 0 14px rgba(255,182,39,.5)}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge" style="background:linear-gradient(135deg,#a855f7,#ef4444)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 C7 7 4 11 4 15a8 8 0 0 0 16 0c0-4-3-8-8-13Z"/></svg></div><span id="title">صدام الألوان</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label rose" id="lblL">اللاعب 1</div><div class="vex-stat-value rose" id="scoreL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblRound">الجولة</div><div class="vex-stat-value" id="round">1/10</div></div><div class="vex-stat"><div class="vex-stat-label blue" id="lblR">اللاعب 2</div><div class="vex-stat-value blue" id="scoreR">0</div></div></div>
+<div class="cc-target" id="target">جهّز…</div>
+<div class="cc-arena"><div class="cc-side" id="sideL">A</div><div class="cc-side" id="sideR">L</div></div>
+<div class="vex-hint" id="hint">عند ظهور لون مطابق، اللاعب الأول الذي يضغط زرّه يكسب نقطة. الضغط على لون خاطئ يفقدك نقطة.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">انتهت!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const COLORS=[{n:'أحمر',e:'RED',c:'#ef4444'},{n:'أزرق',e:'BLUE',c:'#3b82f6'},{n:'أخضر',e:'GREEN',c:'#22c55e'},{n:'ذهبي',e:'GOLD',c:'#fbbf24'},{n:'بنفسجي',e:'PURPLE',c:'#a855f7'}];
+const S={ar:{title:'صدام الألوان',reset:'جديدة',l:'اللاعب 1',r:'اللاعب 2',round:'الجولة',hint:'اضغط زرّك عند ظهور اللون المطلوب. الخطأ يخصم نقطة.',ready:'جهّز…',win:t=>'فاز '+(t==='L'?'اللاعب 1':t==='R'?'اللاعب 2':'')+'!',draw:'تعادل',target:n=>'اللون: '+n},
+en:{title:'Color Clash',reset:'New',l:'Player 1',r:'Player 2',round:'Round',hint:'Tap your side when the target color shows.',ready:'Get ready…',win:t=>(t==='L'?'Player 1':t==='R'?'Player 2':'')+' wins!',draw:'Draw',target:n=>'Target: '+n}};
+let lang='ar';const $=id=>document.getElementById(id);
+let scoreL=0,scoreR=0,round=0,target=null,colorL=null,colorR=null,timer,running;
+const ROUNDS=10;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblRound').textContent=s.round;
+$('hint').textContent=s.hint;}
+function paint(){const sl=$('sideL'),sr=$('sideR');sl.style.background='linear-gradient(180deg,'+colorL.c+'aa,'+colorL.c+'66)';sr.style.background='linear-gradient(180deg,'+colorR.c+'aa,'+colorR.c+'66)';
+sl.textContent=lang==='ar'?colorL.n:colorL.e;sr.textContent=lang==='ar'?colorR.n:colorR.e;
+$('target').textContent=S[lang].target(lang==='ar'?target.n:target.e);$('target').style.color=target.c;}
+function nextRound(){if(round>=ROUNDS)return endGame();round++;$('round').textContent=round+'/'+ROUNDS;
+$('target').textContent=S[lang].ready;
+setTimeout(()=>{if(!running)return;target=COLORS[Math.floor(Math.random()*COLORS.length)];
+const matchL=Math.random()<.5,matchR=Math.random()<.5;
+colorL=matchL?target:COLORS.filter(c=>c!==target)[Math.floor(Math.random()*(COLORS.length-1))];
+colorR=matchR?target:COLORS.filter(c=>c!==target)[Math.floor(Math.random()*(COLORS.length-1))];
+paint();},700+Math.random()*1100);}
+function tap(side){if(!running||!target||!colorL||!colorR)return;const my=side==='L'?colorL:colorR;
+const correct=my===target;
+if(correct){if(side==='L'){scoreL++;$('scoreL').textContent=scoreL;$('sideL').classList.add('lwin');}else{scoreR++;$('scoreR').textContent=scoreR;$('sideR').classList.add('lwin');}
+target=null;setTimeout(()=>{document.querySelectorAll('.cc-side').forEach(x=>x.classList.remove('lwin'));nextRound();},500);}
+else{if(side==='L'){scoreL=Math.max(0,scoreL-1);$('scoreL').textContent=scoreL;$('sideL').classList.add('lose');}else{scoreR=Math.max(0,scoreR-1);$('scoreR').textContent=scoreR;$('sideR').classList.add('lose');}
+setTimeout(()=>document.querySelectorAll('.cc-side').forEach(x=>x.classList.remove('lose')),300);}}
+function endGame(){running=false;const w=scoreL>scoreR?'L':scoreR>scoreL?'R':null;
+$('endTitle').textContent=w?S[lang].win(w):S[lang].draw;$('endSub').textContent=scoreL+' × '+scoreR;
+setTimeout(()=>$('endOverlay').classList.add('show'),300);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(scoreL,scoreR),result:w?'win':'tie',metadata:{winner:w,L:scoreL,R:scoreR}});}
+function reset(){scoreL=0;scoreR=0;round=0;running=true;target=null;colorL=null;colorR=null;
+$('scoreL').textContent=0;$('scoreR').textContent=0;$('round').textContent='0/'+ROUNDS;$('endOverlay').classList.remove('show');
+$('sideL').style.background='';$('sideR').style.background='';$('sideL').textContent='A';$('sideR').textContent='L';nextRound();}
+$('sideL').addEventListener('click',()=>tap('L'));$('sideR').addEventListener('click',()=>tap('R'));
+window.addEventListener('keydown',e=>{if(e.key==='a'||e.key==='A')tap('L');if(e.key==='l'||e.key==='L')tap('R');});
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'color-clash',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

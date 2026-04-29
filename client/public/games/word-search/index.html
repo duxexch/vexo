@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Word Search</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.ws-board{background:linear-gradient(180deg,#0c1530,#040912);border:1px solid rgba(34,197,94,.30);border-radius:14px;padding:6px;width:100%;max-width:340px;margin:0 auto;user-select:none}
+.ws-grid{display:grid;gap:2px}
+.ws-cell{aspect-ratio:1;display:grid;place-items:center;border-radius:6px;background:rgba(255,255,255,.06);font-family:'Bebas Neue',sans-serif;font-size:1rem;color:#dbeafe;cursor:pointer;transition:background .1s}
+.ws-cell.sel{background:rgba(255,182,39,.35);color:#fff}
+.ws-cell.found{background:rgba(34,197,94,.35);color:#fff}
+.ws-words{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;justify-content:center;width:100%}
+.ws-word{padding:4px 10px;border-radius:99px;background:var(--vex-surface);border:1px solid var(--vex-border);font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:.85rem;color:var(--vex-text)}
+.ws-word.found{background:linear-gradient(135deg,#22c55e,#14532d);color:#fff;text-decoration:line-through;border-color:transparent}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge emerald"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div><span id="title">بحث الكلمات</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label" id="lblFound">وجدت</div><div class="vex-stat-value emerald" id="found">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblTotal">المجموع</div><div class="vex-stat-value" id="total">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblTime">الزمن</div><div class="vex-stat-value blue" id="time">0</div></div></div>
+<div class="ws-board"><div class="ws-grid" id="grid"></div></div>
+<div class="ws-words" id="words"></div>
+<div class="vex-hint" id="hint">اسحب أو اضغط على الحروف لتشكيل الكلمة. الكلمات أفقية أو عمودية.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">أحسنت!</div><div class="vex-overlay-subtitle" id="endSub">وجدت كل الكلمات.</div><div class="vex-overlay-stats"><div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFT">الزمن</div><div class="vex-overlay-stat-value" id="finalT">0</div></div><div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFW">الكلمات</div><div class="vex-overlay-stat-value" id="finalW">0</div></div></div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'بحث الكلمات',reset:'جديدة',found:'وجدت',total:'المجموع',time:'الزمن',end:'أحسنت!',endSub:'وجدت كل الكلمات.',newRound:'جولة جديدة',hint:'اسحب أو اضغط الحروف.',
+banks:[['شمس','قمر','نجم','كوكب','مدار','فلك','ضوء','ليل'],['كتاب','قلم','ورق','مكتبة','درس','علم','قراءة','بحث'],['تفاح','موز','عنب','رمان','ليمون','فراولة','بطيخ','مانجو']]},
+en:{title:'Word Search',reset:'New',found:'Found',total:'Total',time:'Time',end:'Great!',endSub:'Found all words.',newRound:'New game',hint:'Drag or tap letters.',
+banks:[['SUN','MOON','STAR','PLANET','ORBIT','LIGHT','NIGHT','SPACE'],['BOOK','PEN','PAPER','LIBRARY','CLASS','STUDY','READ','LEARN'],['APPLE','BANANA','GRAPE','LEMON','PEACH','MELON','MANGO','BERRY']]}};
+let lang='ar';const $=id=>document.getElementById(id);const N=10;
+let grid,words,foundSet,startedAt,timer,sel=[];
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblFound').textContent=s.found;$('lblTotal').textContent=s.total;$('lblTime').textContent=s.time;
+$('hint').textContent=s.hint;$('endTitle').textContent=s.end;$('endSub').textContent=s.endSub;$('endRestart').textContent=s.newRound;$('lblFT').textContent=s.time;$('lblFW').textContent=s.found;}
+function place(w){for(let tries=0;tries<60;tries++){const horiz=Math.random()<.5;const len=w.length;
+const r=Math.floor(Math.random()*(horiz?N:N-len+1));const c=Math.floor(Math.random()*(horiz?N-len+1:N));let ok=true;
+for(let i=0;i<len;i++){const rr=r+(horiz?0:i),cc=c+(horiz?i:0);if(grid[rr][cc]&&grid[rr][cc]!==w[i]){ok=false;break;}}
+if(ok){for(let i=0;i<len;i++){const rr=r+(horiz?0:i),cc=c+(horiz?i:0);grid[rr][cc]=w[i];}return true;}}return false;}
+function buildGrid(){const s=S[lang];const bank=s.banks[Math.floor(Math.random()*s.banks.length)].slice();bank.sort(()=>Math.random()-.5);
+words=bank.slice(0,6);grid=Array.from({length:N},()=>Array(N).fill(''));
+for(const w of words)place(w.replace(/\s/g,''));
+const letters=lang==='ar'?'ابتثجحخدذرزسشصضطظعغفقكلمنهوي':'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!grid[r][c])grid[r][c]=letters[Math.floor(Math.random()*letters.length)];}
+function render(){const g=$('grid');g.style.gridTemplateColumns='repeat('+N+',1fr)';g.innerHTML='';
+for(let r=0;r<N;r++)for(let c=0;c<N;c++){const d=document.createElement('div');d.className='ws-cell';d.dataset.r=r;d.dataset.c=c;d.textContent=grid[r][c];g.appendChild(d);}
+const wrap=$('words');wrap.innerHTML='';words.forEach(w=>{const d=document.createElement('div');d.className='ws-word'+(foundSet.has(w)?' found':'');d.textContent=w;d.dataset.w=w;wrap.appendChild(d);});
+$('total').textContent=words.length;$('found').textContent=foundSet.size;}
+function clearSel(){document.querySelectorAll('.ws-cell.sel').forEach(c=>c.classList.remove('sel'));sel=[];}
+function tryWord(){if(sel.length<2){clearSel();return;}
+const dr=Math.sign(sel[1].r-sel[0].r),dc=Math.sign(sel[1].c-sel[0].c);
+let valid=true;for(let i=1;i<sel.length;i++){if(sel[i].r-sel[i-1].r!==dr||sel[i].c-sel[i-1].c!==dc){valid=false;break;}}
+if(!valid){clearSel();return;}
+const word=sel.map(p=>grid[p.r][p.c]).join('');const rev=word.split('').reverse().join('');
+const match=words.find(w=>!foundSet.has(w)&&(w===word||w===rev));
+if(match){foundSet.add(match);sel.forEach(p=>{const el=document.querySelector('.ws-cell[data-r="'+p.r+'"][data-c="'+p.c+'"]');if(el){el.classList.remove('sel');el.classList.add('found');}});
+sel=[];$('found').textContent=foundSet.size;document.querySelectorAll('.ws-word').forEach(w=>{if(w.dataset.w===match)w.classList.add('found');});
+if(typeof VexGame!=='undefined'){const r=document.querySelector('.ws-board').getBoundingClientRect();VexGame.popScore(document.body,'+'+match.length,r.left+r.width/2+'px',r.top+10+'px','');}
+if(foundSet.size===words.length)win();}else{clearSel();}}
+function win(){clearInterval(timer);const t=(Date.now()-startedAt)/1000;
+$('finalT').textContent=t.toFixed(1);$('finalW').textContent=foundSet.size;
+setTimeout(()=>$('endOverlay').classList.add('show'),300);
+if(typeof VexGame!=='undefined'){const score=Math.max(50,Math.floor(1500-t*5));VexGame.endSession({score,result:'win',metadata:{seconds:t}});}}
+let down=false;
+function cellAt(e){const x=e.touches?e.touches[0].clientX:e.clientX,y=e.touches?e.touches[0].clientY:e.clientY;
+const el=document.elementFromPoint(x,y);return el&&el.classList&&el.classList.contains('ws-cell')?el:null;}
+$('grid').addEventListener('mousedown',e=>{down=true;clearSel();const c=cellAt(e);if(c){sel=[{r:+c.dataset.r,c:+c.dataset.c}];c.classList.add('sel');}});
+$('grid').addEventListener('mousemove',e=>{if(!down)return;const c=cellAt(e);if(!c)return;const r=+c.dataset.r,cc=+c.dataset.c;
+if(sel.some(p=>p.r===r&&p.c===cc))return;sel.push({r,c:cc});c.classList.add('sel');});
+window.addEventListener('mouseup',()=>{if(down){down=false;tryWord();}});
+$('grid').addEventListener('touchstart',e=>{e.preventDefault();down=true;clearSel();const c=cellAt(e);if(c){sel=[{r:+c.dataset.r,c:+c.dataset.c}];c.classList.add('sel');}},{passive:false});
+$('grid').addEventListener('touchmove',e=>{if(!down)return;e.preventDefault();const c=cellAt(e);if(!c)return;const r=+c.dataset.r,cc=+c.dataset.c;
+if(sel.some(p=>p.r===r&&p.c===cc))return;sel.push({r,c:cc});c.classList.add('sel');},{passive:false});
+window.addEventListener('touchend',()=>{if(down){down=false;tryWord();}});
+function reset(){foundSet=new Set();buildGrid();render();startedAt=Date.now();$('time').textContent=0;$('endOverlay').classList.remove('show');
+clearInterval(timer);timer=setInterval(()=>{$('time').textContent=((Date.now()-startedAt)/1000).toFixed(1)},100);}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'word-search',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();reset();}});}
+applyLang();reset();})();</script></body></html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Number Guess Duel</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.ng-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:300px;margin:10px auto}
+.ng-key{aspect-ratio:1.4;display:grid;place-items:center;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#fff;cursor:pointer;
+background:linear-gradient(180deg,#3b4a6e,#1a2342);border:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #050912;transition:transform .06s,box-shadow .06s}
+.ng-key:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 0 #050912}
+.ng-display{padding:18px;font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:.08em;text-align:center;color:var(--vex-gold);background:var(--vex-surface);border:1px solid var(--vex-border);border-radius:14px;margin:14px 0;text-shadow:0 0 16px rgba(255,182,39,.4)}
+.ng-hist{display:flex;flex-direction:column;gap:4px;width:100%;margin-top:8px;max-height:140px;overflow-y:auto}
+.ng-hist-row{display:flex;justify-content:space-between;padding:6px 12px;border-radius:8px;background:var(--vex-surface);font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;font-size:.95rem}
+.ng-hist-row.l{border-right:3px solid #ef4444}.ng-hist-row.r{border-right:3px solid #3b82f6}
+.ng-turn{padding:8px 16px;border-radius:99px;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:1.1rem;text-align:center;width:fit-content;margin:0 auto 10px}
+.ng-turn.l{background:linear-gradient(135deg,#ef4444,#7f1d1d);color:#fff}.ng-turn.r{background:linear-gradient(135deg,#3b82f6,#1e3a8a);color:#fff}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M12 5v14"/></svg></div><span id="title">تخمين العدد</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label rose" id="lblL">اللاعب 1</div><div class="vex-stat-value rose" id="winsL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblRange">المجال</div><div class="vex-stat-value" id="range">1-100</div></div><div class="vex-stat"><div class="vex-stat-label blue" id="lblR">اللاعب 2</div><div class="vex-stat-value blue" id="winsR">0</div></div></div>
+<div class="ng-turn l" id="turn">دور اللاعب 1</div>
+<div class="ng-display" id="display">—</div>
+<div class="ng-pad" id="pad"></div>
+<div class="ng-hist" id="hist"></div>
+<div class="vex-hint" id="hint">يتناوب اللاعبان على التخمين. أول من يصيب الرقم السري يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">فاز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'تخمين العدد',reset:'جديدة',l:'اللاعب 1',r:'اللاعب 2',range:'المجال',hint:'يتناوب اللاعبان على التخمين. أول من يصيب يفوز.',
+turn:t=>'دور '+(t==='L'?'اللاعب 1':'اللاعب 2'),hi:'أعلى',lo:'أقل',win:t=>'فاز '+(t==='L'?'اللاعب 1':'اللاعب 2')+'!',sub:n=>'الرقم السري كان '+n,clear:'مسح',ok:'تخمين'},
+en:{title:'Number Duel',reset:'New',l:'Player 1',r:'Player 2',range:'Range',hint:'Players alternate guesses. First to hit wins.',
+turn:t=>(t==='L'?'Player 1':'Player 2')+"'s turn",hi:'Higher',lo:'Lower',win:t=>(t==='L'?'Player 1':'Player 2')+' wins!',sub:n=>'Secret was '+n,clear:'Clear',ok:'Guess'}};
+let lang='ar';const $=id=>document.getElementById(id);
+let secret,buf,turn,winsL=0,winsR=0,lo,hi,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblRange').textContent=s.range;
+$('hint').textContent=s.hint;$('turn').textContent=s.turn(turn);buildPad();}
+function buildPad(){const pad=$('pad');pad.innerHTML='';const keys=['1','2','3','4','5','6','7','8','9',S[lang].clear,'0',S[lang].ok];
+keys.forEach(k=>{const b=document.createElement('button');b.className='ng-key';b.textContent=k;
+b.addEventListener('click',()=>{if(!running)return;if(k===S[lang].clear){buf='';$('display').textContent='—';}
+else if(k===S[lang].ok)submit();else{if(buf.length<3)buf+=k;$('display').textContent=buf||'—';}});
+pad.appendChild(b);});}
+function reset(){secret=Math.floor(Math.random()*100)+1;buf='';turn='L';lo=1;hi=100;running=true;
+$('display').textContent='—';$('range').textContent=lo+'-'+hi;$('hist').innerHTML='';$('turn').textContent=S[lang].turn(turn);$('turn').className='ng-turn '+turn.toLowerCase();
+$('endOverlay').classList.remove('show');$('winsL').textContent=winsL;$('winsR').textContent=winsR;}
+function submit(){const n=parseInt(buf,10);if(!buf||isNaN(n)||n<1||n>100)return;
+const row=document.createElement('div');row.className='ng-hist-row '+turn.toLowerCase();
+let hint='';if(n===secret)hint='✓';else if(n<secret){hint='↑ '+S[lang].hi;if(n+1>lo)lo=n+1;}else{hint='↓ '+S[lang].lo;if(n-1<hi)hi=n-1;}
+row.innerHTML='<span>'+n+'</span><span>'+hint+'</span>';$('hist').prepend(row);
+$('range').textContent=lo+'-'+hi;buf='';$('display').textContent='—';
+if(n===secret){running=false;if(turn==='L')winsL++;else winsR++;$('winsL').textContent=winsL;$('winsR').textContent=winsR;
+$('endTitle').textContent=S[lang].win(turn);$('endSub').textContent=S[lang].sub(secret);
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(1,11-($('hist').children.length)),result:'win',metadata:{winner:turn,secret}});return;}
+turn=turn==='L'?'R':'L';$('turn').textContent=S[lang].turn(turn);$('turn').className='ng-turn '+turn.toLowerCase();}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'number-guess-duel',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

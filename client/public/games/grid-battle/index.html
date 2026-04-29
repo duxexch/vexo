@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Grid Battle</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.gb-grid{display:grid;gap:4px;width:100%;max-width:340px;margin:14px auto;padding:8px;background:var(--vex-surface);border:1px solid var(--vex-border);border-radius:14px}
+.gb-cell{aspect-ratio:1;border-radius:8px;background:rgba(255,255,255,.05);cursor:pointer;display:grid;place-items:center;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:#fff;transition:transform .12s,background .15s}
+.gb-cell:not(.taken):hover{background:rgba(255,255,255,.12);transform:scale(1.04)}
+.gb-cell.l{background:linear-gradient(135deg,#ef4444,#7f1d1d);box-shadow:inset 0 1px 0 rgba(255,255,255,.20),inset 0 -2px 0 rgba(0,0,0,.45)}
+.gb-cell.r{background:linear-gradient(135deg,#3b82f6,#1e3a8a);box-shadow:inset 0 1px 0 rgba(255,255,255,.20),inset 0 -2px 0 rgba(0,0,0,.45)}
+.gb-turn{padding:8px 16px;border-radius:99px;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:1.1rem;text-align:center;width:fit-content;margin:0 auto 8px}
+.gb-turn.l{background:linear-gradient(135deg,#ef4444,#7f1d1d);color:#fff}.gb-turn.r{background:linear-gradient(135deg,#3b82f6,#1e3a8a);color:#fff}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge rose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><span id="title">معركة الشبكة</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label rose" id="lblL">أحمر</div><div class="vex-stat-value rose" id="scoreL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblFree">المتبقي</div><div class="vex-stat-value" id="free">36</div></div><div class="vex-stat"><div class="vex-stat-label blue" id="lblR">أزرق</div><div class="vex-stat-value blue" id="scoreR">0</div></div></div>
+<div class="gb-turn l" id="turn">دور أحمر</div>
+<div class="gb-grid" id="grid"></div>
+<div class="vex-hint" id="hint">يتناوب اللاعبان. كل خانة محتلة تجاور خانة الخصم تَقلب لون الخصم.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const N=6;
+const S={ar:{title:'معركة الشبكة',reset:'جديدة',l:'أحمر',r:'أزرق',free:'المتبقي',hint:'يتناوب اللاعبان. كل خانة تجاور خانة الخصم تقلبه.',turn:t=>'دور '+(t==='L'?'أحمر':'أزرق'),win:t=>(t==='L'?'أحمر':'أزرق')+' فاز!',draw:'تعادل',sub:(a,b)=>'النتيجة '+a+' × '+b},
+en:{title:'Grid Battle',reset:'New',l:'Red',r:'Blue',free:'Left',hint:'Alternate turns. Adjacent enemy cells flip when surrounded.',turn:t=>(t==='L'?'Red':'Blue')+" turn",win:t=>(t==='L'?'Red':'Blue')+' wins!',draw:'Draw',sub:(a,b)=>'Score '+a+' × '+b}};
+let lang='ar';const $=id=>document.getElementById(id);
+let board,turn,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblFree').textContent=s.free;
+$('hint').textContent=s.hint;$('turn').textContent=s.turn(turn);}
+function counts(){let l=0,r=0,f=0;for(let y=0;y<N;y++)for(let x=0;x<N;x++){const v=board[y][x];if(v==='L')l++;else if(v==='R')r++;else f++;}return{l,r,f};}
+function update(){const c=counts();$('scoreL').textContent=c.l;$('scoreR').textContent=c.r;$('free').textContent=c.f;
+if(c.f===0||(c.l===0&&c.r>0)||(c.r===0&&c.l>0))endGame(c);}
+function flipNeighbors(x,y,me){const opp=me==='L'?'R':'L';let flipped=0;
+[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=N||ny>=N)return;
+if(board[ny][nx]===opp){let mySides=0;[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx2,dy2])=>{const mx=nx+dx2,my=ny+dy2;
+if(mx>=0&&my>=0&&mx<N&&my<N&&board[my][mx]===me)mySides++;});if(mySides>=2){board[ny][nx]=me;flipped++;}});return flipped;}
+function render(){const g=$('grid');g.style.gridTemplateColumns='repeat('+N+',1fr)';g.innerHTML='';
+for(let y=0;y<N;y++)for(let x=0;x<N;x++){const c=document.createElement('div');c.className='gb-cell';
+if(board[y][x]==='L')c.classList.add('l','taken');else if(board[y][x]==='R')c.classList.add('r','taken');
+c.addEventListener('click',()=>tap(x,y));g.appendChild(c);}}
+function tap(x,y){if(!running||board[y][x])return;board[y][x]=turn;flipNeighbors(x,y,turn);
+if(typeof VexGame!=='undefined'){const r=$('grid').getBoundingClientRect();const cw=r.width/N;
+VexGame.popScore(document.body,'+1',r.left+x*cw+cw/2+'px',r.top+y*cw+cw/2+'px',turn==='L'?'rose':'blue');}
+turn=turn==='L'?'R':'L';render();$('turn').textContent=S[lang].turn(turn);$('turn').className='gb-turn '+turn.toLowerCase();update();}
+function endGame(c){running=false;const winner=c.l>c.r?'L':c.r>c.l?'R':null;
+$('endTitle').textContent=winner?S[lang].win(winner):S[lang].draw;$('endSub').textContent=S[lang].sub(c.l,c.r);
+setTimeout(()=>$('endOverlay').classList.add('show'),250);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(c.l,c.r),result:winner?'win':'tie',metadata:{winner,L:c.l,R:c.r}});}
+function reset(){board=Array.from({length:N},()=>Array(N).fill(''));turn=Math.random()<.5?'L':'R';running=true;
+$('endOverlay').classList.remove('show');$('turn').className='gb-turn '+turn.toLowerCase();$('turn').textContent=S[lang].turn(turn);render();update();}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'grid-battle',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

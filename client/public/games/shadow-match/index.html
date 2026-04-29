@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Shadow Match</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.sm-target{display:grid;place-items:center;width:120px;height:120px;margin:14px auto;background:var(--vex-surface);border:1px solid var(--vex-border);border-radius:16px}
+.sm-shadow{filter:brightness(0)}
+.sm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;width:100%;max-width:380px;margin:0 auto}
+.sm-side{padding:12px;border-radius:14px;border:2px solid rgba(255,255,255,.10);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.30))}
+.sm-side.l{border-color:rgba(239,68,68,.30)}.sm-side.r{border-color:rgba(30,136,255,.30)}
+.sm-name{font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:.06em;text-align:center;margin-bottom:6px}
+.sm-name.l{color:#fca5a5}.sm-name.r{color:#93c5fd}
+.sm-opts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sm-opt{aspect-ratio:1;display:grid;place-items:center;background:rgba(255,255,255,.06);border-radius:10px;cursor:pointer;border:none;color:#fff;transition:transform .08s,background .15s}
+.sm-opt:hover{background:rgba(255,255,255,.12)}
+.sm-opt:active{transform:scale(.94)}
+.sm-opt.right{background:linear-gradient(135deg,#22c55e,#14532d)!important}
+.sm-opt.wrong{background:linear-gradient(135deg,#ef4444,#7f1d1d)!important;animation:vexShake .3s}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge" style="background:linear-gradient(135deg,#94a3b8,#1e293b)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l-9 9h3v8h12v-8h3z"/></svg></div><span id="title">طابق الظل</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label rose" id="lblL">لاعب 1</div><div class="vex-stat-value rose" id="scoreL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblRound">الجولة</div><div class="vex-stat-value" id="round">0/8</div></div><div class="vex-stat"><div class="vex-stat-label blue" id="lblR">لاعب 2</div><div class="vex-stat-value blue" id="scoreR">0</div></div></div>
+<div class="sm-target" id="target"></div>
+<div class="sm-grid"><div class="sm-side l"><div class="sm-name l" id="nameL">اللاعب 1</div><div class="sm-opts" id="optsL"></div></div><div class="sm-side r"><div class="sm-name r" id="nameR">اللاعب 2</div><div class="sm-opts" id="optsR"></div></div></div>
+<div class="vex-hint" id="hint">اختر الشكل المطابق للظل بأسرع وقت. الأول يكسب نقطتين، الثاني نقطة.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const SHAPES=[
+{name:'مربع',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>'},
+{name:'دائرة',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>'},
+{name:'مثلث',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><polygon points="12,2 22,22 2,22"/></svg>'},
+{name:'نجمة',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><polygon points="12,2 14.6,9 22,9 16,13.5 18.5,21 12,16.5 5.5,21 8,13.5 2,9 9.4,9"/></svg>'},
+{name:'قلب',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 21s-8-5-8-11a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 6-8 11-8 11z"/></svg>'},
+{name:'سداسي',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><polygon points="6,4 18,4 22,12 18,20 6,20 2,12"/></svg>'},
+{name:'معين',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><polygon points="12,2 22,12 12,22 2,12"/></svg>'},
+{name:'هلال',svg:'<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M14 4a8 8 0 1 0 0 16 6 6 0 1 1 0-16z"/></svg>'}];
+const S={ar:{title:'طابق الظل',reset:'جديدة',l:'لاعب 1',r:'لاعب 2',round:'الجولة',hint:'اختر الشكل المطابق. الأول يكسب 2 نقطتين.',win:t=>'فاز '+(t==='L'?'اللاعب 1':t==='R'?'اللاعب 2':'')+'!',draw:'تعادل'},
+en:{title:'Shadow Match',reset:'New',l:'P1',r:'P2',round:'Round',hint:'Match the shadow. First scores 2.',win:t=>(t==='L'?'P1':t==='R'?'P2':'')+' wins!',draw:'Draw'}};
+let lang='ar';const $=id=>document.getElementById(id);const ROUNDS=8;
+let scoreL=0,scoreR=0,round=0,target,answeredL,answeredR,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblRound').textContent=s.round;
+$('nameL').textContent=s.l;$('nameR').textContent=s.r;$('hint').textContent=s.hint;}
+function pickOpts(){const opts=[target];const others=SHAPES.filter(s=>s!==target).sort(()=>Math.random()-.5);
+opts.push(others[0],others[1],others[2]);return opts.sort(()=>Math.random()-.5);}
+function renderOpts(side,opts){const wrap=$('opts'+side);wrap.innerHTML='';opts.forEach(s=>{const b=document.createElement('button');b.className='sm-opt';b.innerHTML=s.svg;
+b.addEventListener('click',()=>tap(side,s,b));wrap.appendChild(b);});}
+function nextRound(){if(round>=ROUNDS)return endGame();round++;$('round').textContent=round+'/'+ROUNDS;
+target=SHAPES[Math.floor(Math.random()*SHAPES.length)];$('target').innerHTML='<div class="sm-shadow">'+target.svg+'</div>';
+answeredL=false;answeredR=false;renderOpts('L',pickOpts());renderOpts('R',pickOpts());}
+function tap(side,shape,btn){if(!running)return;if(side==='L'&&answeredL)return;if(side==='R'&&answeredR)return;
+const correct=shape===target;const otherDone=side==='L'?answeredR:answeredL;
+if(correct){const pts=otherDone?1:2;if(side==='L'){scoreL+=pts;$('scoreL').textContent=scoreL;answeredL=true;}else{scoreR+=pts;$('scoreR').textContent=scoreR;answeredR=true;}
+btn.classList.add('right');}else{btn.classList.add('wrong');setTimeout(()=>btn.classList.remove('wrong'),400);}
+if((answeredL||side==='L')&&(answeredR||side==='R'))setTimeout(nextRound,800);}
+function endGame(){running=false;const w=scoreL>scoreR?'L':scoreR>scoreL?'R':null;
+$('endTitle').textContent=w?S[lang].win(w):S[lang].draw;$('endSub').textContent=scoreL+' × '+scoreR;
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(scoreL,scoreR),result:w?'win':'tie',metadata:{winner:w,L:scoreL,R:scoreR}});}
+function reset(){scoreL=0;scoreR=0;round=0;running=true;
+$('scoreL').textContent=0;$('scoreR').textContent=0;$('endOverlay').classList.remove('show');nextRound();}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'shadow-match',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Card War</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.cw-table{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;width:100%;margin:14px 0;padding:18px 10px;background:radial-gradient(ellipse at 50% 50%,rgba(34,197,94,.10),transparent 60%),linear-gradient(180deg,#0c1530,#040912);border:1px solid rgba(34,197,94,.20);border-radius:14px;min-height:160px}
+.cw-card{position:relative;width:80px;aspect-ratio:.7;border-radius:10px;display:grid;place-items:center;font-family:'Georgia',serif;font-size:2rem;font-weight:700;
+background:linear-gradient(180deg,#fefce8,#e7e5e4);color:#0a1020;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 0 rgba(0,0,0,.15),0 8px 16px rgba(0,0,0,.5)}
+.cw-card.back{background:repeating-linear-gradient(45deg,#1e3a8a 0 8px,#1e40af 8px 16px);color:transparent}
+.cw-card.win{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 30px rgba(34,197,94,.6)}
+.cw-card.red{color:#dc2626}
+.cw-pname{font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px;text-align:center}
+.cw-slot{display:flex;flex-direction:column;align-items:center;gap:4px}
+.cw-pc{display:flex;gap:6px;justify-content:center;margin-bottom:8px;flex-wrap:wrap}
+.cw-pc button{padding:6px 14px;border-radius:99px;border:1px solid var(--vex-border);background:var(--vex-surface);color:#fff;font-family:'Bebas Neue',sans-serif;cursor:pointer;font-size:.9rem}
+.cw-pc button.active{background:linear-gradient(135deg,#1e88ff,#0a4d9c);border-color:transparent}
+.cw-deal{display:block;width:100%;max-width:280px;margin:6px auto 0;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:.08em;border:none;border-radius:12px;color:#000;
+background:linear-gradient(180deg,#ffd166,#b07406);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.30),0 4px 0 #4a3000;cursor:pointer}
+.cw-deal:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 1px 0 #4a3000}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge gold"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6"/></svg></div><span id="title">حرب الورق</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="cw-pc" id="pCount"></div>
+<div class="vex-stats" id="stats"></div>
+<div class="cw-table" id="table"></div>
+<button class="cw-deal" id="dealBtn">اقلب الأوراق</button>
+<div class="vex-hint" id="hint">في كل جولة تُكشَف ورقة لكل لاعب. أعلى رقم يربح نقطة. الأكثر بعد 7 جولات يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const SUITS=['♠','♥','♦','♣'];const RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const NAMES_AR=['أحمر','أزرق','أخضر','بنفسجي'],NAMES_EN=['Red','Blue','Green','Purple'];
+const S={ar:{title:'حرب الورق',reset:'جديدة',hint:'في كل جولة تُكشَف ورقة لكل لاعب. الأعلى يفوز.',deal:'اقلب الأوراق',round:'الجولة',win:n=>'فاز '+n+'!',sub:(a,b)=>'الجولات: '+a+' • التعادلات: '+b},
+en:{title:'Card War',reset:'New',hint:'Each round flips one card per player. Highest wins.',deal:'Deal cards',round:'Round',win:n=>n+' wins!',sub:(a,b)=>'Wins: '+a+' • Ties: '+b}};
+let lang='ar';const $=id=>document.getElementById(id);const ROUNDS=7;
+let nP=4,scores=[0,0,0,0],round=0,deck,running,ties=0;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('hint').textContent=s.hint;$('dealBtn').textContent=s.deal;renderStats();renderPCount();renderTable(true);}
+function renderPCount(){const wrap=$('pCount');wrap.innerHTML='';[2,3,4].forEach(n=>{const b=document.createElement('button');b.textContent=n+(lang==='ar'?' لاعبين':' players');if(n===nP)b.classList.add('active');
+b.addEventListener('click',()=>{nP=n;reset();});wrap.appendChild(b);});}
+function renderStats(){const wrap=$('stats');wrap.innerHTML='';const names=lang==='ar'?NAMES_AR:NAMES_EN;wrap.style.gridTemplateColumns='repeat('+(nP+1)+',1fr)';
+for(let i=0;i<nP;i++){const d=document.createElement('div');d.className='vex-stat';d.innerHTML='<div class="vex-stat-label">'+names[i]+'</div><div class="vex-stat-value" id="sc'+i+'">'+scores[i]+'</div>';wrap.appendChild(d);}
+const t=document.createElement('div');t.className='vex-stat';t.innerHTML='<div class="vex-stat-label">'+S[lang].round+'</div><div class="vex-stat-value" id="rd">'+round+'/'+ROUNDS+'</div>';wrap.appendChild(t);}
+function renderTable(back,winners){const t=$('table');t.innerHTML='';const names=lang==='ar'?NAMES_AR:NAMES_EN;
+for(let i=0;i<nP;i++){const slot=document.createElement('div');slot.className='cw-slot';slot.innerHTML='<div class="cw-pname">'+names[i]+'</div>';
+const card=document.createElement('div');card.className='cw-card '+(back?'back':'');
+if(!back){const c=window._lastCards[i];card.textContent=c.r+c.s;if(c.s==='♥'||c.s==='♦')card.classList.add('red');if(winners&&winners.includes(i))card.classList.add('win');}else card.textContent='?';
+slot.appendChild(card);t.appendChild(slot);}}
+function makeDeck(){const d=[];for(const s of SUITS)for(let r=0;r<RANKS.length;r++)d.push({r:RANKS[r],s,v:r+2});return d.sort(()=>Math.random()-.5);}
+function deal(){if(!running||round>=ROUNDS)return;round++;$('rd').textContent=round+'/'+ROUNDS;
+if(deck.length<nP)deck=makeDeck();const cards=deck.splice(0,nP);window._lastCards=cards;
+const max=Math.max(...cards.map(c=>c.v));const winners=cards.map((c,i)=>c.v===max?i:-1).filter(i=>i>=0);
+if(winners.length===1){scores[winners[0]]++;$('sc'+winners[0]).textContent=scores[winners[0]];}else ties++;
+renderTable(false,winners);if(round>=ROUNDS)setTimeout(endGame,800);}
+function endGame(){running=false;const max=Math.max(...scores.slice(0,nP));const winners=scores.slice(0,nP).map((s,i)=>s===max?i:-1).filter(i=>i>=0);
+const names=lang==='ar'?NAMES_AR:NAMES_EN;const wn=winners.length===1?names[winners[0]]:winners.map(i=>names[i]).join(' + ');
+$('endTitle').textContent=S[lang].win(wn);$('endSub').textContent=S[lang].sub(scores.slice(0,nP).join(' '),ties);
+setTimeout(()=>$('endOverlay').classList.add('show'),300);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:max,result:'win',metadata:{winners,scores:scores.slice(0,nP),ties,players:nP}});}
+function reset(){scores=[0,0,0,0];round=0;ties=0;running=true;deck=makeDeck();$('endOverlay').classList.remove('show');renderStats();renderPCount();renderTable(true);}
+$('dealBtn').addEventListener('click',deal);$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'card-war',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

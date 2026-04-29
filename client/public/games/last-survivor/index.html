@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Last Survivor</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.ls-grid{display:grid;gap:10px;width:100%;max-width:380px;margin:14px auto}
+.ls-zone{position:relative;padding:14px;border-radius:14px;text-align:center;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.25));border:2px solid rgba(255,255,255,.10);transition:opacity .3s,filter .3s}
+.ls-zone.out{opacity:.3;filter:grayscale(1)}
+.ls-name{font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:.06em;margin-bottom:4px}
+.ls-cnt{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--vex-gold);line-height:1}
+.ls-tap{width:100%;margin-top:8px;padding:18px 0;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;border:none;border-radius:12px;color:#fff;cursor:pointer;
+box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #050912;transition:transform .06s}
+.ls-tap:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 0 #050912}
+.ls-zone.out .ls-tap{cursor:not-allowed;pointer-events:none}
+.ls-zone.eliminated::after{content:'❌';position:absolute;top:6px;right:6px;font-size:1.4rem}
+.ls-pc{display:flex;gap:6px;justify-content:center;margin-bottom:8px;flex-wrap:wrap}
+.ls-pc button{padding:6px 14px;border-radius:99px;border:1px solid var(--vex-border);background:var(--vex-surface);color:#fff;font-family:'Bebas Neue',sans-serif;cursor:pointer;font-size:.9rem}
+.ls-pc button.active{background:linear-gradient(135deg,#1e88ff,#0a4d9c);border-color:transparent}
+.ls-banner{padding:10px;border-radius:12px;background:linear-gradient(135deg,#7f1d1d,#0a1020);text-align:center;font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;font-size:1.05rem;color:#fff;margin-bottom:8px}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge rose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 L4 13 h6 l-2 9 9-12 h-6 z"/></svg></div><span id="title">آخر الناجين</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="ls-pc" id="pCount"></div>
+<div class="ls-banner" id="banner">الجولة 1 — اضغط لتنجو!</div>
+<div class="vex-stats"><div class="vex-stat" style="grid-column:1/-1"><div class="vex-stat-label" id="lblTime">الزمن المتبقي</div><div class="vex-stat-value" id="time">5.0</div></div></div>
+<div class="ls-grid" id="grid"></div>
+<div class="vex-hint" id="hint">في كل جولة، الأقل نقرات يخرج. آخر باقٍ يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9l4 6 5-7 5 7 4-6v10H3z"/></svg></div><div class="vex-overlay-title" id="endTitle">الناجي الوحيد!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const COLORS=[{c:'linear-gradient(180deg,#f87171,#7f1d1d)'},{c:'linear-gradient(180deg,#60a5fa,#1e3a8a)'},{c:'linear-gradient(180deg,#4ade80,#14532d)'},{c:'linear-gradient(180deg,#c084fc,#4c1d95)'}];
+const NAMES_AR=['أحمر','أزرق','أخضر','بنفسجي'],NAMES_EN=['Red','Blue','Green','Purple'];
+const S={ar:{title:'آخر الناجين',reset:'جديدة',hint:'في كل جولة، الأقل نقرات يخرج.',time:'الزمن',banner:r=>'الجولة '+r+' — اضغط لتنجو!',out:n=>n+' خرج!',win:n=>n+' هو الناجي!',tap:'اضغط!'},
+en:{title:'Last Survivor',reset:'New',hint:'Each round, slowest player is eliminated.',time:'Time',banner:r=>'Round '+r+' — tap to survive!',out:n=>n+' eliminated!',win:n=>n+' survived!',tap:'TAP!'}};
+let lang='ar';const $=id=>document.getElementById(id);
+let nP=4,counts=[0,0,0,0],alive=[true,true,true,true],round=0,time=5.0,timer,running;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('hint').textContent=s.hint;$('lblTime').textContent=s.time;renderPCount();renderGrid();}
+function renderPCount(){const wrap=$('pCount');wrap.innerHTML='';[2,3,4].forEach(n=>{const b=document.createElement('button');b.textContent=n+(lang==='ar'?' لاعبين':' players');if(n===nP)b.classList.add('active');
+b.addEventListener('click',()=>{nP=n;reset();});wrap.appendChild(b);});}
+function renderGrid(){const g=$('grid');g.innerHTML='';g.style.gridTemplateColumns=nP===2?'1fr 1fr':nP===3?'1fr 1fr 1fr':'1fr 1fr';
+const names=lang==='ar'?NAMES_AR:NAMES_EN;
+for(let i=0;i<nP;i++){const z=document.createElement('div');z.className='ls-zone'+(!alive[i]?' out eliminated':'');z.dataset.i=i;
+z.innerHTML='<div class="ls-name">'+names[i]+'</div><div class="ls-cnt" id="ct'+i+'">'+counts[i]+'</div>';
+const b=document.createElement('button');b.className='ls-tap';b.style.background=COLORS[i].c;b.textContent=S[lang].tap;b.addEventListener('click',()=>tap(i));z.appendChild(b);g.appendChild(z);}}
+function tap(i){if(!running||!alive[i])return;counts[i]++;$('ct'+i).textContent=counts[i];}
+function startRound(){round++;counts=counts.map(()=>0);
+const aliveCount=alive.filter(Boolean).length;if(aliveCount<=1)return endGame();
+const dur=Math.max(2.5,5.5-round*0.3);time=dur;
+$('banner').textContent=S[lang].banner(round);
+alive.forEach((_,i)=>{if(alive[i])$('ct'+i).textContent=0;});
+clearInterval(timer);const startedAt=Date.now();
+timer=setInterval(()=>{const elapsed=(Date.now()-startedAt)/1000;time=Math.max(0,dur-elapsed);$('time').textContent=time.toFixed(1);
+if(time<=0){clearInterval(timer);endRound();}},80);}
+function endRound(){const aliveIdx=alive.map((a,i)=>a?i:-1).filter(i=>i>=0);
+const min=Math.min(...aliveIdx.map(i=>counts[i]));const losers=aliveIdx.filter(i=>counts[i]===min);
+const loser=losers[Math.floor(Math.random()*losers.length)];alive[loser]=false;
+const names=lang==='ar'?NAMES_AR:NAMES_EN;$('banner').textContent=S[lang].out(names[loser]);
+renderGrid();setTimeout(()=>{if(alive.filter(Boolean).length>1)startRound();else endGame();},1300);}
+function endGame(){running=false;clearInterval(timer);const survivor=alive.findIndex(a=>a);
+const names=lang==='ar'?NAMES_AR:NAMES_EN;
+$('endTitle').textContent=survivor>=0?S[lang].win(names[survivor]):(lang==='ar'?'الكل خرج':'All out');$('endSub').textContent=lang==='ar'?'الجولات: '+round:'Rounds: '+round;
+setTimeout(()=>$('endOverlay').classList.add('show'),250);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:round,result:'win',metadata:{survivor,rounds:round,players:nP}});}
+function reset(){counts=[0,0,0,0];alive=[true,true,true,true].map((_,i)=>i<nP);round=0;running=true;$('endOverlay').classList.remove('show');renderPCount();renderGrid();startRound();}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'last-survivor',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

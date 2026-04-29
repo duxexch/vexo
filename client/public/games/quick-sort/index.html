@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Quick Sort</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.qs-rack{display:flex;gap:6px;justify-content:center;width:100%;max-width:380px;margin:14px auto;flex-wrap:nowrap;padding:14px;background:var(--vex-surface);border:1px solid var(--vex-border);border-radius:14px}
+.qs-tile{flex:1;aspect-ratio:.55;max-width:48px;display:grid;place-items:center;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:#fff;cursor:grab;user-select:none;
+background:linear-gradient(180deg,#3b4a6e,#1a2342);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #050912;
+transition:transform .15s,box-shadow .15s}
+.qs-tile.dragging{opacity:.4;cursor:grabbing}
+.qs-tile.over{transform:scale(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #050912,0 0 18px rgba(30,136,255,.6)}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 6h18M6 12h12M9 18h6"/></svg></div><span id="title">رتّب الأرقام</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label" id="lblTime">الزمن</div><div class="vex-stat-value" id="time">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value emerald" id="best">—</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblMoves">التحريكات</div><div class="vex-stat-value blue" id="moves">0</div></div></div>
+<div class="qs-rack" id="rack"></div>
+<div class="vex-hint" id="hint">اسحب البلاط لتُرتّب الأرقام تصاعدياً.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">رتّبتها!</div><div class="vex-overlay-subtitle" id="endSub">رتّبت كل الأرقام.</div><div class="vex-overlay-stats"><div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFT">الزمن</div><div class="vex-overlay-stat-value" id="finalT">0</div></div><div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFM">التحريكات</div><div class="vex-overlay-stat-value" id="finalM">0</div></div></div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'رتّب الأرقام',reset:'جديدة',time:'الزمن',best:'الأفضل',moves:'التحريكات',end:'رتّبتها!',endSub:'رتّبت كل الأرقام.',newRound:'جولة جديدة',hint:'اسحب البلاط لتُرتّب الأرقام تصاعدياً.'},
+en:{title:'Quick Sort',reset:'New',time:'Time',best:'Best',moves:'Moves',end:'Sorted!',endSub:'You ordered all tiles.',newRound:'New game',hint:'Drag tiles to sort numbers ascending.'}};
+let lang='ar';const $=id=>document.getElementById(id);const N=8;
+let nums,startedAt,timer,moves,dragIdx;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblTime').textContent=s.time;$('lblBest').textContent=s.best;$('lblMoves').textContent=s.moves;
+$('hint').textContent=s.hint;$('endTitle').textContent=s.end;$('endSub').textContent=s.endSub;$('endRestart').textContent=s.newRound;$('lblFT').textContent=s.time;$('lblFM').textContent=s.moves;}
+function shuffle(){nums=[];const used=new Set();while(nums.length<N){const n=Math.floor(Math.random()*99)+1;if(!used.has(n)){used.add(n);nums.push(n);}}
+const sorted=[...nums].sort((a,b)=>a-b);if(nums.every((v,i)=>v===sorted[i]))shuffle();}
+function render(){const r=$('rack');r.innerHTML='';nums.forEach((n,i)=>{const d=document.createElement('div');d.className='qs-tile';d.textContent=n;d.draggable=true;d.dataset.i=i;
+d.addEventListener('dragstart',e=>{dragIdx=i;d.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+d.addEventListener('dragend',()=>d.classList.remove('dragging'));
+d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('over');});
+d.addEventListener('dragleave',()=>d.classList.remove('over'));
+d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');swap(dragIdx,i);});
+let ts=null;d.addEventListener('touchstart',e=>{ts={x:e.touches[0].clientX,y:e.touches[0].clientY,i};dragIdx=i;d.classList.add('dragging');},{passive:true});
+d.addEventListener('touchmove',e=>{if(!ts)return;e.preventDefault();const t=e.touches[0];document.querySelectorAll('.qs-tile.over').forEach(x=>x.classList.remove('over'));
+const el=document.elementFromPoint(t.clientX,t.clientY);if(el&&el.classList.contains('qs-tile'))el.classList.add('over');},{passive:false});
+d.addEventListener('touchend',e=>{d.classList.remove('dragging');if(!ts)return;const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);
+document.querySelectorAll('.qs-tile.over').forEach(x=>x.classList.remove('over'));
+if(el&&el.classList.contains('qs-tile')&&el!==d)swap(dragIdx,+el.dataset.i);ts=null;});
+r.appendChild(d);});}
+function swap(a,b){if(a===b||a===undefined||b===undefined)return;const t=nums[a];nums[a]=nums[b];nums[b]=t;moves++;$('moves').textContent=moves;render();
+if(nums.every((v,i)=>i===0||nums[i-1]<=v))win();}
+function win(){clearInterval(timer);const t=(Date.now()-startedAt)/1000;
+const bk='vex.best.quick-sort';const b=parseFloat(localStorage.getItem(bk)||'0');if(!b||t<b)localStorage.setItem(bk,t.toFixed(1));
+$('best').textContent=parseFloat(localStorage.getItem(bk)).toFixed(1);
+$('finalT').textContent=t.toFixed(1);$('finalM').textContent=moves;
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined'){const score=Math.max(50,Math.floor(1500-t*10-moves*5));VexGame.endSession({score,result:'win',metadata:{seconds:t,moves}});}}
+function reset(){shuffle();moves=0;startedAt=Date.now();$('moves').textContent=0;$('time').textContent=0;
+const b=parseFloat(localStorage.getItem('vex.best.quick-sort')||'0');$('best').textContent=b?b.toFixed(1):'—';
+$('endOverlay').classList.remove('show');render();clearInterval(timer);timer=setInterval(()=>$('time').textContent=((Date.now()-startedAt)/1000).toFixed(1),100);}
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'quick-sort',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><meta name="theme-color" content="#070b14">
+<title>VEX Mini Racing</title><link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>.mr-board{position:relative;width:100%;max-width:340px;margin:14px auto;aspect-ratio:.7;
+background:linear-gradient(180deg,#0f172a,#020617);border:1px solid rgba(34,211,238,.30);border-radius:18px;overflow:hidden;
+box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.mr-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.mr-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:340px;margin:0 auto}
+.mr-pad{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mr-btn{padding:18px 0;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;border:none;border-radius:12px;color:#fff;cursor:pointer;
+box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #050912;transition:transform .06s}
+.mr-btn:active{transform:translateY(3px)}
+.mr-btn.l{background:linear-gradient(180deg,#f87171,#7f1d1d)}.mr-btn.r{background:linear-gradient(180deg,#60a5fa,#1e3a8a)}</style></head>
+<body class="vex-game">
+<div class="vex-shell">
+<div class="vex-header"><div class="vex-title"><div class="vex-title-badge" style="background:linear-gradient(135deg,#fb923c,#7c2d12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1-3a3 3 0 0 1 3-2h6a3 3 0 0 1 3 2l1 3v7H5z"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg></div><span id="title">سباق صغير</span></div><button class="vex-btn" id="resetBtn"><span id="resetLabel">جديدة</span></button></div>
+<div class="vex-stats"><div class="vex-stat"><div class="vex-stat-label rose" id="lblL">لاعب 1</div><div class="vex-stat-value rose" id="distL">0</div></div><div class="vex-stat"><div class="vex-stat-label" id="lblTime">الزمن</div><div class="vex-stat-value" id="time">30</div></div><div class="vex-stat"><div class="vex-stat-label blue" id="lblR">لاعب 2</div><div class="vex-stat-value blue" id="distR">0</div></div></div>
+<div class="mr-board"><canvas class="mr-canvas" id="cv" width="320" height="460"></canvas></div>
+<div class="mr-controls"><div class="mr-pad"><button class="mr-btn l" data-act="l-left">◀</button><button class="mr-btn l" data-act="l-right">▶</button></div><div class="mr-pad"><button class="mr-btn r" data-act="r-left">◀</button><button class="mr-btn r" data-act="r-right">▶</button></div></div>
+<div class="vex-hint" id="hint">تجنب العوائق. كل عائق تتجنبه = +1 متر. الأكثر مسافة في 30 ث يفوز.</div></div>
+<div class="vex-overlay" id="endOverlay"><div class="vex-overlay-card"><div class="vex-overlay-icon gold"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg></div><div class="vex-overlay-title" id="endTitle">الفائز!</div><div class="vex-overlay-subtitle" id="endSub">—</div><div class="vex-btn-row"><button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button></div></div></div>
+<script src="/games/vex-sdk.js"></script><script src="/games/_shared/vex-game.js"></script>
+<script>(function(){'use strict';
+const S={ar:{title:'سباق صغير',reset:'جديدة',l:'لاعب 1',r:'لاعب 2',time:'الزمن',hint:'تجنب العوائق. الأكثر مسافة يفوز.',win:t=>'فاز '+(t==='L'?'اللاعب 1':t==='R'?'اللاعب 2':'')+'!',draw:'تعادل',sub:(a,b)=>'المسافة '+a+' م × '+b+' م'},
+en:{title:'Mini Racing',reset:'New',l:'P1',r:'P2',time:'Time',hint:'Dodge obstacles. Furthest wins.',win:t=>(t==='L'?'P1':t==='R'?'P2':'')+' wins!',draw:'Draw',sub:(a,b)=>'Distance '+a+'m × '+b+'m'}};
+let lang='ar';const $=id=>document.getElementById(id);const cv=$('cv'),ctx=cv.getContext('2d');const W=cv.width,H=cv.height;
+const HALF=W/2;
+let carL,carR,obL,obR,distL,distR,time,timer,raf,running,nextL,nextR;
+function applyLang(){const s=S[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+$('title').textContent=s.title;$('resetLabel').textContent=s.reset;$('lblL').textContent=s.l;$('lblR').textContent=s.r;$('lblTime').textContent=s.time;$('hint').textContent=s.hint;}
+function reset(){carL={x:HALF/2-12,y:H-60,w:24,h:36};carR={x:HALF+HALF/2-12,y:H-60,w:24,h:36};
+obL=[];obR=[];distL=0;distR=0;time=30;running=true;nextL=0;nextR=0;
+$('distL').textContent=0;$('distR').textContent=0;$('time').textContent=time;$('endOverlay').classList.remove('show');
+clearInterval(timer);timer=setInterval(()=>{if(!running)return;time--;$('time').textContent=time;if(time<=0)endGame();},1000);
+cancelAnimationFrame(raf);loop();}
+function step(){const speed=4;
+[[obL,'L',carL,0,HALF],[obR,'R',carR,HALF,W]].forEach(([arr,who,car,xMin,xMax])=>{
+for(const o of arr){o.y+=speed;}
+if((who==='L'?nextL:nextR)<Date.now()){const lane=Math.floor(Math.random()*3);const w=30,h=30;arr.push({x:xMin+15+lane*(HALF-30-w)/2,y:-30,w,h});
+if(who==='L')nextL=Date.now()+700+Math.random()*500;else nextR=Date.now()+700+Math.random()*500;}
+for(let i=arr.length-1;i>=0;i--){const o=arr[i];if(o.y>H+30){arr.splice(i,1);if(who==='L'){distL++;$('distL').textContent=distL;}else{distR++;$('distR').textContent=distR;}}
+if(o.x<car.x+car.w&&o.x+o.w>car.x&&o.y<car.y+car.h&&o.y+o.h>car.y){car.crashed=Date.now();arr.splice(i,1);}}});
+if(carL.crashed&&Date.now()-carL.crashed>800)carL.crashed=0;if(carR.crashed&&Date.now()-carR.crashed>800)carR.crashed=0;}
+function drawCar(c,col){ctx.save();if(c.crashed)ctx.globalAlpha=0.5+Math.sin(Date.now()/40)*0.3;
+const g=ctx.createLinearGradient(c.x,c.y,c.x,c.y+c.h);g.addColorStop(0,col);g.addColorStop(1,'#1e293b');ctx.fillStyle=g;
+ctx.fillRect(c.x,c.y,c.w,c.h);ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(c.x+3,c.y+5,c.w-6,8);
+ctx.fillStyle='#fde047';ctx.fillRect(c.x+2,c.y+c.h-3,4,3);ctx.fillRect(c.x+c.w-6,c.y+c.h-3,4,3);ctx.restore();}
+function draw(){ctx.fillStyle='#0a0f1f';ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=2;ctx.setLineDash([14,12]);ctx.beginPath();ctx.moveTo(HALF,0);ctx.lineTo(HALF,H);ctx.stroke();
+ctx.strokeStyle='rgba(255,255,255,0.10)';ctx.beginPath();ctx.moveTo(HALF/2,0);ctx.lineTo(HALF/2,H);ctx.moveTo(HALF+HALF/2,0);ctx.lineTo(HALF+HALF/2,H);ctx.stroke();ctx.setLineDash([]);
+[obL,obR].forEach(arr=>arr.forEach(o=>{ctx.fillStyle='#dc2626';ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#fbbf24';ctx.fillRect(o.x+3,o.y+3,o.w-6,o.h-6);}));
+drawCar(carL,'#ef4444');drawCar(carR,'#3b82f6');}
+function loop(){if(!running)return;step();draw();raf=requestAnimationFrame(loop);}
+function endGame(){running=false;clearInterval(timer);cancelAnimationFrame(raf);
+const w=distL>distR?'L':distR>distL?'R':null;$('endTitle').textContent=w?S[lang].win(w):S[lang].draw;$('endSub').textContent=S[lang].sub(distL,distR);
+setTimeout(()=>$('endOverlay').classList.add('show'),200);
+if(typeof VexGame!=='undefined')VexGame.endSession({score:Math.max(distL,distR),result:w?'win':'tie',metadata:{winner:w,L:distL,R:distR}});}
+function moveCar(c,dx,minX,maxX){if(c.crashed)return;c.x=Math.max(minX,Math.min(maxX-c.w,c.x+dx));}
+const STEP=12;
+document.querySelectorAll('.mr-btn[data-act]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.act;
+if(a==='l-left')moveCar(carL,-STEP,4,HALF);if(a==='l-right')moveCar(carL,STEP,4,HALF);
+if(a==='r-left')moveCar(carR,-STEP,HALF,W-4);if(a==='r-right')moveCar(carR,STEP,HALF,W-4);}));
+window.addEventListener('keydown',e=>{if(e.key==='a')moveCar(carL,-STEP,4,HALF);if(e.key==='d')moveCar(carL,STEP,4,HALF);
+if(e.key==='ArrowLeft')moveCar(carR,-STEP,HALF,W-4);if(e.key==='ArrowRight')moveCar(carR,STEP,HALF,W-4);});
+$('resetBtn').addEventListener('click',reset);$('endRestart').addEventListener('click',reset);
+if(typeof VexGame!=='undefined'){VexGame.boot({slug:'mini-racing',onReady:p=>{if(p&&p.language){lang=p.language==='en'?'en':'ar';VexGame.setLang(lang);}applyLang();}});}
+applyLang();reset();})();</script></body></html>
