@@ -890,7 +890,7 @@ function SoloGameTileCard({ g, lang }: { g: ApiExternalGame; lang: string }) {
             <img
               src={cover}
               alt={name}
-              className="w-3/4 h-3/4 object-contain group-hover:scale-110 transition-transform drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]"
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform"
               loading="lazy"
             />
           ) : (
