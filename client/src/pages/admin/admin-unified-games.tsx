@@ -1540,7 +1540,7 @@ export default function AdminUnifiedGames() {
             {ARCADE_GAMES.map((g) => (
               <a
                 key={g.key}
-                href={`/arcade/${g.key}`}
+                href={`/play/${g.key}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-sky-500"

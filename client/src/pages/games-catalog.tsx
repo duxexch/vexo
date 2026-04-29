@@ -279,9 +279,10 @@ export default function GamesCatalogPage() {
     }
     // New 9 HTML5 mini-games launch through the iframe-based arcade player
     // so scores reach the server and Sam9 can react. Legacy keys keep the
-    // pre-existing static fallbacks.
+    // pre-existing static fallbacks. Canonical URL is /play/:gameKey — the
+    // /play route auto-detects arcade keys and renders the iframe player.
     if (isArcadeGameKey(gameKey)) {
-      navigate(`/arcade/${gameKey}`);
+      navigate(`/play/${gameKey}`);
       return;
     }
     if (gameKey === "puzzle") {
