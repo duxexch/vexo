@@ -26,6 +26,9 @@ import {
     Download,
     Bell,
     ArrowDownToLine,
+    Coins,
+    Crown,
+    Building2,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -235,6 +238,7 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     const playerMenuItems: MenuItem[] = [
         { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, key: "dashboard" },
         { title: t("nav.wallet"), url: "/wallet", icon: Wallet, key: "wallet" },
+        { title: t("nav.coin"), url: "/coin", icon: Coins, key: "coin" },
         { title: t("nav.multiplayer"), url: "/multiplayer", icon: Gamepad2, key: "multiplayer" },
         { title: t("nav.challenges"), url: "/challenges", icon: Swords, key: "challenges" },
         { title: t("nav.tournaments"), url: "/tournaments", icon: Trophy, key: "tournaments" },
@@ -248,6 +252,9 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
         { title: t("nav.free"), url: "/free", icon: Gift, key: "free" },
         { title: t("nav.dailyRewards"), url: "/daily-rewards", icon: CalendarCheck, key: "daily-rewards" },
         { title: t("nav.referral"), url: "/referral", icon: UserPlus, key: "referral" },
+        { title: t("nav.invest"), url: "/invest", icon: Building2, key: "invest" },
+        { title: t("nav.agentsProgram"), url: "/agents-program", icon: Crown, key: "agents-program" },
+        { title: t("nav.affiliates"), url: "/affiliates", icon: Megaphone, key: "affiliates" },
         { title: t("nav.transactions"), url: "/transactions", icon: DollarSign, key: "transactions" },
         { title: t("nav.complaints"), url: "/complaints", icon: AlertTriangle, key: "complaints" },
         { title: t("nav.support"), url: "/support", icon: Headset, key: "support" },
@@ -259,6 +266,7 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     const adminMenuItems: MenuItem[] = [
         { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, key: "dashboard" },
         { title: t("nav.wallet"), url: "/wallet", icon: Wallet, key: "wallet" },
+        { title: t("nav.coin"), url: "/coin", icon: Coins, key: "coin" },
         { title: t("nav.multiplayer"), url: "/multiplayer", icon: Gamepad2, key: "multiplayer" },
         { title: t("nav.gameManagement"), url: "/games", icon: Dices, key: "game-management" },
         { title: t("nav.announcements"), url: "/admin/announcements", icon: Megaphone, key: "announcements" },
@@ -274,6 +282,9 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
         { title: t("nav.free"), url: "/free", icon: Gift, key: "free" },
         { title: t("nav.dailyRewards"), url: "/daily-rewards", icon: CalendarCheck, key: "daily-rewards" },
         { title: t("nav.referral"), url: "/referral", icon: UserPlus, key: "referral" },
+        { title: t("nav.invest"), url: "/invest", icon: Building2, key: "invest" },
+        { title: t("nav.agentsProgram"), url: "/agents-program", icon: Crown, key: "agents-program" },
+        { title: t("nav.affiliates"), url: "/affiliates", icon: Megaphone, key: "affiliates" },
         { title: t("nav.transactions"), url: "/transactions", icon: DollarSign, key: "transactions" },
         { title: t("nav.complaints"), url: "/complaints", icon: AlertTriangle, key: "complaints" },
         { title: t("nav.support"), url: "/support", icon: Headset, key: "support" },

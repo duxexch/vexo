@@ -102,7 +102,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
             </header>
             <main className="p-4">{children}</main>
             <footer className="border-t mt-8 px-4 py-6 text-sm" data-testid="footer-seo-links">
-                <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-6">
                     <div>
                         <div className="font-semibold mb-2">{dir === "rtl" ? "الفئات" : "Categories"}</div>
                         <ul className="space-y-1">
@@ -130,6 +130,15 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
                             <li><Link href="/leaderboard/domino" className="hover:underline">{dir === "rtl" ? "دومينو" : "Domino"}</Link></li>
                             <li><Link href="/leaderboard/tarneeb" className="hover:underline">{dir === "rtl" ? "طرنيب" : "Tarneeb"}</Link></li>
                             <li><Link href="/leaderboard/baloot" className="hover:underline">{dir === "rtl" ? "بلوت" : "Baloot"}</Link></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div className="font-semibold mb-2">{dir === "rtl" ? "البرامج" : "Programs"}</div>
+                        <ul className="space-y-1">
+                            <li><Link href="/coin" className="hover:underline">{dir === "rtl" ? "عملة المشروع" : "Project Coin"}</Link></li>
+                            <li><Link href="/invest" className="hover:underline">{dir === "rtl" ? "استثمر في فيكس" : "Invest in VEX"}</Link></li>
+                            <li><Link href="/agents-program" className="hover:underline">{dir === "rtl" ? "برنامج الوكلاء" : "Agents Program"}</Link></li>
+                            <li><Link href="/affiliates" className="hover:underline">{dir === "rtl" ? "برنامج المسوقين" : "Marketers Program"}</Link></li>
                         </ul>
                     </div>
                     <div>

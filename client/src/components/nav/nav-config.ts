@@ -93,6 +93,22 @@ export const SIDEBAR_ICON_ACCENTS: Record<string, SidebarIconAccent> = {
     active: "bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 border-blue-200/50",
     inactive: "bg-gradient-to-br from-blue-500/85 via-indigo-500/85 to-violet-500/85 border-blue-200/35",
   },
+  coin: {
+    active: "bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 border-amber-200/50",
+    inactive: "bg-gradient-to-br from-yellow-400/85 via-amber-500/85 to-orange-500/85 border-amber-200/35",
+  },
+  invest: {
+    active: "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 border-emerald-200/50",
+    inactive: "bg-gradient-to-br from-emerald-400/85 via-teal-500/85 to-cyan-600/85 border-emerald-200/35",
+  },
+  "agents-program": {
+    active: "bg-gradient-to-br from-violet-500 via-purple-600 to-indigo-700 border-violet-200/50",
+    inactive: "bg-gradient-to-br from-violet-500/85 via-purple-600/85 to-indigo-700/85 border-violet-200/35",
+  },
+  affiliates: {
+    active: "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-rose-600 border-pink-200/50",
+    inactive: "bg-gradient-to-br from-pink-500/85 via-fuchsia-500/85 to-rose-600/85 border-pink-200/35",
+  },
 };
 
 export const DEFAULT_SIDEBAR_ICON_ACCENT: SidebarIconAccent = {
