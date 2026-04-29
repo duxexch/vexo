@@ -5,6 +5,7 @@ import csurf from "csurf";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin-routes";
+import { createAgentsProxyMiddleware } from "./middleware/agents-proxy";
 import { serveStatic } from "./static";
 import { getAllowedOrigins } from "@shared/runtime-config";
 import { createServer } from "http";
@@ -631,6 +632,13 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     // or still at the .env.example placeholder.
     const { validateTurnCredentialsAtBoot } = await import("./lib/turn-credentials");
     validateTurnCredentialsAtBoot();
+
+    // Mount the agents-service reverse proxy BEFORE the in-process agent
+    // routes. When AGENTS_SERVICE_URL is set, this intercepts /api/admin/agents
+    // and /api/agents requests and forwards them to the standalone container.
+    // When unset, the middleware is a no-op and the legacy in-process routes
+    // continue to handle these endpoints (zero-disruption fallback).
+    app.use(createAgentsProxyMiddleware());
 
     await registerRoutes(httpServer, app);
     registerAdminRoutes(app);

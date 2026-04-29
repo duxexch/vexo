@@ -1,0 +1,29 @@
+{
+  "name": "vex-agents-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VEX commercial agents (cashier/financial) microservice — split out of the main app for deployment isolation. Shares the same Postgres DB.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.7.0",
+    "zod": "^3.24.2",
+    "pg": "^8.13.1",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/bcryptjs": "^2.4.6"
+  }
+}

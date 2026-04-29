@@ -101,6 +101,40 @@ services:
       retries: 3
       start_period: 10s
 
+  # VEX Commercial Agents Service (cashier/financial agents subsystem)
+  # Standalone container split out of the main app for deployment isolation.
+  # Shares the same Postgres DB as `app` via DATABASE_URL.
+  agents-service:
+    build:
+      context: .
+      dockerfile: services/agents-service/Dockerfile
+    container_name: vex-agents-service
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vex_user}:${POSTGRES_PASSWORD:-vex_password}@vex-db:5432/${POSTGRES_DB:-vex_db}
+      # SECURITY: must be supplied explicitly via .env / Docker secrets in
+      # production. The agents-service refuses to boot if this is unset, and
+      # the proxy on the main app refuses to forward without it (the main
+      # app simply falls back to in-process routes).
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      DB_POOL_MAX: ${AGENTS_DB_POOL_MAX:-10}
+      DB_POOL_MIN: ${AGENTS_DB_POOL_MIN:-1}
+      DB_SSL: "false"
+      TZ: UTC
+    networks:
+      - vex-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   # VEX Application
   app:
     build:
@@ -160,6 +194,9 @@ services:
       AI_AGENT_BASE_URL: http://vex-ai-agent:3100
       AI_AGENT_SHARED_TOKEN: ${AI_AGENT_SHARED_TOKEN:-vex-local-ai-token}
       AI_AGENT_TIMEOUT_MS: ${AI_AGENT_TIMEOUT_MS:-900}
+      # Commercial agents subsystem — routed to standalone container
+      AGENTS_SERVICE_URL: http://vex-agents-service:3002
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-vex-local-internal-token}
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}

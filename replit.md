@@ -46,6 +46,7 @@ VEX employs a modern, distributed architecture for scalability and reliability.
 **Core Architectural Decisions:**
 
 - **Microservices for AI:** The AI service is a decoupled container for independent scaling.
+- **Microservice for Commercial Agents (cashier subsystem):** The agents subsystem (admin agent CRUD, ledger, balance adjustments, payment methods — `/api/admin/agents/*`, `/api/agents/*`) lives in `services/agents-service/` as a standalone container on port 3002, sharing the same Postgres DB. The main server's `server/middleware/agents-proxy.ts` validates the admin session locally, then forwards the request to the service with `X-Internal-Service-Token` + `X-Admin-{Id,Role,Username}` headers. **Activation:** controlled by `AGENTS_SERVICE_URL` — when unset (Replit dev), the proxy is a no-op and the legacy in-process routes still serve the same endpoints (zero-disruption fallback). In docker-compose, the `app` container receives `AGENTS_SERVICE_URL=http://vex-agents-service:3002` so the proxy activates automatically. Both processes share the secret via `INTERNAL_SERVICE_TOKEN`.
 - **Shared Codebase:** A `shared/` directory centralizes types and Drizzle schema for consistency between frontend and backend.
 - **Containerization:** Docker and Docker Compose are used for consistent environments.
 - **Real-time Communication:** WebSockets are central to interactive features, supported by sticky sessions.
