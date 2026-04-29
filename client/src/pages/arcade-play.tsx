@@ -99,6 +99,10 @@ export default function ArcadePlayPage() {
   useEffect(() => {
     if (!game || !user) return;
     const expectedOrigin = window.location.origin;
+    // Capture narrowed local copies so the message handler closure
+    // doesn't lose the non-null narrowing across the boundary.
+    const safeUser = user;
+    const safeGame = game;
 
     function handleMessage(event: MessageEvent) {
       // Accept messages only from our own iframe (same origin).
@@ -123,13 +127,13 @@ export default function ArcadePlayPage() {
             "ready",
             {
               player: {
-                id: user.id,
-                username: user.username ?? "",
+                id: safeUser.id,
+                username: safeUser.username ?? "",
                 balance: "0",
                 language: lang,
-                avatarUrl: (user as { avatarUrl?: string }).avatarUrl ?? "",
+                avatarUrl: (safeUser as { avatarUrl?: string }).avatarUrl ?? "",
               },
-              sessionToken: `arcade_${game.key}_${Date.now()}`,
+              sessionToken: `arcade_${safeGame.key}_${Date.now()}`,
             },
             data.id,
           );

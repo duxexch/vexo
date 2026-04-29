@@ -406,8 +406,10 @@ async function seedMultiplayerGames() {
   }
 
   // Bump config version so clients re-fetch the new game list
-  const currentVersionRaw = await storage.getSystemConfig('multiplayer_games_version');
-  const currentVersion = parseInt(currentVersionRaw || '0', 10) || 0;
+  // `getSystemConfig` returns a `SystemConfigType | undefined` row, not a
+  // string — pull `.value` (which itself is nullable) before parsing.
+  const currentVersionRow = await storage.getSystemConfig('multiplayer_games_version');
+  const currentVersion = parseInt(currentVersionRow?.value ?? '0', 10) || 0;
   await storage.setSystemConfig('multiplayer_games_version', String(currentVersion + 1));
 
   logger.info(`Seeded ${missingGames.length} multiplayer games successfully`);

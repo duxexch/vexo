@@ -85,6 +85,13 @@ type ApiExternalGame = {
   playCount: number;
   isFeatured: boolean;
   sortOrder: number;
+  /**
+   * Player-count hints used by the home page to bucket games into
+   * solo / duo / party rails. Both fields are optional on the API
+   * payload — when missing we treat the game as a 1-player solo.
+   */
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
 };
 
 type ApiChallenge = {
