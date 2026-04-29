@@ -369,7 +369,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-6" dir={dir}>
       <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.adminTitle')}</h1>
+        <h1 className="font-display tracking-wider text-2xl sm:text-3xl leading-none">{t('dashboard.adminTitle')}</h1>
         <Badge variant="outline" className="text-primary border-primary">
           {t('dashboard.netRevenue')}: {formatAdminCurrency(stats?.netRevenue || 0)}
         </Badge>

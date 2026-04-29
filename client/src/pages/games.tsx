@@ -193,7 +193,7 @@ export default function GamesPage() {
         <div className="flex items-center gap-4">
           <BackButton fallbackPath="/dashboard" />
           <div>
-            <h1 className="text-2xl font-bold">{t('games.management')}</h1>
+            <h1 className="font-display tracking-wider text-2xl sm:text-3xl leading-none">{t('games.management')}</h1>
             <p className="text-sm text-muted-foreground">{t('games.managementDescription')}</p>
           </div>
         </div>
@@ -369,7 +369,7 @@ export default function GamesPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-semibold">{t('games.mostPlayed')}</h2>
+            <h2 className="font-display tracking-wider text-xl sm:text-2xl leading-none">{t('games.mostPlayed')}</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {mostPlayedGames.map((game, index) => (
@@ -421,7 +421,7 @@ export default function GamesPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Gamepad2 className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-xl font-semibold">
+            <h2 className="font-display tracking-wider text-xl sm:text-2xl leading-none">
               {categoryFilter === "all" ? t('games.allGames') : categories.find(c => c.value === categoryFilter)?.label}
             </h2>
             <Badge variant="secondary" className="ms-2">{filteredGames.length}</Badge>

@@ -115,7 +115,7 @@ export default function CoinPage() {
         </Reveal>
         <div className="mt-6 grid lg:grid-cols-[1.2fr_1fr] gap-10 items-center">
           <Reveal delay={0.05}>
-            <h1 className="font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+            <h1 className="font-display text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
               <span
                 className="bg-clip-text text-transparent"
                 style={{
@@ -167,7 +167,7 @@ export default function CoinPage() {
                 </span>
                 <span className="text-slate-500">{t("coin.priceNow")}</span>
               </div>
-              <div className="mt-3 font-['Bebas_Neue'] text-6xl tracking-wider">
+              <div className="mt-3 font-display text-6xl tracking-wider">
                 $<Counter to={current} decimals={4} duration={1.2} />
               </div>
               <div
@@ -292,7 +292,7 @@ export default function CoinPage() {
             <Reveal key={s.k} delay={i * 0.05}>
               <GlassCard className="p-5 h-full" glow={s.color}>
                 <Icon className="h-7 w-7 mb-3" style={{ color: s.color }} />
-                <div className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider">
+                <div className="font-display text-3xl sm:text-4xl tracking-wider">
                   <Counter
                     to={s.v}
                     prefix={s.prefix || ""}
@@ -342,7 +342,7 @@ export default function CoinPage() {
                   >
                     <Icon className="h-6 w-6" style={{ color: u.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                  <h3 className="font-display text-2xl tracking-wider mb-2">
                     {t("coin.use." + u.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -378,7 +378,7 @@ export default function CoinPage() {
               <Reveal key={r.k} delay={i * 0.07}>
                 <div className="flex gap-4 sm:gap-5 items-start">
                   <div
-                    className="shrink-0 grid place-items-center w-14 h-14 sm:w-16 sm:h-16 rounded-full font-['Bebas_Neue'] text-2xl tracking-wider relative z-10"
+                    className="shrink-0 grid place-items-center w-14 h-14 sm:w-16 sm:h-16 rounded-full font-display text-2xl tracking-wider relative z-10"
                     style={{
                       background: `${r.color}20`,
                       border: `2px solid ${r.color}`,
@@ -403,7 +403,7 @@ export default function CoinPage() {
                         {r.status}
                       </span>
                     </div>
-                    <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                    <h3 className="font-display text-2xl tracking-wider mb-2">
                       {t("coin.road." + r.k + ".title")}
                     </h3>
                     <p className="text-sm text-slate-400 leading-relaxed">
@@ -421,7 +421,7 @@ export default function CoinPage() {
       <section>
         <Reveal>
           <SpotlightCard from={BLUE} via="#1565c0" to="#0a3a8c">
-            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+            <h2 className="font-display text-5xl sm:text-6xl tracking-wider">
               {t("coin.cta.title")}
             </h2>
             <p className="mt-4 text-base sm:text-lg text-blue-100 max-w-2xl mx-auto">

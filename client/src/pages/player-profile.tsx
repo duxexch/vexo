@@ -236,7 +236,7 @@ export default function PlayerProfilePage() {
       <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-4" dir={dir}>
         <div className="flex items-center gap-3 sm:gap-4 mb-6">
           <BackButton />
-          <h1 className="text-xl sm:text-2xl font-bold">{t('profile.title')}</h1>
+          <h1 className="font-display tracking-wider text-2xl sm:text-3xl leading-none">{t('profile.title')}</h1>
         </div>
         <Card>
           <CardContent className="p-8 text-center">
@@ -280,7 +280,7 @@ export default function PlayerProfilePage() {
     <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-4 space-y-6" dir={dir}>
       <div className="flex items-center gap-3 sm:gap-4">
         <BackButton />
-        <h1 className="text-xl sm:text-2xl font-bold">{isOwnProfile ? t('profile.myProfile') : t('profile.title')}</h1>
+        <h1 className="font-display tracking-wider text-2xl sm:text-3xl leading-none">{isOwnProfile ? t('profile.myProfile') : t('profile.title')}</h1>
       </div>
 
       <Card className="overflow-hidden">
@@ -307,7 +307,7 @@ export default function PlayerProfilePage() {
 
             <div className="flex-1 pt-2">
               <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-2xl font-bold">{stats.nickname || stats.username}</h2>
+                <h2 className="font-display tracking-wider text-2xl sm:text-3xl leading-none">{stats.nickname || stats.username}</h2>
                 {stats.trustBadge && (
                   <Badge
                     className="border-transparent text-white"

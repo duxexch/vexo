@@ -1175,7 +1175,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h2
-                  className="font-['Bebas_Neue'] tracking-wider text-3xl sm:text-4xl text-white leading-none drop-shadow-[0_2px_8px_rgba(30,136,255,0.5)]"
+                  className="font-display tracking-wider text-3xl sm:text-4xl text-white leading-none drop-shadow-[0_2px_8px_rgba(30,136,255,0.5)]"
                   data-testid="text-chat-title"
                 >
                   {t("chat.title")}
@@ -1210,7 +1210,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
               )}
               {totalUnread > 0 && (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-[#1e88ff]/15 border border-[#1e88ff]/40 px-2 py-0.5 text-[10px] font-medium text-[#90c8ff] tabular-nums"
+                  className="inline-flex items-center gap-1 rounded-full bg-brand-blue/15 border border-brand-blue/40 px-2 py-0.5 text-[10px] font-medium text-[#90c8ff] tabular-nums"
                   data-testid="badge-total-unread"
                 >
                   <MessageCircle className="w-2.5 h-2.5" />
@@ -1237,7 +1237,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                 placeholder={t("chat.searchConversations")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="ps-9 h-10 rounded-xl bg-white/[0.06] border-white/15 text-white placeholder:text-white/40 focus:bg-white/[0.1] focus:border-[#1e88ff]/50 transition-all"
+                className="ps-9 h-10 rounded-xl bg-white/[0.06] border-white/15 text-white placeholder:text-white/40 focus:bg-white/[0.1] focus:border-brand-blue/50 transition-all"
                 data-testid="input-chat-search"
               />
             </div>
@@ -1254,7 +1254,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     className={cn(
                       "flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all",
                       active
-                        ? "bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
+                        ? "bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
                         : "bg-white/[0.04] text-white/60 hover:bg-white/[0.08] hover:text-white"
                     )}
                     data-testid={`chat-filter-${f}`}
@@ -1276,10 +1276,10 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
         <ScrollArea className="flex-1">
           {filteredConversations.length === 0 ? (
             <div className="p-6 text-center">
-              <div className="mx-auto mb-4 grid place-items-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1e88ff]/20 to-[#0a4d9c]/20 border border-[#1e88ff]/30">
-                <MessageCircle className="h-7 w-7 text-[#1e88ff]" />
+              <div className="mx-auto mb-4 grid place-items-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-blue/20 to-brand-blue-dark/20 border border-brand-blue/30">
+                <MessageCircle className="h-7 w-7 text-brand-blue" />
               </div>
-              <p className="font-['Bebas_Neue'] tracking-wider text-xl text-foreground">
+              <p className="font-display tracking-wider text-xl text-foreground">
                 {chatListFilter === "unread" ? t("chat.noUnread") :
                  chatListFilter === "online" ? t("chat.noOnline") :
                  conversations.length === 0 ? t("chat.noConvosTitle") : t("chat.noConversations")}
@@ -1293,7 +1293,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                 <Button
                   size="sm"
                   onClick={() => navigate("/friends")}
-                  className="mt-4 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
+                  className="mt-4 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-dark hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
                   data-testid="button-empty-find-friends"
                 >
                   <Pencil className="w-3.5 h-3.5 me-1.5" />
@@ -1314,15 +1314,15 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       "group relative w-full p-3 min-h-[48px] rounded-xl text-start transition-all duration-200",
                       "border border-transparent",
                       activeConversation === conv.otherUserId
-                        ? "bg-gradient-to-r from-[#1e88ff]/15 to-[#0a4d9c]/10 border-[#1e88ff]/40 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.45)]"
+                        ? "bg-gradient-to-r from-brand-blue/15 to-brand-blue-dark/10 border-brand-blue/40 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.45)]"
                         : conv.unreadCount > 0
-                        ? "bg-gradient-to-r from-[#1e88ff]/8 to-transparent border-[#1e88ff]/20 hover:border-[#1e88ff]/40 hover:bg-[#1e88ff]/10"
+                        ? "bg-gradient-to-r from-brand-blue/8 to-transparent border-brand-blue/20 hover:border-brand-blue/40 hover:bg-brand-blue/10"
                         : "hover:bg-white/[0.05] hover:border-white/10"
                     )}
                     data-testid={`chat-conversation-${conv.otherUserId}`}
                   >
                     {conv.unreadCount > 0 && (
-                      <span className="absolute start-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-gradient-to-b from-[#1e88ff] to-[#0a4d9c]" />
+                      <span className="absolute start-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-gradient-to-b from-brand-blue to-brand-blue-dark" />
                     )}
                     <div className="flex items-start gap-3">
                       <div className="relative">
@@ -1337,7 +1337,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                         )}
                         <Avatar className={cn("h-10 w-10 ring-2", userOnline ? "ring-emerald-400/70" : "ring-transparent")}>
                           <AvatarImage src={conv.otherUser.avatarUrl || undefined} />
-                          <AvatarFallback className="bg-[#1e88ff]/15 text-[#1e88ff] text-sm font-semibold">{getInitials(conv.otherUser)}</AvatarFallback>
+                          <AvatarFallback className="bg-brand-blue/15 text-brand-blue text-sm font-semibold">{getInitials(conv.otherUser)}</AvatarFallback>
                         </Avatar>
                         <span
                           className={cn(
@@ -1448,7 +1448,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                 )}
                 <Avatar className={cn("h-10 w-10 ring-2", isActiveUserOnline ? "ring-emerald-400/70" : "ring-white/10")}>
                   <AvatarImage src={activeUserProfile?.avatarUrl || undefined} />
-                  <AvatarFallback className="bg-[#1e88ff]/15 text-[#1e88ff] text-sm font-semibold">{activeUserProfile ? getInitials(activeUserProfile) : "??"}</AvatarFallback>
+                  <AvatarFallback className="bg-brand-blue/15 text-brand-blue text-sm font-semibold">{activeUserProfile ? getInitials(activeUserProfile) : "??"}</AvatarFallback>
                 </Avatar>
                 <span
                   className={cn(
@@ -1460,7 +1460,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
               <div className="flex-1 min-w-0">
                 <h3 className="flex min-w-0 items-center gap-2">
                   <span
-                    className="font-['Bebas_Neue'] tracking-wider text-xl sm:text-2xl leading-none line-clamp-2 break-words [overflow-wrap:anywhere]"
+                    className="font-display tracking-wider text-xl sm:text-2xl leading-none line-clamp-2 break-words [overflow-wrap:anywhere]"
                     data-testid="text-active-user-name"
                   >
                     {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}

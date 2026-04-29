@@ -57,7 +57,7 @@ export default function AffiliatesPage() {
           <SectionEyebrow color={BLUE}>{t("aff.eyebrow")}</SectionEyebrow>
         </Reveal>
         <Reveal delay={0.05}>
-          <h1 className="mt-6 font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+          <h1 className="mt-6 font-display text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
             <span
               className="bg-clip-text text-transparent"
               style={{
@@ -109,7 +109,7 @@ export default function AffiliatesPage() {
             ].map((s, i) => (
               <GlassCard key={i} className="p-4 sm:p-5 text-center">
                 <div
-                  className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider"
+                  className="font-display text-3xl sm:text-4xl tracking-wider"
                   style={{ color: s.c }}
                 >
                   {s.v}
@@ -161,7 +161,7 @@ export default function AffiliatesPage() {
                   >
                     <Icon className="h-6 w-6" style={{ color: b.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                  <h3 className="font-display text-2xl tracking-wider mb-2">
                     {t("aff.benefit." + b.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -201,13 +201,13 @@ export default function AffiliatesPage() {
                       <Icon className="h-5 w-5" style={{ color }} />
                     </div>
                     <span
-                      className="font-['Bebas_Neue'] text-4xl tracking-wider opacity-30"
+                      className="font-display text-4xl tracking-wider opacity-30"
                       style={{ color }}
                     >
                       0{n}
                     </span>
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                  <h3 className="font-display text-xl tracking-wider mb-2">
                     {t("aff.step." + n + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -240,7 +240,7 @@ export default function AffiliatesPage() {
                   >
                     <Icon className="h-7 w-7" style={{ color: a.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                  <h3 className="font-display text-xl tracking-wider mb-2">
                     {t("aff.audience." + a.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -260,7 +260,7 @@ export default function AffiliatesPage() {
             <div className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
               <div>
                 <SectionEyebrow color={GOLD}>{t("mkt.brand.eyebrow")}</SectionEyebrow>
-                <h2 className="mt-4 font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
+                <h2 className="mt-4 font-display text-4xl sm:text-5xl tracking-wider">
                   {t("aff.diff.title")}
                 </h2>
               </div>
@@ -288,7 +288,7 @@ export default function AffiliatesPage() {
       <section>
         <Reveal>
           <SpotlightCard from={BLUE} via="#1565c0" to="#0a3a8c">
-            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+            <h2 className="font-display text-5xl sm:text-6xl tracking-wider">
               {t("aff.cta.title")}
             </h2>
             <p className="mt-4 text-base sm:text-lg text-blue-100 max-w-2xl mx-auto">

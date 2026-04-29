@@ -128,7 +128,7 @@ export function SectionHeading({
       )}
     >
       {eyebrow && <SectionEyebrow color={accent}>{eyebrow}</SectionEyebrow>}
-      <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl md:text-6xl tracking-wider leading-[0.95]">
+      <h2 className="font-display text-4xl sm:text-5xl md:text-6xl tracking-wider leading-[0.95]">
         {title}
       </h2>
       {subtitle && (
@@ -274,7 +274,7 @@ export function SpotlightCard({
         transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
       />
       <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div className="absolute top-0 left-0 w-72 h-72 rounded-full blur-[100px] bg-[#ffb627]" />
+        <div className="absolute top-0 left-0 w-72 h-72 rounded-full blur-[100px] bg-brand-gold" />
         <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full blur-[100px] bg-white" />
       </div>
       <div className="relative">{children}</div>
@@ -300,7 +300,7 @@ export function Marquee({
       >
         {doubled.map((it, i) => (
           <div key={i} className="flex items-center gap-3 shrink-0">
-            <span className="font-['Bebas_Neue'] text-2xl tracking-wider text-[#ffb627]">
+            <span className="font-display text-2xl tracking-wider text-brand-gold">
               {it.value}
             </span>
             <span className="text-xs uppercase tracking-widest text-slate-400">

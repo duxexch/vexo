@@ -93,7 +93,7 @@ function UserCard({
       className="group relative flex flex-wrap items-start sm:items-center gap-3 p-3 rounded-2xl
                  bg-white/[0.04] dark:bg-white/[0.04] backdrop-blur-sm
                  border border-white/[0.06] dark:border-white/10
-                 hover:border-[#1e88ff]/40
+                 hover:border-brand-blue/40
                  hover:bg-white/[0.06]
                  hover:shadow-[0_12px_30px_-12px_rgba(30,136,255,0.5)]
                  hover:-translate-y-[1px]
@@ -114,12 +114,12 @@ function UserCard({
         <Avatar
           className={cn(
             "h-12 w-12 ring-2 transition-all",
-            isOnline ? "ring-emerald-400/70" : "ring-white/10 group-hover:ring-[#1e88ff]/40"
+            isOnline ? "ring-emerald-400/70" : "ring-white/10 group-hover:ring-brand-blue/40"
           )}
           data-testid={`avatar-user-${user.id}`}
         >
           <AvatarImage src={user.avatarUrl || user.profilePicture || undefined} alt={user.username} />
-          <AvatarFallback className="text-sm font-semibold bg-[#1e88ff]/15 text-[#1e88ff]">
+          <AvatarFallback className="text-sm font-semibold bg-brand-blue/15 text-brand-blue">
             {initials}
           </AvatarFallback>
         </Avatar>
@@ -143,7 +143,7 @@ function UserCard({
           </span>
           <Badge
             variant="outline"
-            className="text-[10px] h-5 px-1.5 font-mono border-[#ffb627]/30 text-[#ffb627]/90 bg-[#ffb627]/5"
+            className="text-[10px] h-5 px-1.5 font-mono border-brand-gold/30 text-brand-gold/90 bg-brand-gold/5"
             data-testid={`badge-level-${user.id}`}
           >
             Lv {level}
@@ -158,7 +158,7 @@ function UserCard({
             </Badge>
           )}
           {actionType === "suggestion" && mutual > 0 && (
-            <Badge className="text-[10px] h-5 px-1.5 bg-[#1e88ff]/15 text-[#1e88ff] border-0">
+            <Badge className="text-[10px] h-5 px-1.5 bg-brand-blue/15 text-brand-blue border-0">
               <Users className="w-3 h-3 me-0.5" />
               {t("friends.mutualWithCount", { count: mutual })}
             </Badge>
@@ -184,7 +184,7 @@ function UserCard({
           <>
             <Button
               size="sm"
-              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
+              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-dark hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
               onClick={() => onAction(user.id, "chat")}
               disabled={isLoading}
               data-testid={`button-chat-${user.id}`}
@@ -195,7 +195,7 @@ function UserCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-full px-3 text-xs border-[#ffb627]/40 text-[#ffb627] hover:bg-[#ffb627]/10 hover:text-[#ffb627]"
+              className="h-9 rounded-full px-3 text-xs border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10 hover:text-brand-gold"
               onClick={() => onAction(user.id, "challenge")}
               disabled={isLoading}
               data-testid={`button-challenge-${user.id}`}
@@ -243,7 +243,7 @@ function UserCard({
           ) : (
             <Button
               size="sm"
-              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
+              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-dark hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
               onClick={() => onAction(user.id, "friend-request")}
               disabled={isLoading}
               data-testid={`button-followback-${user.id}`}
@@ -369,7 +369,7 @@ function UserCard({
             ) : (
               <Button
                 size="sm"
-                className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
+                className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-dark hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
                 onClick={() => onAction(user.id, "friend-request")}
                 disabled={isLoading}
                 data-testid={`button-add-friend-${user.id}`}
@@ -470,18 +470,18 @@ function EmptySection({
   return (
     <div className="flex flex-col items-center justify-center py-14 px-4 text-center rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.04] to-transparent">
       <div className="relative mb-5">
-        <div className="absolute inset-0 -z-10 rounded-3xl blur-2xl bg-[#1e88ff]/20" />
-        <div className="rounded-2xl bg-gradient-to-br from-[#1e88ff]/20 to-[#0a4d9c]/20 border border-[#1e88ff]/30 p-5">
-          <Icon className="h-9 w-9 text-[#1e88ff]" />
+        <div className="absolute inset-0 -z-10 rounded-3xl blur-2xl bg-brand-blue/20" />
+        <div className="rounded-2xl bg-gradient-to-br from-brand-blue/20 to-brand-blue-dark/20 border border-brand-blue/30 p-5">
+          <Icon className="h-9 w-9 text-brand-blue" />
         </div>
       </div>
-      <p className="font-['Bebas_Neue'] tracking-wider text-2xl text-foreground">{title}</p>
+      <p className="font-display tracking-wider text-2xl text-foreground">{title}</p>
       <p className="text-xs text-muted-foreground/80 mt-1.5 max-w-[280px] leading-relaxed">{desc}</p>
       {ctaLabel && onCta && (
         <Button
           size="sm"
           onClick={onCta}
-          className="mt-5 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
+          className="mt-5 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-brand-blue to-brand-blue-dark hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
         >
           <Sparkles className="w-3.5 h-3.5 me-1.5" />
           {ctaLabel}
@@ -515,7 +515,7 @@ function TabButton({
         "relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium",
         "transition-all duration-200 whitespace-nowrap shrink-0",
         active
-          ? "bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_6px_18px_-6px_rgba(30,136,255,0.7)]"
+          ? "bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white shadow-[0_6px_18px_-6px_rgba(30,136,255,0.7)]"
           : "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
       )}
     >
@@ -525,7 +525,7 @@ function TabButton({
         <span
           className={cn(
             "inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[10px] font-bold tabular-nums",
-            active ? "bg-white/25 text-white" : "bg-[#ffb627]/15 text-[#ffb627]"
+            active ? "bg-white/25 text-white" : "bg-brand-gold/15 text-brand-gold"
           )}
         >
           {count! > 99 ? "99+" : count}
@@ -552,8 +552,8 @@ function StatTile({
   testId?: string;
 }) {
   const accentMap = {
-    blue: "from-[#1e88ff]/30 to-[#0a4d9c]/20 text-[#1e88ff] border-[#1e88ff]/30",
-    gold: "from-[#ffb627]/30 to-[#ff8a00]/20 text-[#ffb627] border-[#ffb627]/30",
+    blue: "from-brand-blue/30 to-brand-blue-dark/20 text-brand-blue border-brand-blue/30",
+    gold: "from-brand-gold/30 to-brand-gold-dark/20 text-brand-gold border-brand-gold/30",
     emerald: "from-emerald-500/30 to-emerald-700/20 text-emerald-400 border-emerald-500/30",
     violet: "from-violet-500/30 to-purple-700/20 text-violet-400 border-violet-500/30",
   } as const;
@@ -570,7 +570,7 @@ function StatTile({
         <Icon className="w-3.5 h-3.5" />
         <span className="text-[10px] uppercase tracking-wider opacity-80">{label}</span>
       </div>
-      <span className="font-['Bebas_Neue'] tracking-wider text-3xl leading-none tabular-nums">
+      <span className="font-display tracking-wider text-3xl leading-none tabular-nums">
         {value}
       </span>
     </div>
@@ -873,7 +873,7 @@ export default function FriendsPage() {
     return (
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground/80 px-1 font-medium">
-          {t("friends.searchResults")} <span className="text-[#1e88ff] tabular-nums">({searchResults.length})</span>
+          {t("friends.searchResults")} <span className="text-brand-blue tabular-nums">({searchResults.length})</span>
         </p>
         {searchResults.map((u) => (
           <UserCard key={u.id} user={u} actionType="search" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
@@ -895,7 +895,7 @@ export default function FriendsPage() {
           <div className="relative flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <h1
-                className="font-['Bebas_Neue'] tracking-wider text-4xl sm:text-5xl text-white leading-none drop-shadow-[0_2px_10px_rgba(30,136,255,0.5)]"
+                className="font-display tracking-wider text-4xl sm:text-5xl text-white leading-none drop-shadow-[0_2px_10px_rgba(30,136,255,0.5)]"
                 data-testid="text-friends-title"
               >
                 {t("friends.title")}
@@ -969,7 +969,7 @@ export default function FriendsPage() {
             }}
             onFocus={() => setIsSearchActive(true)}
             className="ps-10 pe-9 h-11 rounded-xl bg-white/[0.04] border-white/10
-                       focus:bg-white/[0.07] focus:border-[#1e88ff]/40 transition-all"
+                       focus:bg-white/[0.07] focus:border-brand-blue/40 transition-all"
             data-testid="input-search-users"
           />
           {isSearchActive && (
@@ -1016,11 +1016,11 @@ export default function FriendsPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <span className="grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br from-[#ffb627] to-[#ff8a00] text-black">
+                <span className="grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br from-brand-gold to-brand-gold-dark text-black">
                   <Sparkles className="w-3.5 h-3.5" />
                 </span>
                 <div>
-                  <h3 className="font-['Bebas_Neue'] tracking-wider text-base leading-none text-foreground" data-testid="text-suggestions-title">
+                  <h3 className="font-display tracking-wider text-base leading-none text-foreground" data-testid="text-suggestions-title">
                     {t("friends.suggestions")}
                   </h3>
                   <p className="text-[10px] text-muted-foreground/70 mt-0.5">{t("friends.suggestionsDesc")}</p>

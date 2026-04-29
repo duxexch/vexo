@@ -71,7 +71,7 @@ export default function InvestPage() {
               </SectionEyebrow>
             </Reveal>
             <Reveal delay={0.05}>
-              <h1 className="mt-6 font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+              <h1 className="mt-6 font-display text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
                 <span
                   className="bg-clip-text text-transparent"
                   style={{
@@ -129,7 +129,7 @@ export default function InvestPage() {
                   <div className="text-[10px] uppercase tracking-widest text-slate-500">
                     {t("invest.qualifiedOnly")}
                   </div>
-                  <div className="font-['Bebas_Neue'] text-3xl tracking-wider mt-1">
+                  <div className="font-display text-3xl tracking-wider mt-1">
                     {t("mkt.exclusive")}
                   </div>
                 </div>
@@ -184,7 +184,7 @@ export default function InvestPage() {
                   >
                     <Icon className="h-6 w-6" style={{ color: r.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                  <h3 className="font-display text-2xl tracking-wider mb-2">
                     {t("invest.reason." + r.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -253,7 +253,7 @@ export default function InvestPage() {
                             {t("invest.alloc." + a.key)}
                           </span>
                           <span
-                            className="font-['Bebas_Neue'] text-xl tracking-wider"
+                            className="font-display text-xl tracking-wider"
                             style={{ color: a.color }}
                           >
                             {a.value}%
@@ -298,7 +298,7 @@ export default function InvestPage() {
                   >
                     <Icon className="h-7 w-7" style={{ color: a.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                  <h3 className="font-display text-xl tracking-wider mb-2">
                     {t("invest.adv." + a.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -326,7 +326,7 @@ export default function InvestPage() {
               <Reveal key={n} delay={i * 0.05}>
                 <GlassCard className="p-5 h-full" glow={color}>
                   <div
-                    className="font-['Bebas_Neue'] text-5xl tracking-wider mb-2"
+                    className="font-display text-5xl tracking-wider mb-2"
                     style={{ color }}
                   >
                     Q{n}
@@ -348,7 +348,7 @@ export default function InvestPage() {
             <div className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
               <div>
                 <Building2 className="h-10 w-10 mb-4" style={{ color: GOLD }} />
-                <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
+                <h2 className="font-display text-4xl sm:text-5xl tracking-wider">
                   {t("invest.commit.title")}
                 </h2>
               </div>
@@ -376,7 +376,7 @@ export default function InvestPage() {
       <section>
         <Reveal>
           <SpotlightCard from="#a06a00" via="#7a4f00" to="#3d2800">
-            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+            <h2 className="font-display text-5xl sm:text-6xl tracking-wider">
               {t("invest.cta.title")}
             </h2>
             <p className="mt-4 text-base sm:text-lg text-amber-100/90 max-w-2xl mx-auto">

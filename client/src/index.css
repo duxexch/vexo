@@ -303,6 +303,20 @@
   line-gap-override: 0%;
 }
 
+/* Display font (brand headings) */
+@font-face {
+  font-family: 'Bebas Neue';
+  font-display: swap;
+  src: local('Bebas Neue');
+}
+
+/* Bebas Neue has no Arabic glyphs and falls back to Poppins under RTL.
+   Letter-spacing breaks Arabic cursive joins, so neutralize tracking on
+   display-font headings whenever the document direction is RTL. */
+[dir="rtl"] .font-display {
+  letter-spacing: 0 !important;
+}
+
 /* Prevent layout shifts globally */
 *,
 *::before,
@@ -526,6 +540,15 @@ svg {
   --font-sans: 'Poppins', sans-serif;
   --font-serif: 'Poppins', sans-serif;
   --font-mono: Menlo, monospace;
+  --font-display: 'Bebas Neue', 'Poppins', sans-serif;
+
+  /* VEX brand identity tokens */
+  --brand-blue: 213 100% 56%;       /* #1e88ff */
+  --brand-blue-dark: 211 89% 33%;   /* #0a4d9c */
+  --brand-gold: 41 100% 57%;        /* #ffb627 */
+  --brand-gold-dark: 32 100% 50%;   /* #ff8a00 */
+  --surface-1: 220 13% 8%;          /* #0f1419 — main app dark surface */
+  --surface-2: 220 13% 11%;         /* card surface on dark */
   --radius: 0.5rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.03);
   --shadow-xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.05);
@@ -563,7 +586,20 @@ svg {
   --touch-target-min: 44px;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --game-board-max-h: min(600px, calc(100vh - var(--safe-area-bottom) - 120px));
+}
 
+/* Larger boards on tablets/desktops where vertical real estate exists */
+@media (min-width: 768px) {
+  :root {
+    --game-board-max-h: min(720px, calc(100vh - var(--safe-area-bottom) - 140px));
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --game-board-max-h: min(820px, calc(100vh - var(--safe-area-bottom) - 160px));
+  }
+}
+:root {
   /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);

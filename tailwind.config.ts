@@ -104,11 +104,22 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        brand: {
+          blue: "hsl(var(--brand-blue) / <alpha-value>)",
+          "blue-dark": "hsl(var(--brand-blue-dark) / <alpha-value>)",
+          gold: "hsl(var(--brand-gold) / <alpha-value>)",
+          "gold-dark": "hsl(var(--brand-gold-dark) / <alpha-value>)",
+        },
+        surface: {
+          1: "hsl(var(--surface-1) / <alpha-value>)",
+          2: "hsl(var(--surface-2) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        display: ["var(--font-display)"],
       },
       keyframes: {
         "accordion-down": {

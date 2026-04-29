@@ -57,7 +57,7 @@ export default function AgentsProgramPage() {
           <SectionEyebrow color={GOLD}>{t("agents.eyebrow")}</SectionEyebrow>
         </Reveal>
         <Reveal delay={0.05}>
-          <h1 className="mt-6 font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+          <h1 className="mt-6 font-display text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
             <span
               className="bg-clip-text text-transparent"
               style={{
@@ -142,7 +142,7 @@ export default function AgentsProgramPage() {
                   >
                     <Icon className="h-6 w-6" style={{ color: b.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                  <h3 className="font-display text-2xl tracking-wider mb-2">
                     {t("agents.benefit." + b.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -171,7 +171,7 @@ export default function AgentsProgramPage() {
               <Reveal key={n} delay={i * 0.06}>
                 <GlassCard className="p-6 h-full relative" glow={color}>
                   <div
-                    className="font-['Bebas_Neue'] text-7xl leading-none opacity-20 absolute top-2 end-3"
+                    className="font-display text-7xl leading-none opacity-20 absolute top-2 end-3"
                     style={{ color }}
                   >
                     {n}
@@ -183,7 +183,7 @@ export default function AgentsProgramPage() {
                     >
                       0{n}
                     </div>
-                    <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                    <h3 className="font-display text-xl tracking-wider mb-2">
                       {t("agents.step." + n + ".title")}
                     </h3>
                     <p className="text-sm text-slate-400 leading-relaxed">
@@ -221,7 +221,7 @@ export default function AgentsProgramPage() {
                   >
                     <Icon className="h-7 w-7" style={{ color: tool.color }} />
                   </div>
-                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                  <h3 className="font-display text-xl tracking-wider mb-2">
                     {t("agents.tool." + tool.k + ".title")}
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
@@ -241,7 +241,7 @@ export default function AgentsProgramPage() {
             <div className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
               <div>
                 <SectionEyebrow color={GOLD}>{t("mkt.brand.eyebrow")}</SectionEyebrow>
-                <h2 className="mt-4 font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
+                <h2 className="mt-4 font-display text-4xl sm:text-5xl tracking-wider">
                   {t("agents.promise.title")}
                 </h2>
               </div>
@@ -269,7 +269,7 @@ export default function AgentsProgramPage() {
       <section>
         <Reveal>
           <SpotlightCard from="#a06a00" via="#7a4f00" to="#3d2800">
-            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+            <h2 className="font-display text-5xl sm:text-6xl tracking-wider">
               {t("agents.cta.title")}
             </h2>
             <p className="mt-4 text-base sm:text-lg text-amber-100/90 max-w-2xl mx-auto">

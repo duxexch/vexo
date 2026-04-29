@@ -1337,7 +1337,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-4">
             <VexLogo size={64} loading="eager" fetchPriority="high" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">VEX</h1>
+          <h1 className="font-display tracking-widest text-3xl text-foreground leading-none">VEX</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('auth.gamingTrading')}</p>
         </div>
 

@@ -245,8 +245,8 @@ function Rail({
   const { t } = useI18n();
   const railRef = useRef<HTMLDivElement>(null);
   const accentMap = {
-    blue: "from-[#1e88ff] to-[#0a4d9c] shadow-[0_0_30px_-5px_#1e88ff]",
-    gold: "from-[#ffb627] to-[#a86b00] shadow-[0_0_30px_-5px_#ffb627]",
+    blue: "from-brand-blue to-brand-blue-dark shadow-[0_0_30px_-5px_#1e88ff]",
+    gold: "from-brand-gold to-[#a86b00] shadow-[0_0_30px_-5px_#ffb627]",
     red: "from-rose-500 to-rose-900 shadow-[0_0_30px_-5px_#ef4444]",
   }[accent];
 
@@ -264,7 +264,7 @@ function Rail({
             {icon}
           </span>
           <div className="min-w-0">
-            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none truncate">
+            <h2 className="font-display tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none truncate">
               {title}
             </h2>
             {kicker && (
@@ -344,8 +344,8 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
           <div className="absolute inset-0 bg-gradient-to-l from-slate-100/80 dark:from-[#0a0e1a] via-transparent dark:via-[#0a0e1a]/40 to-slate-100/80 dark:to-[#0a0e1a]" />
         </div>
         <div className="relative px-4 md:px-8 py-12 md:py-16 text-center">
-          <Trophy className="w-12 h-12 mx-auto text-[#ffb627] mb-4 opacity-70" />
-          <h1 className="font-['Bebas_Neue'] text-4xl md:text-5xl text-slate-900 dark:text-white drop-shadow-[0_4px_20px_rgba(30,136,255,0.4)]">
+          <Trophy className="w-12 h-12 mx-auto text-brand-gold mb-4 opacity-70" />
+          <h1 className="font-display text-4xl md:text-5xl text-slate-900 dark:text-white drop-shadow-[0_4px_20px_rgba(30,136,255,0.4)]">
             {t("home.noFeaturedTournaments") || "لا توجد بطولات مميزة حالياً"}
           </h1>
           <p className="text-slate-700 dark:text-slate-300 mt-3 max-w-md mx-auto leading-relaxed">
@@ -354,7 +354,7 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
           </p>
           <Button
             asChild
-            className="mt-6 h-11 px-6 bg-gradient-to-l from-[#ffb627] to-[#ff8a00] text-black font-bold rounded-md shadow-[0_8px_30px_-5px_rgba(255,182,39,0.6)] hover:brightness-110"
+            className="mt-6 h-11 px-6 bg-gradient-to-l from-brand-gold to-brand-gold-dark text-black font-bold rounded-md shadow-[0_8px_30px_-5px_rgba(255,182,39,0.6)] hover:brightness-110"
           >
             <Link href="/tournaments">
               <Trophy className="w-5 h-5 ml-2" />
@@ -409,21 +409,21 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
               </>
             )}
             {active.gameType && (
-              <Badge className="bg-[#ffb627] text-black hover:bg-[#ffb627] rounded-sm px-2 py-0 text-[10px] font-black">
+              <Badge className="bg-brand-gold text-black hover:bg-brand-gold rounded-sm px-2 py-0 text-[10px] font-black">
                 {active.gameType}
               </Badge>
             )}
           </div>
-          <h1 className="font-['Bebas_Neue'] text-4xl sm:text-5xl md:text-7xl leading-[0.9] text-slate-900 dark:text-white drop-shadow-[0_4px_20px_rgba(30,136,255,0.4)]">
+          <h1 className="font-display text-4xl sm:text-5xl md:text-7xl leading-[0.9] text-slate-900 dark:text-white drop-shadow-[0_4px_20px_rgba(30,136,255,0.4)]">
             {activeTitle}
-            <span className="block text-[#ffb627] text-2xl sm:text-3xl md:text-4xl mt-2">
+            <span className="block text-brand-gold text-2xl sm:text-3xl md:text-4xl mt-2">
               {t("home.prize") || "جائزة"} {fmtMoney(prizeNum)} {active.currency || "USDT"}
             </span>
           </h1>
           <div className="flex flex-wrap items-center gap-3 mt-6">
             <Button
               asChild
-              className="h-12 px-6 bg-gradient-to-l from-[#ffb627] to-[#ff8a00] text-black font-bold rounded-md shadow-[0_8px_30px_-5px_rgba(255,182,39,0.6)] hover:brightness-110"
+              className="h-12 px-6 bg-gradient-to-l from-brand-gold to-brand-gold-dark text-black font-bold rounded-md shadow-[0_8px_30px_-5px_rgba(255,182,39,0.6)] hover:brightness-110"
             >
               <Link href={`/tournaments/${active.shareSlug || active.id}`}>
                 <Trophy className="w-5 h-5 ml-2" />
@@ -443,7 +443,7 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
               </Button>
             )}
             <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-              <Users className="w-4 h-4 text-[#1e88ff]" />
+              <Users className="w-4 h-4 text-brand-blue" />
               <span className="font-bold text-slate-900 dark:text-white">{registered}</span>
               <span className="text-slate-500 dark:text-slate-500">/ {capacity}</span>
               <span className="text-slate-500 dark:text-slate-500">
@@ -452,7 +452,7 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
             </div>
             {countdown && (
               <div className="flex items-center gap-2 text-sm">
-                <Timer className="w-4 h-4 text-[#ffb627]" />
+                <Timer className="w-4 h-4 text-brand-gold" />
                 <span className="font-mono font-black text-slate-900 dark:text-white tracking-wider">
                   {countdown}
                 </span>
@@ -468,7 +468,7 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
                   onClick={() => setIdx(i)}
                   className={`h-1.5 rounded-full transition-all ${
                     i === idx
-                      ? "w-10 bg-[#ffb627]"
+                      ? "w-10 bg-brand-gold"
                       : "w-4 bg-slate-400/40 dark:bg-white/20"
                   }`}
                   aria-label={`${t("home.slide") || "شريحة"} ${i + 1}`}
@@ -509,7 +509,7 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
                 <span />
               )}
               {active.gameType && (
-                <Badge className="bg-black/60 text-[#ffb627] border border-[#ffb627]/40 rounded-sm px-2 py-0.5 text-[10px] font-bold">
+                <Badge className="bg-black/60 text-brand-gold border border-brand-gold/40 rounded-sm px-2 py-0.5 text-[10px] font-bold">
                   {active.gameType}
                 </Badge>
               )}
@@ -519,17 +519,17 @@ function HeroCarousel({ tournaments, lang }: { tournaments: ApiTournament[]; lan
               className="absolute bottom-0 inset-x-0 p-5"
               style={{ transform: "translateZ(60px)" }}
             >
-              <div className="flex items-center gap-2 text-[#ffb627] text-xs mb-2 font-bold tracking-widest">
+              <div className="flex items-center gap-2 text-brand-gold text-xs mb-2 font-bold tracking-widest">
                 <Trophy className="w-4 h-4" />
                 {t("home.grandPrize") || "الجائزة الكبرى"}
               </div>
-              <div className="font-['Bebas_Neue'] text-5xl text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] leading-none">
+              <div className="font-display text-5xl text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] leading-none">
                 {prizeNum.toLocaleString()}{" "}
-                <span className="text-[#ffb627]">{active.currency || "USDT"}</span>
+                <span className="text-brand-gold">{active.currency || "USDT"}</span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-l from-[#ffb627] to-[#ff8a00]"
+                  className="h-full bg-gradient-to-l from-brand-gold to-brand-gold-dark"
                   style={{ width: `${fillPct}%` }}
                 />
               </div>
@@ -608,26 +608,26 @@ function OwnerBar(props: OwnerBarProps) {
       <div className="relative px-4 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 items-center">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar className="w-16 h-16 ring-2 ring-[#ffb627] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0a0e1a]">
+            <Avatar className="w-16 h-16 ring-2 ring-brand-gold ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0a0e1a]">
               <AvatarImage src={avatarUrl || ""} alt={displayName} />
-              <AvatarFallback className="bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white font-black text-xl">
+              <AvatarFallback className="bg-gradient-to-br from-brand-blue to-brand-blue-dark text-white font-black text-xl">
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <span className="absolute -bottom-1 -left-1 grid place-items-center w-7 h-7 rounded-full bg-[#ffb627] border-2 border-slate-100 dark:border-[#0a0e1a] text-black font-black text-xs">
+            <span className="absolute -bottom-1 -left-1 grid place-items-center w-7 h-7 rounded-full bg-brand-gold border-2 border-slate-100 dark:border-[#0a0e1a] text-black font-black text-xs">
               {level}
             </span>
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-100 dark:border-[#0a0e1a]" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="font-['Bebas_Neue'] text-2xl text-slate-900 dark:text-white tracking-wider leading-none truncate">
+              <h3 className="font-display text-2xl text-slate-900 dark:text-white tracking-wider leading-none truncate">
                 {displayName}
               </h3>
-              <Crown className="w-4 h-4 text-[#ffb627] shrink-0" />
+              <Crown className="w-4 h-4 text-brand-gold shrink-0" />
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Badge className="bg-gradient-to-l from-[#ffb627] to-[#ff8a00] text-black hover:bg-[#ffb627] rounded-sm text-[10px] py-0 px-1.5 font-black">
+              <Badge className="bg-gradient-to-l from-brand-gold to-brand-gold-dark text-black hover:bg-brand-gold rounded-sm text-[10px] py-0 px-1.5 font-black">
                 {rankLabel}
               </Badge>
               <span className="text-xs text-slate-700 dark:text-slate-400">@{username}</span>
@@ -676,7 +676,7 @@ function OwnerBar(props: OwnerBarProps) {
           <div className="col-span-2 md:col-span-1 rounded-lg border border-slate-300/70 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-2.5">
             <div className="flex items-center justify-between text-[11px] text-slate-700 dark:text-slate-400">
               <span className="flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-[#1e88ff]" />
+                <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
                 XP الأسبوع
               </span>
               <span className="text-slate-900 dark:text-white font-bold">
@@ -685,11 +685,11 @@ function OwnerBar(props: OwnerBarProps) {
             </div>
             <Progress
               value={xpPercent}
-              className="h-1.5 mt-2 bg-slate-200/80 dark:bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-[#1e88ff] [&>div]:to-[#0a4d9c]"
+              className="h-1.5 mt-2 bg-slate-200/80 dark:bg-white/10 [&>div]:bg-gradient-to-l [&>div]:from-brand-blue [&>div]:to-brand-blue-dark"
             />
             <div className="text-[10px] text-slate-500 dark:text-slate-500 mt-1">
               {xpCurrent.toLocaleString("ar-EG")} / {xpTarget.toLocaleString("ar-EG")} لرتبة{" "}
-              <span className="text-[#ffb627] font-bold">{nextRankLabel}</span>
+              <span className="text-brand-gold font-bold">{nextRankLabel}</span>
             </div>
           </div>
         </div>
@@ -698,7 +698,7 @@ function OwnerBar(props: OwnerBarProps) {
           <Button
             type="button"
             onClick={onChallengeFriend}
-            className="h-11 px-4 bg-gradient-to-l from-[#1e88ff] to-[#0a4d9c] text-white font-bold rounded-md shadow-[0_6px_25px_-5px_rgba(30,136,255,0.7)] hover:brightness-110"
+            className="h-11 px-4 bg-gradient-to-l from-brand-blue to-brand-blue-dark text-white font-bold rounded-md shadow-[0_6px_25px_-5px_rgba(30,136,255,0.7)] hover:brightness-110"
             data-testid="button-stadium-challenge-friend"
           >
             <Swords className="w-4 h-4 ml-2" />
@@ -734,7 +734,7 @@ function StatCell({
   accent: "gold" | "green" | "red" | "orange";
 }) {
   const tone = {
-    gold: "text-[#ffb627]",
+    gold: "text-brand-gold",
     green: "text-emerald-400",
     red: "text-rose-400",
     orange: "text-orange-400",
@@ -745,7 +745,7 @@ function StatCell({
         <span className={tone}>{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className={`font-['Bebas_Neue'] text-2xl tracking-wider mt-1 ${tone} leading-none`}>
+      <div className={`font-display text-2xl tracking-wider mt-1 ${tone} leading-none`}>
         {value}
       </div>
       {sub && (
@@ -781,22 +781,22 @@ function TournamentCard({ t, lang }: { t: ApiTournament; lang: string }) {
               <span />
             )}
             {t.gameType && (
-              <Badge className="bg-[#1e88ff]/90 hover:bg-[#1e88ff] text-white rounded-sm px-2 py-0.5 text-[10px] font-bold">
+              <Badge className="bg-brand-blue/90 hover:bg-brand-blue text-white rounded-sm px-2 py-0.5 text-[10px] font-bold">
                 {t.gameType}
               </Badge>
             )}
           </div>
         </div>
         <div className="p-3">
-          <h3 className="font-['Bebas_Neue'] text-xl tracking-wider truncate">{title}</h3>
+          <h3 className="font-display text-xl tracking-wider truncate">{title}</h3>
           <div className="mt-2 flex items-center justify-between">
             <div className="text-[11px] text-slate-400">{t.currency || "USDT"}</div>
-            <div className="font-mono text-lg font-black text-[#ffb627]">
+            <div className="font-mono text-lg font-black text-brand-gold">
               {fmtMoney(prize)}
             </div>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full bg-gradient-to-l from-[#ffb627] to-[#ff8a00]" style={{ width: `${fillPct}%` }} />
+            <div className="h-full bg-gradient-to-l from-brand-gold to-brand-gold-dark" style={{ width: `${fillPct}%` }} />
           </div>
           <div className="mt-1.5 flex justify-between text-[10px] text-slate-300">
             <span>
@@ -843,13 +843,13 @@ function GameTileCard({ g, lang }: { g: ApiGame; lang: string }) {
           {cover ? (
             <img src={cover} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
           ) : (
-            <span className="font-['Bebas_Neue'] text-5xl tracking-wider text-white/95 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]">
+            <span className="font-display text-5xl tracking-wider text-white/95 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]">
               {initial}
             </span>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
           {g.isFeatured && (
-            <Badge className="absolute top-2 right-2 bg-[#ffb627] hover:bg-[#ffb627] text-black rounded-sm px-1.5 py-0 text-[9px] font-bold">
+            <Badge className="absolute top-2 right-2 bg-brand-gold hover:bg-brand-gold text-black rounded-sm px-1.5 py-0 text-[9px] font-bold">
               ★
             </Badge>
           )}
@@ -895,7 +895,7 @@ function SoloGameTileCard({ g, lang }: { g: ApiExternalGame; lang: string }) {
             />
           ) : (
             <span
-              className="font-['Bebas_Neue'] text-6xl tracking-wider text-white drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]"
+              className="font-display text-6xl tracking-wider text-white drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]"
               style={{ color: accent }}
             >
               {initial}
@@ -903,7 +903,7 @@ function SoloGameTileCard({ g, lang }: { g: ApiExternalGame; lang: string }) {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
           {g.isFeatured && (
-            <Badge className="absolute top-2 right-2 bg-[#ffb627] hover:bg-[#ffb627] text-black rounded-sm px-1.5 py-0 text-[9px] font-bold">
+            <Badge className="absolute top-2 right-2 bg-brand-gold hover:bg-brand-gold text-black rounded-sm px-1.5 py-0 text-[9px] font-bold">
               ★
             </Badge>
           )}
@@ -935,14 +935,14 @@ function ChallengeCard({ c, gamesMap }: { c: ApiChallenge; gamesMap: Map<string,
           <div className="font-bold text-white truncate">{c.player1Name}</div>
           <div className="text-[11px] text-slate-400 truncate">vs {opp}</div>
         </div>
-        <Badge className="bg-[#1e88ff]/90 text-white rounded-sm px-1.5 py-0 text-[9px] font-bold">
+        <Badge className="bg-brand-blue/90 text-white rounded-sm px-1.5 py-0 text-[9px] font-bold">
           {game}
         </Badge>
       </div>
       <div className="mt-3 flex items-end justify-between">
         <div>
           <div className="text-[10px] text-slate-500">رهان</div>
-          <div className="font-mono text-lg font-black text-[#ffb627]">
+          <div className="font-mono text-lg font-black text-brand-gold">
             {fmtMoney(c.betAmount)} <span className="text-xs text-slate-400">USDT</span>
           </div>
         </div>
@@ -984,13 +984,13 @@ function PlatformStatsTicker() {
       label: t("home.activeGames") || "ألعاب نشطة",
       value: data?.activeGames ?? 0,
       icon: <Gamepad2 className="w-3.5 h-3.5" />,
-      tone: "text-[#1e88ff]",
+      tone: "text-brand-blue",
     },
     {
       label: t("home.totalUsers") || "إجمالي اللاعبين",
       value: data?.totalUsers ?? 0,
       icon: <Star className="w-3.5 h-3.5" />,
-      tone: "text-[#ffb627]",
+      tone: "text-brand-gold",
     },
     {
       label: t("home.totalGames") || "ألعاب على المنصة",
@@ -1043,7 +1043,7 @@ function TopPlayerCard({ p }: { p: ApiLeaderboardEntry }) {
   const initials = (p.nickname || p.username || "?").charAt(0).toUpperCase();
   const rankAccent =
     p.rank === 1
-      ? "from-[#ffb627] to-[#ff8a00]"
+      ? "from-brand-gold to-brand-gold-dark"
       : p.rank === 2
       ? "from-slate-300 to-slate-500"
       : p.rank === 3
@@ -1054,9 +1054,9 @@ function TopPlayerCard({ p }: { p: ApiLeaderboardEntry }) {
       <Link href={`/profile/${p.id}`} className="block">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Avatar className="w-14 h-14 ring-2 ring-[#ffb627]/60">
+            <Avatar className="w-14 h-14 ring-2 ring-brand-gold/60">
               <AvatarImage src={p.profilePicture || ""} alt={p.nickname || p.username} />
-              <AvatarFallback className="bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white font-black">
+              <AvatarFallback className="bg-gradient-to-br from-brand-blue to-brand-blue-dark text-white font-black">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -1077,7 +1077,7 @@ function TopPlayerCard({ p }: { p: ApiLeaderboardEntry }) {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-md bg-white/[0.04] border border-white/10 p-2 text-center">
             <div className="text-[10px] text-slate-500">أرباح</div>
-            <div className="font-mono font-black text-sm text-[#ffb627]">
+            <div className="font-mono font-black text-sm text-brand-gold">
               {fmtMoney(earnings)}
             </div>
           </div>
@@ -1111,7 +1111,7 @@ function MostPlayedCard({ g }: { g: ApiGame }) {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
             />
           ) : (
-            <span className="font-['Bebas_Neue'] text-5xl tracking-wider text-white/95 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]">
+            <span className="font-display text-5xl tracking-wider text-white/95 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)]">
               {initial}
             </span>
           )}
@@ -1128,7 +1128,7 @@ function MostPlayedCard({ g }: { g: ApiGame }) {
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] text-slate-500">جولات</div>
-            <div className="font-mono font-black text-sm text-[#1e88ff]">
+            <div className="font-mono font-black text-sm text-brand-blue">
               {fmtMoney(g.playCount)}
             </div>
           </div>
@@ -1145,8 +1145,8 @@ function PlayerOfWeekCard({ p }: { p: ApiLeaderboardEntry | null }) {
   const { t } = useI18n();
   if (!p) {
     return (
-      <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
-        <div className="flex items-center gap-2 text-[#ffb627] text-xs font-bold tracking-widest mb-2">
+      <Card className="relative overflow-hidden bg-gradient-to-br from-brand-blue/15 via-[#0a0e1a] to-brand-gold/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
+        <div className="flex items-center gap-2 text-brand-gold text-xs font-bold tracking-widest mb-2">
           <Crown className="w-4 h-4" />
           {t("home.playerOfWeek") || "لاعب الأسبوع"}
         </div>
@@ -1159,22 +1159,22 @@ function PlayerOfWeekCard({ p }: { p: ApiLeaderboardEntry | null }) {
   const initials = (p.nickname || p.username || "?").charAt(0).toUpperCase();
   const earnings = Number(p.totalEarnings || 0);
   return (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff]/15 via-[#0a0e1a] to-[#ffb627]/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
-      <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#ffb627]/30 blur-3xl" />
+    <Card className="relative overflow-hidden bg-gradient-to-br from-brand-blue/15 via-[#0a0e1a] to-brand-gold/10 border-slate-300/70 dark:border-white/10 rounded-xl p-5 text-white">
+      <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-brand-gold/30 blur-3xl" />
       <div className="relative">
-        <div className="flex items-center gap-2 text-[#ffb627] text-xs font-bold tracking-widest mb-3">
+        <div className="flex items-center gap-2 text-brand-gold text-xs font-bold tracking-widest mb-3">
           <Crown className="w-4 h-4" />
           {t("home.playerOfWeek") || "لاعب الأسبوع"}
         </div>
         <Link href={`/profile/${p.id}`} className="flex items-center gap-3 group">
-          <Avatar className="w-14 h-14 ring-2 ring-[#ffb627]">
+          <Avatar className="w-14 h-14 ring-2 ring-brand-gold">
             <AvatarImage src={p.profilePicture || ""} alt={p.nickname || p.username} />
-            <AvatarFallback className="bg-gradient-to-br from-[#ffb627] to-[#a86b00] text-black font-black">
+            <AvatarFallback className="bg-gradient-to-br from-brand-gold to-[#a86b00] text-black font-black">
               {initials}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <div className="font-['Bebas_Neue'] text-2xl tracking-wider leading-none truncate group-hover:text-[#ffb627] transition-colors">
+            <div className="font-display text-2xl tracking-wider leading-none truncate group-hover:text-brand-gold transition-colors">
               {p.nickname || p.username}
             </div>
             <div className="text-xs text-slate-400 mt-1">
@@ -1185,7 +1185,7 @@ function PlayerOfWeekCard({ p }: { p: ApiLeaderboardEntry | null }) {
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <MiniStat label={t("home.wins") || "فوز"} value={String(p.gamesWon)} tone="text-emerald-400" />
           <MiniStat label={t("home.losses") || "هزيمة"} value={String(p.gamesLost)} tone="text-rose-400" />
-          <MiniStat label={t("home.winRatePct") || "نسبة"} value={`${p.winRate}%`} tone="text-[#ffb627]" />
+          <MiniStat label={t("home.winRatePct") || "نسبة"} value={`${p.winRate}%`} tone="text-brand-gold" />
         </div>
       </div>
     </Card>
@@ -1195,7 +1195,7 @@ function PlayerOfWeekCard({ p }: { p: ApiLeaderboardEntry | null }) {
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="rounded-md bg-white/[0.04] border border-white/10 py-2">
-      <div className={`font-['Bebas_Neue'] text-xl tracking-wider ${tone}`}>{value}</div>
+      <div className={`font-display text-xl tracking-wider ${tone}`}>{value}</div>
       <div className="text-[10px] text-slate-400 mt-0.5">{label}</div>
     </div>
   );
@@ -1209,7 +1209,7 @@ function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
   if (!s) {
     return (
       <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
-        <div className="flex items-center gap-2 text-[#1e88ff] text-xs font-bold tracking-widest mb-3">
+        <div className="flex items-center gap-2 text-brand-blue text-xs font-bold tracking-widest mb-3">
           <Gift className="w-4 h-4" />
           {t("home.dailyReward") || "مكافأتك اليومية"}
         </div>
@@ -1221,11 +1221,11 @@ function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
   return (
     <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-[#1e88ff] text-xs font-bold tracking-widest">
+        <div className="flex items-center gap-2 text-brand-blue text-xs font-bold tracking-widest">
           <Gift className="w-4 h-4" />
           {t("home.dailyReward") || "مكافأتك اليومية"}
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-[#ffb627] font-bold">
+        <div className="flex items-center gap-1 text-[10px] text-brand-gold font-bold">
           <Flame className="w-3 h-3" />
           {s.currentStreak} {t("home.streakDays") || "أيام متتالية"}
         </div>
@@ -1241,14 +1241,14 @@ function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
                 isPassed
                   ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
                   : isCurrent
-                  ? "bg-[#ffb627]/15 border-[#ffb627] text-[#ffb627] shadow-[0_0_20px_-5px_#ffb627]"
+                  ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-[0_0_20px_-5px_#ffb627]"
                   : "bg-white/[0.03] border-white/10 text-slate-500"
               }`}
             >
-              <div className="font-['Bebas_Neue'] text-xs leading-none">D{d.day}</div>
+              <div className="font-display text-xs leading-none">D{d.day}</div>
               <div className="font-mono text-[9px] mt-0.5">+{d.amount}</div>
               {isCurrent && !s.claimedToday && (
-                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#ffb627] animate-ping" />
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-brand-gold animate-ping" />
               )}
             </div>
           );
@@ -1257,7 +1257,7 @@ function DailyRewardCard({ s }: { s: ApiDailyRewardStatus | null }) {
       <Button
         asChild
         size="sm"
-        className="w-full mt-3 h-9 bg-gradient-to-l from-[#1e88ff] to-[#0a4d9c] text-white text-xs font-bold rounded-md hover:brightness-110"
+        className="w-full mt-3 h-9 bg-gradient-to-l from-brand-blue to-brand-blue-dark text-white text-xs font-bold rounded-md hover:brightness-110"
       >
         <Link href="/rewards">
           {s.claimedToday
@@ -1282,7 +1282,7 @@ function AnnouncementCard({ a, lang }: { a: ApiAnnouncement | null; lang: string
     a.priority === "urgent"
       ? "text-rose-400"
       : a.priority === "high"
-      ? "text-[#ffb627]"
+      ? "text-brand-gold"
       : "text-emerald-400";
   return (
     <Card className="bg-gradient-to-b from-[#0f1730] to-[#0a0e1a] border-slate-300/70 dark:border-white/10 rounded-xl p-4 text-white">
@@ -1291,7 +1291,7 @@ function AnnouncementCard({ a, lang }: { a: ApiAnnouncement | null; lang: string
           <Megaphone className="w-4 h-4" />
           {t("home.announcement") || "إعلان رسمي"}
         </div>
-        {a.isPinned && <Pin className="w-3.5 h-3.5 text-[#ffb627]" />}
+        {a.isPinned && <Pin className="w-3.5 h-3.5 text-brand-gold" />}
       </div>
       <div className="font-bold text-white mb-1.5 truncate">{title}</div>
       <div className="text-sm text-slate-300 leading-relaxed line-clamp-3">{content}</div>
@@ -1330,11 +1330,11 @@ function HighlightsSection({
     <section className="px-4 md:px-6">
       <div className="flex items-end justify-between mb-3">
         <div className="flex items-center gap-3">
-          <span className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_0_30px_-5px_#1e88ff]">
+          <span className="grid place-items-center w-9 h-9 rounded-md bg-gradient-to-br from-brand-blue to-brand-blue-dark text-white shadow-[0_0_30px_-5px_#1e88ff]">
             <Activity className="w-4 h-4" />
           </span>
           <div>
-            <h2 className="font-['Bebas_Neue'] tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none">
+            <h2 className="font-display tracking-wider text-2xl md:text-3xl text-slate-900 dark:text-white leading-none">
               {t("home.highlights") || "أبرز ما يحدث الآن"}
             </h2>
             <p className="text-xs text-slate-700 dark:text-slate-400 mt-1">
@@ -1475,7 +1475,7 @@ export function StadiumHome({ owner }: StadiumHomeProps) {
     <div
       dir={lang === "ar" ? "rtl" : "ltr"}
       lang={lang}
-      className="min-h-screen bg-slate-100 dark:bg-[#0a0e1a] text-slate-900 dark:text-white selection:bg-[#ffb627] selection:text-black"
+      className="min-h-screen bg-slate-100 dark:bg-[#0a0e1a] text-slate-900 dark:text-white selection:bg-brand-gold selection:text-black"
     >
       <OwnerBar {...owner} />
 

@@ -390,7 +390,7 @@ export default function ArcadePlayPage() {
               <div
                 className={`rounded-xl p-4 my-3 border ${
                   resultUi.economy.netVex > 0
-                    ? "bg-gradient-to-br from-[#ffb627]/15 to-[#ffb627]/5 border-[#ffb627]/40"
+                    ? "bg-gradient-to-br from-brand-gold/15 to-brand-gold/5 border-brand-gold/40"
                     : resultUi.economy.netVex === 0
                       ? "bg-white/5 border-white/15"
                       : "bg-rose-500/10 border-rose-500/30"
@@ -479,7 +479,7 @@ export default function ArcadePlayPage() {
             )}
             {resultUi.banter && (
               <div className="text-sm text-slate-200 mb-4 px-2 py-3 rounded-xl bg-white/5 border border-white/10 flex gap-2 items-start">
-                <Sparkles className="h-4 w-4 text-[#ffb627] shrink-0 mt-0.5" />
+                <Sparkles className="h-4 w-4 text-brand-gold shrink-0 mt-0.5" />
                 <span className="text-right flex-1" dir={lang === "ar" ? "rtl" : "ltr"}>
                   {resultUi.banter.text}
                 </span>

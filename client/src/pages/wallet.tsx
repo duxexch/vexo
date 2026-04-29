@@ -750,7 +750,7 @@ export default function WalletPage() {
     <div className="min-h-[100svh] space-y-4 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_42%)] p-3 sm:space-y-6 sm:p-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+          <h1 className="font-display tracking-wider text-2xl sm:text-3xl leading-none flex items-center gap-2">
             <Wallet className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
             {t('wallet.title')}
           </h1>
