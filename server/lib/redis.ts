@@ -48,10 +48,39 @@ let redisSub: Redis | null = null;
 let redisPub: Redis | null = null;
 
 function createRedisConnection(name: string): Redis {
+  const isProd = process.env.NODE_ENV === "production";
+  const LOG_THROTTLE_MS = 60_000;
+  // Shared throttle map for all log streams emitted by this client (errors and
+  // "Closed" notices). Keys are namespaced by stream name so different events
+  // don't interfere.
+  const logThrottle = new Map<string, { lastLoggedAt: number; suppressed: number }>();
+
+  function shouldLogThrottled(streamKey: string): { log: boolean; suppressed: number } {
+    const now = Date.now();
+    const state = logThrottle.get(streamKey);
+    if (state && now - state.lastLoggedAt < LOG_THROTTLE_MS) {
+      state.suppressed += 1;
+      return { log: false, suppressed: 0 };
+    }
+    const suppressedSinceLast = state?.suppressed ?? 0;
+    logThrottle.set(streamKey, { lastLoggedAt: now, suppressed: 0 });
+    return { log: true, suppressed: suppressedSinceLast };
+  }
+
   const client = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 3,
+    // In production we want fail-fast (commands reject after 3 retries so callers
+    // can fall back). In development a missing local redis would otherwise emit
+    // an unbounded stream of FATAL "Unhandled Rejection: MaxRetriesPerRequestError"
+    // until the operator starts redis. `null` keeps commands queued instead, so
+    // they simply succeed once redis comes up — no FATAL log spam.
+    maxRetriesPerRequest: isProd ? 3 : null,
     retryStrategy(times) {
-      if (times > 10) {
+      // In production give up after 10 attempts so callers see a hard error and
+      // health checks fail loudly. In development we keep retrying forever (with
+      // a 5s ceiling) so a developer can start redis at any time and the app
+      // recovers without restart, and we don't leak "Connection is closed"
+      // Unhandled Rejections from the in-flight queue.
+      if (isProd && times > 10) {
         logger.error(`[Redis:${name}] Max retries reached, giving up`);
         return null;
       }
@@ -65,9 +94,33 @@ function createRedisConnection(name: string): Redis {
     connectTimeout: 10000,
   });
 
-  client.on("connect", () => logger.info(`[Redis:${name}] Connected`));
-  client.on("error", (err) => logger.error(`[Redis:${name}] Error`, new Error(err.message)));
-  client.on("close", () => logger.warn(`[Redis:${name}] Closed`));
+  client.on("connect", () => {
+    logger.info(`[Redis:${name}] Connected`);
+    logThrottle.clear();
+  });
+
+  // Throttle "Error" lines so a redis outage doesn't spam thousands of
+  // identical ECONNREFUSED entries every second.
+  client.on("error", (err) => {
+    const message = err.message || "unknown";
+    const decision = shouldLogThrottled(`error:${message}`);
+    if (!decision.log) return;
+    const suffix = decision.suppressed > 0
+      ? ` (suppressed ${decision.suppressed} similar errors in the last ${Math.floor(LOG_THROTTLE_MS / 1000)}s)`
+      : "";
+    logger.error(`[Redis:${name}] Error${suffix}`, new Error(message));
+  });
+
+  // Same for "Closed" — when a redis isn't available these can fire on every
+  // reconnect attempt.
+  client.on("close", () => {
+    const decision = shouldLogThrottled("closed");
+    if (!decision.log) return;
+    const suffix = decision.suppressed > 0
+      ? ` (suppressed ${decision.suppressed} similar close events in the last ${Math.floor(LOG_THROTTLE_MS / 1000)}s)`
+      : "";
+    logger.warn(`[Redis:${name}] Closed${suffix}`);
+  });
 
   return client;
 }

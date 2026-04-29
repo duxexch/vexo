@@ -59,6 +59,7 @@ VEX employs a modern, distributed architecture for scalability and reliability.
 - **Game Management:** Administrative tools include visual identity management for games with asset uploaders and color pickers.
 - **Leaderboards:** Supports period- and region-filtered leaderboards.
 - **Matchmaking:** Skill-based matchmaking system with adaptive tolerance and queue expiration.
+- **Operational Log Hygiene (Apr 2026):** The 4 turn-timeout watchdogs (Domino/Tarneeb/Baloot/Language Duel) and the Redis client (`server/lib/redis.ts`) deduplicate repeating WARN/ERROR lines so a single stuck challenge or a missing local Redis no longer floods the log file. Watchdog skips for the same `(challengeId, reason)` are logged at most once per hour via a bounded in-memory cache (`shouldLogWatchdogSkip` in `server/setup/schedulers.ts`). Redis "Error" and "Closed" events are throttled per (client, message) to once per minute with a `(suppressed N similar … in the last 60s)` suffix. In development, `maxRetriesPerRequest` is `null` and `retryStrategy` retries forever (5s ceiling) so a missing local Redis no longer emits FATAL "Unhandled Rejection: MaxRetriesPerRequestError" / "Connection is closed" loops; production keeps fail-fast (3 retries, give-up after 10 reconnect attempts).
 
 **UI/UX Decisions:**
 - **Mobile-first Design:** Frontend development prioritizes responsiveness and optimal mobile experience.

@@ -22,6 +22,48 @@ import { settleChallengePayout, settleDrawPayout } from "../lib/payout";
 import { normalizeChallengeGameState } from "../lib/challenge-game-state";
 import { WebSocket } from "ws";
 
+/**
+ * Watchdogs run every ~1s. When a challenge enters an unrecoverable state
+ * (e.g. "invalid game state", "no valid timeout move"), the watchdog returns
+ * early and re-enters the same branch on every tick, producing thousands of
+ * duplicate WARN log lines per hour.
+ *
+ * This cache de-duplicates WARN messages per `(challengeId, reason)` for a
+ * configurable TTL so each stuck challenge is logged once per hour instead of
+ * once per second. The cache is bounded to prevent unbounded memory growth.
+ */
+const WATCHDOG_SKIP_LOG_TTL_MS = 60 * 60 * 1000;
+const WATCHDOG_SKIP_LOG_MAX_ENTRIES = 5000;
+const watchdogSkipLogCache = new Map<string, number>();
+
+function shouldLogWatchdogSkip(challengeId: string, reason: string): boolean {
+  const key = `${challengeId}::${reason}`;
+  const now = Date.now();
+  const last = watchdogSkipLogCache.get(key);
+  if (last !== undefined && now - last < WATCHDOG_SKIP_LOG_TTL_MS) {
+    return false;
+  }
+  watchdogSkipLogCache.set(key, now);
+
+  if (watchdogSkipLogCache.size > WATCHDOG_SKIP_LOG_MAX_ENTRIES) {
+    for (const [k, t] of watchdogSkipLogCache) {
+      if (now - t > WATCHDOG_SKIP_LOG_TTL_MS) {
+        watchdogSkipLogCache.delete(k);
+      }
+    }
+    if (watchdogSkipLogCache.size > WATCHDOG_SKIP_LOG_MAX_ENTRIES) {
+      const overflow = watchdogSkipLogCache.size - WATCHDOG_SKIP_LOG_MAX_ENTRIES;
+      let removed = 0;
+      for (const k of watchdogSkipLogCache.keys()) {
+        if (removed >= overflow) break;
+        watchdogSkipLogCache.delete(k);
+        removed++;
+      }
+    }
+  }
+  return true;
+}
+
 function selectDominoTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
   const playableMoves = validMoves.filter((move) => move.type === "play");
   if (playableMoves.length > 0) {
@@ -884,14 +926,18 @@ export function startSchedulers(): void {
 
             const normalizedState = normalizeChallengeGameState(session.gameState);
             if (!normalizedState) {
-              logger.warn(`[Domino Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              if (shouldLogWatchdogSkip(row.challengeId, "domino:invalid_state")) {
+                logger.warn(`[Domino Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              }
               return null;
             }
 
             const validMoves = dominoEngine.getValidMoves(normalizedState, timedOutPlayerId);
             const timeoutMove = selectDominoTimeoutAutoMove(validMoves);
             if (!timeoutMove) {
-              logger.warn(`[Domino Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              if (shouldLogWatchdogSkip(row.challengeId, "domino:no_timeout_move")) {
+                logger.warn(`[Domino Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              }
               return null;
             }
 
@@ -1208,14 +1254,18 @@ export function startSchedulers(): void {
 
             const normalizedState = normalizeChallengeGameState(session.gameState);
             if (!normalizedState) {
-              logger.warn(`[Language Duel Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              if (shouldLogWatchdogSkip(row.challengeId, "languageDuel:invalid_state")) {
+                logger.warn(`[Language Duel Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              }
               return null;
             }
 
             const validMoves = languageDuelEngine.getValidMoves(normalizedState, timedOutPlayerId);
             const timeoutMove = validMoves.find((move) => move.type === "timeout") || validMoves[0] || null;
             if (!timeoutMove) {
-              logger.warn(`[Language Duel Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              if (shouldLogWatchdogSkip(row.challengeId, "languageDuel:no_timeout_move")) {
+                logger.warn(`[Language Duel Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              }
               return null;
             }
 
@@ -1507,14 +1557,18 @@ export function startSchedulers(): void {
 
             const normalizedState = normalizeChallengeGameState(session.gameState);
             if (!normalizedState) {
-              logger.warn(`[Baloot Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              if (shouldLogWatchdogSkip(row.challengeId, "baloot:invalid_state")) {
+                logger.warn(`[Baloot Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              }
               return null;
             }
 
             const validMoves = balootEngine.getValidMoves(normalizedState, timedOutPlayerId);
             const timeoutMove = selectBalootTimeoutAutoMove(balootEngine, normalizedState, validMoves);
             if (!timeoutMove) {
-              logger.warn(`[Baloot Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              if (shouldLogWatchdogSkip(row.challengeId, "baloot:no_timeout_move")) {
+                logger.warn(`[Baloot Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              }
               return null;
             }
 
@@ -1842,19 +1896,25 @@ export function startSchedulers(): void {
 
             const normalizedState = normalizeChallengeGameState(session.gameState);
             if (!normalizedState) {
-              logger.warn(`[Tarneeb Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              if (shouldLogWatchdogSkip(row.challengeId, "tarneeb:invalid_state")) {
+                logger.warn(`[Tarneeb Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              }
               return null;
             }
 
             const validMoves = tarneebEngine.getValidMoves(normalizedState, timedOutPlayerId);
             if (validMoves.length === 0) {
-              logger.warn(`[Tarneeb Timeout Watchdog] No valid moves for current turn ${timedOutPlayerId} in challenge ${row.challengeId}`);
+              if (shouldLogWatchdogSkip(row.challengeId, "tarneeb:no_valid_moves")) {
+                logger.warn(`[Tarneeb Timeout Watchdog] No valid moves for current turn ${timedOutPlayerId} in challenge ${row.challengeId}`);
+              }
               return null;
             }
 
             const timeoutMove = selectTarneebTimeoutAutoMove(validMoves);
             if (!timeoutMove) {
-              logger.warn(`[Tarneeb Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              if (shouldLogWatchdogSkip(row.challengeId, "tarneeb:no_timeout_move")) {
+                logger.warn(`[Tarneeb Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              }
               return null;
             }
 
