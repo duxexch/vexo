@@ -138,6 +138,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useI18n } from "@/lib/i18n";
+import { ARCADE_GAMES } from "@shared/arcade-games";
 import type { GameStatus } from "@shared/schema";
 
 const GAME_CATEGORIES = [
@@ -1521,6 +1522,43 @@ export default function AdminUnifiedGames() {
           </Button>
         </div>
       </div>
+
+      <Card className={SURFACE_CARD_CLASS} data-testid="panel-arcade-preview">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Gamepad2 className="h-5 w-5 text-sky-600" />
+            {language === "ar" ? "معاينة سريعة لألعاب الأركيد (HTML5)" : "Arcade Mini-Games — Quick Preview (HTML5)"}
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            {language === "ar"
+              ? "افتح أي لعبة في تبويب جديد للتحقق منها قبل النشر."
+              : "Open any game in a new tab to verify it before going live."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {ARCADE_GAMES.map((g) => (
+              <a
+                key={g.key}
+                href={`/arcade/${g.key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-sky-500"
+                data-testid={`link-arcade-preview-${g.key}`}
+                style={{ borderInlineStartWidth: 4, borderInlineStartColor: g.color }}
+              >
+                <span className="text-lg leading-none" aria-hidden="true">{g.iconEmoji}</span>
+                <span className="flex-1 truncate">
+                  {language === "ar" ? g.titleAr : g.titleEn}
+                </span>
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  {g.kind}
+                </span>
+              </a>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className={STAT_CARD_CLASS}>

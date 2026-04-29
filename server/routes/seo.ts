@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
+import { getCanonicalOrigin } from "@shared/runtime-config";
 import { db } from "../db";
 import { multiplayerGames, users, liveGameSessions } from "@shared/schema";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
@@ -41,7 +42,7 @@ function buildBaseUrl(req: Request): string {
   const fwd = typeof req.headers["x-forwarded-proto"] === "string" ? req.headers["x-forwarded-proto"].split(",")[0].trim() : "";
   const proto = fwd || (req.secure ? "https" : "http");
   const host = req.get("host");
-  return host ? `${proto}://${host}` : "https://vixo.click";
+  return host ? `${proto}://${host}` : getCanonicalOrigin();
 }
 
 function setXmlHeaders(res: Response): void {

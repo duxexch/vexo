@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin-routes";
 import { serveStatic } from "./static";
+import { getAllowedOrigins } from "@shared/runtime-config";
 import { createServer } from "http";
 import { setupGameWebSocket } from "./game-websocket";
 import { seedMultiplayerGames, seedGiftCatalog, seedFreePlaySettings } from "./seed";
@@ -381,9 +382,7 @@ app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
 
 // CORS protection - restrict cross-origin requests in production
 app.use((req: Request, res: Response, next: NextFunction) => {
-  const allowedOrigins = isProduction
-    ? ['https://vixo.click', 'https://www.vixo.click']
-    : ['http://localhost:3001', 'http://localhost:3000', 'http://127.0.0.1:3001'];
+  const allowedOrigins = getAllowedOrigins(isProduction);
 
   const origin = req.headers.origin;
   res.setHeader('Vary', 'Origin');

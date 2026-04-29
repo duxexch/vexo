@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation, Link } from "wouter";
+import { getCanonicalUrl } from "@shared/runtime-config";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -153,7 +154,7 @@ function Router() {
     useEffect(() => {
         const link = document.querySelector('link[rel="canonical"]');
         if (link) {
-            link.setAttribute("href", `https://vixo.click${location === "/" ? "/" : location}`);
+            link.setAttribute("href", getCanonicalUrl(location));
         }
     }, [location]);
 

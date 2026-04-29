@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import { JWT_ADMIN_SECRET, JWT_ADMIN_EXPIRY } from "../lib/auth-config";
 import { logger } from "../lib/logger";
 import { authRateLimiter, sensitiveRateLimiter } from "../routes/middleware";
+import { ADMIN_LOGIN_LOCKOUT } from "../lib/security-config";
 import {
   getAdminTokenFromRequest,
   getTokenFingerprint,
@@ -68,7 +69,9 @@ export function registerAdminLoginRoutes(app: Express) {
       if (!isValid) {
         // Increment failed attempts
         const attempts = (admin.failedLoginAttempts || 0) + 1;
-        const lockout = attempts >= 3 ? new Date(Date.now() + 30 * 60000) : null; // Lock for 30 min after 3 fails
+        const lockout = attempts >= ADMIN_LOGIN_LOCKOUT.maxFailedAttempts
+          ? new Date(Date.now() + ADMIN_LOGIN_LOCKOUT.lockoutDurationMs)
+          : null;
         await db.update(users).set({
           failedLoginAttempts: attempts,
           lockedUntil: lockout,

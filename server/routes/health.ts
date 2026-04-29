@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { getCanonicalOrigin } from "@shared/runtime-config";
 import { db, pool } from "../db";
 import { sql } from "drizzle-orm";
 import os from "os";
@@ -77,7 +78,7 @@ function resolveRequestOrigin(req: Request): string {
     return `${protocol}://${host}`;
   }
 
-  return process.env.APP_PUBLIC_BASE_URL || "https://vixo.click";
+  return getCanonicalOrigin();
 }
 
 function resolveNativeLatestVersion(webVersion: string): string | null {

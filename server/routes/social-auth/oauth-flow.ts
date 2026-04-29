@@ -4,6 +4,7 @@
 import { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { getCanonicalOrigin } from "@shared/runtime-config";
 import { storage } from "../../storage";
 import { logger } from "../../lib/logger";
 import {
@@ -333,7 +334,7 @@ function sanitizePostLoginRedirect(redirect?: string): string | undefined {
   }
 
   try {
-    const normalized = new URL(trimmed, "https://vixo.click");
+    const normalized = new URL(trimmed, getCanonicalOrigin());
     return `${normalized.pathname}${normalized.search}${normalized.hash}`;
   } catch {
     return undefined;

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useGameSounds } from "@/hooks/use-game-sounds";
+import { useGameAudio } from "@/hooks/use-game-audio";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -275,7 +275,7 @@ export default function ChallengeGamePage() {
   const [messageInput, setMessageInput] = useState("");
   const [isMuted, setIsMuted] = useState(false);
   const [isVoiceMicMuted, setIsVoiceMicMuted] = useState(false);
-  const { play: playSound, setMuted: setSoundMuted } = useGameSounds();
+  const { play: playSound, setMuted: setSoundMuted } = useGameAudio();
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [spectators, setSpectators] = useState<SpectatorInfo[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<GiftInfo[]>([]);
@@ -1770,7 +1770,7 @@ export default function ChallengeGamePage() {
             data.reason === "draw" ||
             data.isDraw === true;
           if (data.winnerId === user?.id) playSound("gameWin");
-          else if (isDrawResult) playSound("draw");
+          else if (isDrawResult) playSound("drawOffer");
           else playSound("gameLose");
           break;
         case "draw_offered":
@@ -1778,7 +1778,7 @@ export default function ChallengeGamePage() {
             break;
           }
           setDrawOffered(data.offeredBy ?? null);
-          playSound("draw");
+          playSound("drawOffer");
           toast({
             title: t("challenge.drawOffered"),
             description: t("challenge.opponentOffersDraw"),

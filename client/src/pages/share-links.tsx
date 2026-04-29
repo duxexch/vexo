@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getCanonicalOrigin } from "@shared/runtime-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -204,7 +205,7 @@ export default function ShareLinksPage() {
       // Prefer the production canonical when available so links look clean
       // when shared (avoid replit preview hosts in copied URLs).
       const isPreview = /\.replit\.|localhost|127\.0\.0\.1/.test(window.location.hostname);
-      setOrigin(isPreview ? "https://vixo.click" : window.location.origin);
+      setOrigin(isPreview ? getCanonicalOrigin() : window.location.origin);
     }
   }, []);
 

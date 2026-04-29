@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { getCanonicalOrigin } from "@shared/runtime-config";
 import { featureFlags, themes, appSettings, insertAppSettingSchema } from "@shared/schema";
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
@@ -60,7 +61,7 @@ const DEFAULT_SEO_SETTINGS: SeoSettingsResponse = {
   ogDescription: "",
   ogImage: "",
   ogType: "website",
-  canonicalUrl: "https://vixo.click/",
+  canonicalUrl: `${getCanonicalOrigin()}/`,
   robotsContent: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
   enableSitemap: true,
   googleAnalyticsId: "",
@@ -70,7 +71,7 @@ const DEFAULT_SEO_SETTINGS: SeoSettingsResponse = {
   instagramUrl: "",
   jsonLdEnabled: true,
   organizationName: "VEX",
-  organizationLogo: "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  organizationLogo: `${getCanonicalOrigin()}/icons/vex-gaming-logo-512x512.png`,
   localeOverrides: {},
 };
 

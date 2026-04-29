@@ -8,6 +8,9 @@ import { db } from "./db";
 import { appSettings } from "@shared/schema";
 import { inArray } from "drizzle-orm";
 import { resolveDynamicRouteSeo } from "./lib/sitemap-builder";
+import { getCanonicalOrigin } from "@shared/runtime-config";
+
+const CANONICAL_ORIGIN = getCanonicalOrigin();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,7 +53,7 @@ function buildFallbackRobots(req: Request): string {
     ? ""
     : (forwardedProto || (req.secure ? "https" : "http"));
   const host = req.get("host");
-  const baseUrl = appUrl || (host ? `${protocol}://${host}` : "https://vixo.click");
+  const baseUrl = appUrl || (host ? `${protocol}://${host}` : getCanonicalOrigin());
   return [
     "# VEX Platform - Robots.txt (fallback)",
     "User-agent: *",
@@ -165,7 +168,7 @@ function buildRuntimeBaseUrl(req: Request): string {
     : "";
   const protocol = forwardedProto || (req.secure ? "https" : "http");
   const host = req.get("host");
-  return host ? `${protocol}://${host}` : "https://vixo.click";
+  return host ? `${protocol}://${host}` : CANONICAL_ORIGIN;
 }
 
 // SEO page titles & descriptions for crawler-friendly rendering
@@ -174,73 +177,73 @@ const SEO_PAGES: Record<string, { title: string; description: string; keywords: 
     title: "VEX - منصة الألعاب والتداول | Play Chess, Backgammon, Domino Online",
     description: "العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين. تداول P2P آمن مع 85+ عملة. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
     keywords: "VEX, العاب اونلاين, شطرنج, طاولة, دومينو, طرنيب, بلوت, تداول P2P, online games, chess, backgammon",
-    canonicalUrl: "https://vixo.click"
+    canonicalUrl: CANONICAL_ORIGIN
   },
   "/games": {
     title: "ألعاب أونلاين - شطرنج، طاولة، دومينو، طرنيب، بلوت | VEX Games",
     description: "العب أفضل الألعاب أونلاين: شطرنج، طاولة زهر، دومينو، طرنيب وبلوت مع لاعبين حقيقيين في الوقت الفعلي. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
     keywords: "العاب اونلاين, شطرنج اونلاين, طاولة زهر, دومينو, طرنيب, بلوت, chess online, backgammon, domino",
-    canonicalUrl: "https://vixo.click/games"
+    canonicalUrl: `${CANONICAL_ORIGIN}/games`
   },
   "/challenges": {
     title: "تحديات مباشرة - العب وأربح | VEX Challenges",
     description: "شارك في تحديات مباشرة ضد لاعبين حقيقيين. تحدى أصدقائك في الشطرنج والطاولة والدومينو. Challenge real players in Chess, Backgammon & more.",
     keywords: "تحديات, مسابقات, العب واربح, challenges, compete, win prizes",
-    canonicalUrl: "https://vixo.click/challenges"
+    canonicalUrl: `${CANONICAL_ORIGIN}/challenges`
   },
   "/p2p": {
     title: "تداول P2P آمن - 85+ عملة | VEX P2P Trading",
     description: "تداول P2P آمن ومضمون مع أكثر من 85 عملة. بيع واشتري بأفضل الأسعار. Secure P2P trading with 85+ currencies.",
     keywords: "تداول P2P, بيع وشراء, عملات, P2P trading, buy sell, currencies, secure trading",
-    canonicalUrl: "https://vixo.click/p2p"
+    canonicalUrl: `${CANONICAL_ORIGIN}/p2p`
   },
   "/tournaments": {
     title: "بطولات أونلاين - فز بجوائز حقيقية | VEX Tournaments",
     description: "شارك في بطولات الشطرنج والطاولة والبلوت. جوائز حقيقية كل يوم. Join Chess, Backgammon & Baloot tournaments.",
     keywords: "بطولات, tournaments, جوائز, prizes, مسابقات, competitions",
-    canonicalUrl: "https://vixo.click/tournaments"
+    canonicalUrl: `${CANONICAL_ORIGIN}/tournaments`
   },
   "/leaderboard": {
     title: "لوحة المتصدرين - أفضل اللاعبين | VEX Leaderboard",
     description: "شاهد ترتيب أفضل اللاعبين. تنافس للوصول إلى القمة. See top players ranking and compete for the top.",
     keywords: "متصدرين, ترتيب, leaderboard, ranking, top players, أفضل لاعب",
-    canonicalUrl: "https://vixo.click/leaderboard"
+    canonicalUrl: `${CANONICAL_ORIGIN}/leaderboard`
   },
   "/free": {
     title: "ألعاب مجانية - العب بدون رصيد | VEX Free Games",
     description: "العب ألعاب مجانية بدون أي رصيد. تدرب وطور مهاراتك. Play free games without any balance. Practice and improve.",
     keywords: "العاب مجانية, free games, بدون رصيد, practice, تدريب",
-    canonicalUrl: "https://vixo.click/free"
+    canonicalUrl: `${CANONICAL_ORIGIN}/free`
   },
   "/daily-rewards": {
     title: "مكافآت يومية - اجمع هدايا كل يوم | VEX Daily Rewards",
     description: "احصل على مكافآت يومية مجانية. سجل دخولك كل يوم واجمع جوائز. Get free daily rewards and bonuses.",
     keywords: "مكافآت يومية, daily rewards, هدايا, bonuses, جوائز مجانية",
-    canonicalUrl: "https://vixo.click/daily-rewards"
+    canonicalUrl: `${CANONICAL_ORIGIN}/daily-rewards`
   },
   "/referral": {
     title: "ادعُ أصدقاءك واربح - نظام الإحالة | VEX Referral",
     description: "ادعُ أصدقاءك لمنصة VEX واحصل على مكافآت. Invite friends and earn rewards with VEX referral program.",
     keywords: "إحالة, دعوة أصدقاء, referral, invite friends, مكافآت إحالة",
-    canonicalUrl: "https://vixo.click/referral"
+    canonicalUrl: `${CANONICAL_ORIGIN}/referral`
   },
   "/install-app": {
     title: "حمّل تطبيق VEX - Android & PWA | Download VEX App",
     description: "حمّل تطبيق VEX على جهازك. متوفر كتطبيق PWA وأندرويد. Download VEX app for Android or install as PWA.",
     keywords: "تحميل VEX, download VEX, تطبيق اندرويد, Android app, PWA, تثبيت",
-    canonicalUrl: "https://vixo.click/install-app"
+    canonicalUrl: `${CANONICAL_ORIGIN}/install-app`
   },
   "/terms": {
     title: "شروط الاستخدام | VEX Terms of Service",
     description: "شروط استخدام منصة VEX للألعاب والتداول. VEX Platform Terms of Service.",
     keywords: "شروط الاستخدام, terms of service, قوانين, rules",
-    canonicalUrl: "https://vixo.click/terms"
+    canonicalUrl: `${CANONICAL_ORIGIN}/terms`
   },
   "/privacy": {
     title: "سياسة الخصوصية | VEX Privacy Policy",
     description: "سياسة الخصوصية لمنصة VEX. نحمي بياناتك. VEX Privacy Policy - Your data is protected.",
     keywords: "سياسة الخصوصية, privacy policy, حماية البيانات, data protection",
-    canonicalUrl: "https://vixo.click/privacy"
+    canonicalUrl: `${CANONICAL_ORIGIN}/privacy`
   },
 };
 
@@ -277,7 +280,7 @@ const RUNTIME_SEO_DEFAULTS: RuntimeSeoSettings = {
   siteKeywords: SEO_PAGES["/"]?.keywords || "VEX",
   ogTitle: SEO_PAGES["/"]?.title || "VEX",
   ogDescription: SEO_PAGES["/"]?.description || "VEX",
-  canonicalUrl: "https://vixo.click/",
+  canonicalUrl: `${CANONICAL_ORIGIN}/`,
   robotsContent: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
   enableSitemap: true,
   localeOverrides: {},

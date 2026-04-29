@@ -1,8 +1,47 @@
 import Redis from "ioredis";
 import { logger } from "./logger";
 
+// Hostnames that only resolve inside the production docker network.
+// In development we transparently fall back to localhost so devs can run the
+// platform outside docker without editing env vars.
+const DOCKER_INTERNAL_REDIS_HOSTS = new Set(["vex-redis", "redis"]);
+
+function resolveRedisUrl(): string {
+  const raw = (process.env.REDIS_URL ?? "").trim();
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!raw) {
+    if (isProduction) {
+      throw new Error(
+        "[Redis] REDIS_URL is required in production but is not set. " +
+          "Cache, pub/sub and distributed rate limiting are unavailable.",
+      );
+    }
+    return "redis://localhost:6379";
+  }
+
+  if (!isProduction) {
+    try {
+      const parsed = new URL(raw);
+      if (DOCKER_INTERNAL_REDIS_HOSTS.has(parsed.hostname)) {
+        parsed.hostname = "127.0.0.1";
+        const swapped = parsed.toString();
+        logger.warn(
+          `[Redis] Dev override: configured host points at docker-internal '${parsed.hostname}'; ` +
+            `using ${swapped} for local development. Set REDIS_URL explicitly to silence this.`,
+        );
+        return swapped;
+      }
+    } catch {
+      // Not a parseable URL — let ioredis raise its own clear error.
+    }
+  }
+
+  return raw;
+}
+
 // Redis client for caching, sessions, and rate limiting
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+const REDIS_URL = resolveRedisUrl();
 
 let redis: Redis | null = null;
 let redisSub: Redis | null = null;
@@ -301,8 +340,20 @@ export async function redisRateLimit(
 
     return { allowed: true };
   } catch (err: unknown) {
-    // Fallback: allow on Redis error (don't block users)
-    logger.warn('[Redis] Rate limit error', { action: 'rate_limit', error: err instanceof Error ? err.message : String(err) });
+    // Fallback policy controlled by RATE_LIMIT_FAIL_MODE (defaults to "closed"
+    // in production, "open" in development). Failing closed in production
+    // prevents bypass of distributed rate limits when Redis is degraded.
+    const failClosed = (process.env.RATE_LIMIT_FAIL_MODE ?? "").trim().toLowerCase() === "closed"
+      || (process.env.NODE_ENV === "production"
+        && (process.env.RATE_LIMIT_FAIL_MODE ?? "").trim().toLowerCase() !== "open");
+    logger.warn('[Redis] Rate limit error', {
+      action: 'rate_limit',
+      error: err instanceof Error ? err.message : String(err),
+      fail_mode: failClosed ? 'closed' : 'open',
+    });
+    if (failClosed) {
+      return { allowed: false, retryAfterMs: windowMs };
+    }
     return { allowed: true };
   }
 }
