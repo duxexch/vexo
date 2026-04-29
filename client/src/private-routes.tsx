@@ -104,6 +104,10 @@ const TournamentsPage = lazy(() => import("@/pages/tournaments"));
 const DailyRewardsPage = lazy(() => import("@/pages/daily-rewards"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const ReferralPage = lazy(() => import("@/pages/referral"));
+const CoinPage = lazy(() => import("@/pages/coin"));
+const AgentsProgramPage = lazy(() => import("@/pages/agents-program"));
+const AffiliatesPage = lazy(() => import("@/pages/affiliates"));
+const InvestPage = lazy(() => import("@/pages/invest"));
 const GamePlayerPage = lazy(() => import("@/pages/game-player"));
 const ArcadePlayPage = lazy(() => import("@/pages/arcade-play"));
 const TermsPage = lazy(() => import("@/pages/terms"));
@@ -1052,6 +1056,10 @@ export default function PrivateRoutes() {
                         <Route path="/daily-rewards">{() => <ErrorBoundary><DailyRewardsPage /></ErrorBoundary>}</Route>
                         <Route path="/notifications">{() => <ErrorBoundary><NotificationsPage /></ErrorBoundary>}</Route>
                         <Route path="/referral">{() => <ErrorBoundary><ReferralPage /></ErrorBoundary>}</Route>
+                        <Route path="/coin">{() => <ErrorBoundary><CoinPage /></ErrorBoundary>}</Route>
+                        <Route path="/agents-program">{() => <ErrorBoundary><AgentsProgramPage /></ErrorBoundary>}</Route>
+                        <Route path="/affiliates">{() => <ErrorBoundary><AffiliatesPage /></ErrorBoundary>}</Route>
+                        <Route path="/invest">{() => <ErrorBoundary><InvestPage /></ErrorBoundary>}</Route>
                         <Route path="/profile">{() => <ErrorBoundary><PlayerProfilePage /></ErrorBoundary>}</Route>
                         <Route path="/player/:userId">{() => <ErrorBoundary><PlayerProfilePage /></ErrorBoundary>}</Route>
                         <Route path="/leaderboard">{() => <ErrorBoundary><LeaderboardPage /></ErrorBoundary>}</Route>
