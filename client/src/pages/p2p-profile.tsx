@@ -275,7 +275,7 @@ export default function P2PProfilePage() {
               </Avatar>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl font-bold" data-testid="text-trader-name">{profile.displayName}</h1>
+                  <h1 className="font-display text-2xl sm:text-3xl tracking-wider leading-none" data-testid="text-trader-name">{profile.displayName}</h1>
                   {profile.isOnline ? (
                     <Badge variant="default" className="bg-green-500">{t('p2p.profile.online')}</Badge>
                   ) : (

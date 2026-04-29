@@ -643,7 +643,7 @@ export default function P2PSettingsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-settings-title">
+          <h1 className="font-display text-2xl sm:text-3xl tracking-wider leading-none flex items-center gap-2" data-testid="text-settings-title">
             <Settings className="h-6 w-6 text-primary" />
             {t('p2p.settings.title')}
           </h1>

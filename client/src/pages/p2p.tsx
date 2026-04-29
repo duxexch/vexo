@@ -1563,7 +1563,7 @@ function MarketplaceTab() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100 shadow-xl shadow-slate-900/40">
-        <div className="flex items-center justify-between gap-3 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+        <div className="flex items-center justify-between gap-3 bg-brand-gold px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4" />
             <span className="text-sm font-semibold sm:text-base">{t('p2p.marketplace')}</span>
@@ -1720,8 +1720,8 @@ function MarketplaceTab() {
             </div>
 
             <div className="flex min-w-[8.5rem] items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-2 text-slate-300">
-              <Shield className="h-4 w-4 text-[#f0c73f]" />
-              <Star className="h-4 w-4 text-[#f0c73f]" />
+              <Shield className="h-4 w-4 text-brand-gold" />
+              <Star className="h-4 w-4 text-brand-gold" />
               <Switch
                 checked={showTopRatedOnly}
                 onCheckedChange={setShowTopRatedOnly}
@@ -1789,7 +1789,7 @@ function MarketplaceTab() {
                       </div>
 
                       <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                        <Star className="h-3.5 w-3.5 fill-[#f0c73f] text-[#f0c73f]" />
+                        <Star className="h-3.5 w-3.5 fill-brand-gold text-brand-gold" />
                         <span className="tabular-nums">{formatNumericValue(offer.rating, numberLocale, 2, 2)}</span>
                         <span>•</span>
                         <span>{formatNumericValue(offer.completedTrades, numberLocale, 0, 0)} {t('p2p.trades')}</span>
@@ -1883,7 +1883,7 @@ function MarketplaceTab() {
                       <div className="flex flex-col min-w-0">
                         <span className="font-medium truncate text-slate-100" data-testid={`text-trader-${offer.id}`}>{offer.username}</span>
                         <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
-                          <Star className="h-3 w-3 shrink-0 fill-[#f0c73f] text-[#f0c73f]" />
+                          <Star className="h-3 w-3 shrink-0 fill-brand-gold text-brand-gold" />
                           <span className="tabular-nums">{formatNumericValue(offer.rating, numberLocale, 2, 2)}</span>
                           <span>•</span>
                           <span>{formatNumericValue(offer.completedTrades, numberLocale, 0, 0)} {t('p2p.trades')}</span>
@@ -2642,7 +2642,7 @@ function MyOffersTab() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100">
-        <div className="flex items-center justify-between gap-2 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+        <div className="flex items-center justify-between gap-2 bg-brand-gold px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4" />
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.yourOffers')}</h3>
@@ -2651,7 +2651,7 @@ function MyOffersTab() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
-              className="h-9 min-w-[9.5rem] bg-slate-900 text-[#f0c73f] hover:bg-slate-900/90"
+              className="h-9 min-w-[9.5rem] bg-slate-900 text-brand-gold hover:bg-slate-900/90"
               data-testid="button-create-standard-offer"
               disabled={eligibilityLoading}
               onClick={() => openCreateOfferDialog("standard_asset")}
@@ -4296,12 +4296,12 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100">
-        <div className="flex items-center justify-between gap-2 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+        <div className="flex items-center justify-between gap-2 bg-brand-gold px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4" />
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.tradeHistory')}</h3>
           </div>
-          <Badge className="bg-slate-900 text-[#f0c73f] hover:bg-slate-900">{formatNumericValue(tradeStats.total, numberLocale, 0, 0)}</Badge>
+          <Badge className="bg-slate-900 text-brand-gold hover:bg-slate-900">{formatNumericValue(tradeStats.total, numberLocale, 0, 0)}</Badge>
         </div>
 
         <div className="grid grid-cols-3 gap-2 p-3 sm:p-4">
@@ -4522,7 +4522,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                 <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-[#f0c73f]" />
+                      <MessageSquare className="h-4 w-4 text-brand-gold" />
                       <h4 className="font-medium text-slate-100">{t('p2p.dispute.chat')}</h4>
                     </div>
                     {activeTrade.expiresAt && (
@@ -4561,7 +4561,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                                 isSystemMessage
                                   ? "bg-slate-800 text-slate-400"
                                   : isOwnMessage
-                                    ? "bg-[#f0c73f] text-slate-900"
+                                    ? "bg-brand-gold text-slate-900"
                                     : "bg-slate-800 text-slate-100",
                               )}>
                                 {!isSystemMessage && (
@@ -4607,14 +4607,14 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                             className={cn(
                               "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs",
                               state === "done" && "border-emerald-600/40 bg-emerald-600/10 text-emerald-300",
-                              state === "current" && "border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a]",
+                              state === "current" && "border-brand-gold/50 bg-brand-gold/10 text-brand-gold",
                               state === "idle" && "border-slate-700 bg-slate-950 text-slate-400",
                             )}
                           >
                             <span className={cn(
                               "h-2 w-2 rounded-full",
                               state === "done" && "bg-emerald-400",
-                              state === "current" && "bg-[#f0c73f]",
+                              state === "current" && "bg-brand-gold",
                               state === "idle" && "bg-slate-600",
                             )} />
                             {getStatusBadge(step).props.children}
@@ -4649,7 +4649,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
 
                             {!buyerInstructionAcknowledged ? (
                               <Button
-                                className="w-full bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+                                className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
                                 onClick={() => acknowledgeBuyerInstructionsMutation.mutate()}
                                 disabled={acknowledgeBuyerInstructionsMutation.isPending}
                                 data-testid="button-acknowledge-buyer-instructions"
@@ -4750,7 +4750,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
 
                         {activeTrade.isSeller && activeTrade.status === "paid" && (
                           <Button
-                            className="w-full bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+                            className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
                             onClick={() => tradeActionMutation.mutate("confirm")}
                             disabled={tradeActionMutation.isPending}
                             data-testid="button-trade-action-confirm"
@@ -4839,7 +4839,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                               {canApproveActiveCancellationRequest && (
                                 <Button
                                   variant="outline"
-                                  className="border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a] hover:bg-[#f0c73f]/20"
+                                  className="border-brand-gold/50 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20"
                                   onClick={() => approveCancellationRequestMutation.mutate()}
                                   disabled={
                                     approveCancellationRequestMutation.isPending
@@ -5021,7 +5021,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                                 key={entry.currency}
                                 className={cn(
                                   "rounded-md border border-slate-800 bg-slate-950/70 p-2",
-                                  isActiveTradeCurrency && "border-[#f0c73f]/50 bg-[#f0c73f]/10",
+                                  isActiveTradeCurrency && "border-brand-gold/50 bg-brand-gold/10",
                                 )}
                               >
                                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -5064,7 +5064,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                             className={cn(
                               "h-2.5 w-2.5 rounded-full",
                               state === "done" && "bg-emerald-400",
-                              state === "current" && "bg-[#f0c73f]",
+                              state === "current" && "bg-brand-gold",
                               state === "idle" && "bg-slate-600",
                             )}
                           />
@@ -5192,7 +5192,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     >
                       <SheetHeader>
                         <SheetTitle className="flex items-center gap-2 text-slate-100">
-                          <CreditCard className="h-4 w-4 text-[#f0c73f]" />
+                          <CreditCard className="h-4 w-4 text-brand-gold" />
                           {t('p2p.tradeRoom.viewPaymentDetails')}
                         </SheetTitle>
                         <SheetDescription className="text-slate-400">
@@ -5530,7 +5530,7 @@ function DisputesTab() {
     return (
       <div className="space-y-4">
         <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100">
-          <div className="flex items-center justify-between gap-2 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between gap-2 bg-brand-gold px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
             <Button
               variant="ghost"
               size="sm"
@@ -5541,7 +5541,7 @@ function DisputesTab() {
               {t('common.back')}
             </Button>
             <h3 className="font-semibold">{t('p2p.dispute.fileDispute')}</h3>
-            <Badge className="bg-slate-900 text-[#f0c73f] hover:bg-slate-900">{disputeStep}/3</Badge>
+            <Badge className="bg-slate-900 text-brand-gold hover:bg-slate-900">{disputeStep}/3</Badge>
           </div>
         </div>
 
@@ -5872,14 +5872,14 @@ function DisputesTab() {
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100">
-        <div className="flex items-center justify-between gap-2 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+        <div className="flex items-center justify-between gap-2 bg-brand-gold px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
           <div className="flex items-center gap-2">
             <Scale className="h-4 w-4" />
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.dispute.title')}</h3>
           </div>
 
           <Button
-            className="h-8 bg-slate-900 text-[#f0c73f] hover:bg-slate-900/90"
+            className="h-8 bg-slate-900 text-brand-gold hover:bg-slate-900/90"
             onClick={() => setShowFileDispute(true)}
             data-testid="button-file-dispute"
           >
@@ -6189,7 +6189,7 @@ export default function P2PPage() {
     <div className="min-h-[100svh] overflow-x-hidden bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-2 md:p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
       <div className="mb-4 flex items-start justify-between gap-2 sm:gap-4 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-p2p-title">{t('nav.p2p')}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl tracking-wider leading-none" data-testid="text-p2p-title">{t('nav.p2p')}</h1>
           <p className="text-sm sm:text-base text-muted-foreground">{t('p2p.description')}</p>
         </div>
         <div className="flex w-full sm:w-auto gap-2">
