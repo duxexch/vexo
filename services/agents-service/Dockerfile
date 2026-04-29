@@ -25,15 +25,18 @@ RUN if [ -f package-lock.json ]; then \
     # build now instead of crashing at runtime with a confusing error.
     node -e "require('drizzle-orm');require('drizzle-zod');console.log('[ok] drizzle deps present')"
 
-# Copy the shared schema (used via path alias @shared/*)
-COPY shared /shared
+# Copy the shared schema INTO /app so that Node can resolve node_modules
+# from the same tree. If we keep shared at /shared, Node walks up from
+# /shared looking for /shared/node_modules and /node_modules — neither
+# exists — and crashes with MODULE_NOT_FOUND for drizzle-orm.
+COPY shared ./shared
 
 # Copy service source
 COPY services/agents-service/tsconfig.json ./
 COPY services/agents-service/src ./src
 
-# Patch the path alias so @shared/* resolves to /shared at runtime in the container
-RUN node -e "const fs=require('fs');const p='./tsconfig.json';const j=JSON.parse(fs.readFileSync(p));j.compilerOptions.paths['@shared/*']=['/shared/*'];j.include=['src/**/*','/shared/**/*'];fs.writeFileSync(p,JSON.stringify(j,null,2));"
+# Patch the path alias so @shared/* resolves to ./shared/* (i.e. /app/shared)
+RUN node -e "const fs=require('fs');const p='./tsconfig.json';const j=JSON.parse(fs.readFileSync(p));j.compilerOptions.paths['@shared/*']=['./shared/*'];j.include=['src/**/*','shared/**/*'];fs.writeFileSync(p,JSON.stringify(j,null,2));"
 
 ENV NODE_ENV=production \
     PORT=3002
@@ -46,7 +49,7 @@ HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
 # Drop privileges
 RUN addgroup -g 1002 -S agentsgrp && \
     adduser -S -u 1002 -G agentsgrp agentsusr && \
-    chown -R agentsusr:agentsgrp /app /shared
+    chown -R agentsusr:agentsgrp /app
 USER agentsusr
 
 ENTRYPOINT ["/sbin/tini", "--"]
