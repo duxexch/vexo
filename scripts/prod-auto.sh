@@ -639,13 +639,33 @@ log_info "Starting dependency services"
 if [[ "$NO_CACHE_BUILD" == "true" ]]; then
   log_info "Building ai-agent image without cache"
   "${compose_cmd[@]}" build --no-cache ai-agent
+  if "${compose_cmd[@]}" config --services 2>/dev/null | grep -Fxq 'agents-service'; then
+    log_info "Building agents-service image without cache"
+    "${compose_cmd[@]}" build --no-cache agents-service
+  fi
 fi
-"${compose_cmd[@]}" up -d db redis minio ai-agent
+
+# agents-service is split out of the main app; bring it up alongside the
+# other dependencies so the app can wait on it via depends_on.
+if "${compose_cmd[@]}" config --services 2>/dev/null | grep -Fxq 'agents-service'; then
+  "${compose_cmd[@]}" up -d db redis minio ai-agent agents-service
+else
+  "${compose_cmd[@]}" up -d db redis minio ai-agent
+fi
 
 if ! wait_for_container_health vex-db 180; then
   log_error "Database container did not become healthy in time"
   docker logs --tail 80 vex-db || true
   exit 1
+fi
+
+if docker container inspect vex-agents-service >/dev/null 2>&1; then
+  if ! wait_for_container_health vex-agents-service 180; then
+    log_error "agents-service container did not become healthy in time"
+    docker logs --tail 120 vex-agents-service || true
+    exit 1
+  fi
+  log_success "vex-agents-service is healthy"
 fi
 
 DB_USER="$(read_env POSTGRES_USER)"

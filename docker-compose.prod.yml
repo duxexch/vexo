@@ -180,6 +180,52 @@ services:
       retries: 3
       start_period: 15s
 
+  # ==================== VEX Commercial Agents Service ====================
+  # Standalone container split out of the main app for deployment isolation.
+  # Hosts the cashier/financial agents subsystem on its own port (3002) and
+  # talks to the same Postgres DB. The main app proxies requests to it via
+  # AGENTS_SERVICE_URL when set; otherwise it falls back to in-process routes.
+  # Auth is enforced via INTERNAL_SERVICE_TOKEN (no insecure default).
+  agents-service:
+    build:
+      context: .
+      dockerfile: services/agents-service/Dockerfile
+    container_name: vex-agents-service
+    hostname: vex-agents-service
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@vex-db:5432/${POSTGRES_DB:-vex_db}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      DB_POOL_MAX: ${AGENTS_DB_POOL_MAX:-10}
+      DB_POOL_MIN: ${AGENTS_DB_POOL_MIN:-1}
+      DB_SSL: "false"
+      TZ: UTC
+    networks:
+      - vex-internal
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3002/health" ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   # ==================== VEX Application ====================
   app:
     build:
@@ -208,6 +254,8 @@ services:
       minio:
         condition: service_healthy
       ai-agent:
+        condition: service_healthy
+      agents-service:
         condition: service_healthy
     environment:
       NODE_ENV: production

@@ -90,9 +90,12 @@ Usage: ./prod-update.sh [options]
 
 Update script (without path/repo bootstrap):
 - Validates and repairs .env via prod-auto flow
+  (now also enforces INTERNAL_SERVICE_TOKEN — required by vex-agents-service)
 - Pulls latest updates from GitHub
 - Ensures updated env values are loaded into containers
-- Performs strict production redeploy + health verification
+- Performs strict production redeploy + health verification across the
+  6-container stack: vex-db, vex-redis, vex-minio, vex-ai-agent,
+  vex-agents-service (commercial agents, port 3002), vex-app
 - Reconciles voice stack (livekit + coturn) through prod-auto voice checks
 
 Options:

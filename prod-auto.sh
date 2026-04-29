@@ -392,6 +392,9 @@ is_valid_key_value() {
     AI_AGENT_SHARED_TOKEN|AI_AGENT_PAYLOAD_SALT|AI_AGENT_PRIVACY_SALT)
       [[ ${#value} -ge 16 ]] && ! value_is_placeholder "$value"
       ;;
+    INTERNAL_SERVICE_TOKEN)
+      [[ ${#value} -ge 32 ]] && ! value_is_placeholder "$value"
+      ;;
     MINIO_ROOT_USER|ADMIN_BOOTSTRAP_USERNAME)
       [[ "$value" =~ ^[A-Za-z0-9._-]{3,64}$ ]] && ! value_is_placeholder "$value"
       ;;
@@ -447,7 +450,7 @@ auto_fill_key_value() {
 
   if [[ "$secret" == "true" ]]; then
     case "$key" in
-      SESSION_SECRET|JWT_SIGNING_KEY|ADMIN_JWT_SECRET|SECRETS_ENCRYPTION_KEY)
+      SESSION_SECRET|JWT_SIGNING_KEY|ADMIN_JWT_SECRET|SECRETS_ENCRYPTION_KEY|INTERNAL_SERVICE_TOKEN)
         generated="$(generate_secret_hex 48)"
         ;;
       *)
@@ -642,6 +645,10 @@ ensure_required_env_values() {
   prompt_for_key AI_AGENT_SHARED_TOKEN "ادخل AI_AGENT_SHARED_TOKEN بطول 16+" "" true
   prompt_for_key AI_AGENT_PAYLOAD_SALT "ادخل AI_AGENT_PAYLOAD_SALT بطول 16+" "" true
   prompt_for_key AI_AGENT_PRIVACY_SALT "ادخل AI_AGENT_PRIVACY_SALT بطول 16+" "" true
+
+  # Commercial Agents Service (vex-agents-service, port 3002) — required to
+  # bring up the agents-service container and to authorize the main-app proxy.
+  prompt_for_key INTERNAL_SERVICE_TOKEN "ادخل INTERNAL_SERVICE_TOKEN بطول 32+" "" true
 
   prompt_for_key ADMIN_BOOTSTRAP_USERNAME "ادخل ADMIN_BOOTSTRAP_USERNAME" "admin" false
   prompt_for_key ADMIN_BOOTSTRAP_PASSWORD "ادخل ADMIN_BOOTSTRAP_PASSWORD قوية" "" true
@@ -1022,6 +1029,35 @@ rebuild_ai_agent_service() {
   log_ok "ai-agent rebuilt and running"
 }
 
+# vex-agents-service is the standalone commercial-agents container (port 3002).
+# It is a peer of vex-ai-agent and follows the same rebuild/wait pattern. Older
+# repo snapshots may not yet declare the service in compose; in that case we
+# log and skip (idempotent / safe to re-run on legacy hosts).
+rebuild_agents_service() {
+  local compose_cmd=(docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
+
+  if ! "${compose_cmd[@]}" config --services 2>/dev/null | grep -Fxq 'agents-service'; then
+    log_info "Service agents-service is not defined in compose; skipping agents-service rebuild"
+    return 0
+  fi
+
+  log_info "Rebuilding agents-service to apply latest source code"
+  if ! "${compose_cmd[@]}" up -d --build agents-service; then
+    log_error "Failed to rebuild agents-service"
+    return 1
+  fi
+
+  if ! wait_for_container_ready vex-agents-service 180; then
+    local svc_state
+    svc_state="$(container_runtime_state vex-agents-service)"
+    log_error "agents-service container check failed after rebuild (state: ${svc_state:-missing})"
+    docker logs --tail 120 vex-agents-service 2>/dev/null || true
+    return 1
+  fi
+
+  log_ok "agents-service rebuilt and running"
+}
+
 container_env_value() {
   local env_dump="$1"
   local key="$2"
@@ -1208,6 +1244,14 @@ verify_post_deploy_stack() {
   local required_containers=(vex-db vex-redis vex-minio vex-ai-agent vex-app)
   local container state
 
+  # vex-agents-service is required only when the service is declared in the
+  # active compose file. This keeps the verification compatible with legacy
+  # compose snapshots that predate the agents-service split.
+  local compose_cmd=(docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
+  if "${compose_cmd[@]}" config --services 2>/dev/null | grep -Fxq 'agents-service'; then
+    required_containers+=(vex-agents-service)
+  fi
+
   for container in "${required_containers[@]}"; do
     state="$(container_runtime_state "$container")"
     if ! is_container_ready "$state"; then
@@ -1216,6 +1260,18 @@ verify_post_deploy_stack() {
       return 1
     fi
   done
+
+  # Verify the agents-service /health endpoint responds inside the container.
+  # Port 3002 is intentionally not published to the host (the main app reaches
+  # it on the internal docker network), so we exec into the container.
+  if docker container inspect vex-agents-service >/dev/null 2>&1; then
+    if ! docker exec vex-agents-service \
+         curl -sf http://127.0.0.1:3002/health >/dev/null 2>&1; then
+      log_error "agents-service /health did not respond inside vex-agents-service"
+      docker logs --tail 120 vex-agents-service 2>/dev/null || true
+      return 1
+    fi
+  fi
 
   if ! wait_for_http_200 "http://127.0.0.1:3001/api/health" 120; then
     log_error "Health endpoint did not return 200: /api/health"
@@ -1464,6 +1520,7 @@ fi
 refresh_upstream_images_if_needed
 run_core_deploy
 rebuild_ai_agent_service
+rebuild_agents_service
 repair_runtime_mismatches_if_needed
 run_voice_stack_deploy_if_needed
 
