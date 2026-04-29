@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageSwitcher } from "@/lib/i18n-ui";
 import { VexLogo } from "@/components/vex-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -323,6 +324,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <SidebarTrigger data-testid="button-admin-sidebar-toggle" />
             <div className="flex items-center gap-3">
               <AdminAlertsDropdown />
+              <LanguageSwitcher />
               <ThemeToggle />
             </div>
           </header>

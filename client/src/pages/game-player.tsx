@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, financialQueryOptions } from "@/lib/queryClient";
+import { isArcadeGameKey } from "@shared/arcade-games";
 import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -70,9 +71,15 @@ export default function GamePlayerPage() {
   const sessionTokenRef = useRef<string>("");
   const pendingCallbacks = useRef<Map<string, (data: any) => void>>(new Map());
 
-  // Start game session
+  // Start game session — but if `slug` is one of the 9 HTML5 arcade keys
+  // (snake, stack_tower, aim_trainer, …), hand off to the iframe-based
+  // arcade player so scores reach the arcade endpoint and Sam9 reacts.
   useEffect(() => {
     if (!slug) return;
+    if (isArcadeGameKey(slug)) {
+      setLocation(`/arcade/${slug}`, { replace: true });
+      return;
+    }
     startSession();
   }, [slug]);
 
