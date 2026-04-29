@@ -37,7 +37,8 @@ export function ShareMatchButton({
   const [showDialog, setShowDialog] = useState(false);
 
   const matchUrl = `${window.location.origin}/challenge/${challengeId}/watch`;
-  
+  const shareImageUrl = `${window.location.origin}/api/share-image?type=game&title=${encodeURIComponent(gameType)}&titleAr=${encodeURIComponent(gameType === "chess" ? "الشطرنج" : "الدومينو")}&description=${encodeURIComponent("شاهد مباراة مثيرة الآن!")}&descriptionAr=${encodeURIComponent("شاهد مباراة مثيرة الآن!")}&url=${encodeURIComponent(matchUrl)}`;
+
   const shareText = language === "ar"
     ? `شاهد مباراة ${gameType === "chess" ? "الشطرنج" : "الدومينو"} المثيرة الآن!`
     : `Watch this exciting ${gameType} match now!`;
@@ -132,7 +133,7 @@ export function ShareMatchButton({
             )}
             {language === "ar" ? "نسخ الرابط" : "Copy Link"}
           </DropdownMenuItem>
-          
+
           {shareLinks.map((link) => (
             <DropdownMenuItem
               key={link.name}
