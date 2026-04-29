@@ -108,6 +108,7 @@ function AdminSidebar() {
     { id: "free-play", titleKey: "admin.layout.menu.freePlay", url: "/admin/free-play", icon: Gift },
     { id: "marketers", titleKey: "admin.layout.menu.marketers", url: "/admin/marketers", icon: Crown },
     { id: "gifts", titleKey: "admin.layout.menu.giftCatalog", url: "/admin/gifts", icon: Gift },
+    { id: "agents", titleKey: "admin.layout.menu.agents", url: "/admin/agents", icon: Headset, hasBadge: true },
     { id: "tournaments", titleKey: "admin.layout.menu.tournaments", url: "/admin/tournaments", icon: Trophy },
     { id: "audit-logs", titleKey: "admin.layout.menu.auditLogs", url: "/admin/audit-logs", icon: FileText },
   ];

@@ -28,6 +28,24 @@ export const paymentOperationTypeEnum = pgEnum("payment_operation_type", [
 ]);
 export const paymentOperationTokenStatusEnum = pgEnum("payment_operation_token_status", ["pending", "completed", "failed", "cancelled", "expired"]);
 export const gameStateModeEnum = pgEnum("game_state_mode", ["LEGACY", "CANONICAL"]);
+export const agentLedgerTypeEnum = pgEnum("agent_ledger_type", [
+  "agent_topup",
+  "deposit_user_credit",
+  "withdraw_user_debit",
+  "commission_earned",
+  "admin_adjust_credit",
+  "admin_adjust_debit",
+  "complaint_refund",
+  "complaint_penalty",
+]);
+export const agentRequestTypeEnum = pgEnum("agent_request_type", ["deposit", "withdraw"]);
+export const agentRequestActionEnum = pgEnum("agent_request_action", [
+  "pending",
+  "approved",
+  "rejected",
+  "expired",
+  "reassigned",
+]);
 
 // ==================== ENUM TYPE HELPERS ====================
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
@@ -239,6 +257,8 @@ export const agents = pgTable("agents", {
   agentCode: text("agent_code").notNull().unique(),
   commissionRateDeposit: decimal("commission_rate_deposit", { precision: 5, scale: 4 }).notNull().default("0.02"),
   commissionRateWithdraw: decimal("commission_rate_withdraw", { precision: 5, scale: 4 }).notNull().default("0.01"),
+  commissionFixedDeposit: decimal("commission_fixed_deposit", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  commissionFixedWithdraw: decimal("commission_fixed_withdraw", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalCommissionEarned: decimal("total_commission_earned", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalDepositsProcessed: decimal("total_deposits_processed", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalWithdrawalsProcessed: decimal("total_withdrawals_processed", { precision: 15, scale: 2 }).notNull().default("0.00"),
@@ -246,15 +266,31 @@ export const agents = pgTable("agents", {
   monthlyLimit: decimal("monthly_limit", { precision: 15, scale: 2 }).notNull().default("1000000.00"),
   initialDeposit: decimal("initial_deposit", { precision: 15, scale: 2 }).notNull().default("0.00"),
   currentBalance: decimal("current_balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  // Multi-level balance thresholds (absolute values in defaultCurrency)
+  balanceWarnThreshold: decimal("balance_warn_threshold", { precision: 15, scale: 2 }).notNull().default("150.00"),
+  balanceFreezeThreshold: decimal("balance_freeze_threshold", { precision: 15, scale: 2 }).notNull().default("100.00"),
+  balanceMinThreshold: decimal("balance_min_threshold", { precision: 15, scale: 2 }).notNull().default("50.00"),
+  // Traffic distribution
+  maxConcurrentRequests: integer("max_concurrent_requests").notNull().default(5),
+  trafficWeight: integer("traffic_weight").notNull().default(100),
+  // Multi-currency support
+  allowedCurrencies: jsonb("allowed_currencies").notNull().default(sql`'["USD"]'::jsonb`),
+  defaultCurrency: text("default_currency").notNull().default("USD"),
+  // Operational state
   isOnline: boolean("is_online").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  awayMode: boolean("away_mode").notNull().default(false),
+  suspendedAt: timestamp("suspended_at"),
+  suspendedReason: text("suspended_reason"),
   assignedCustomersCount: integer("assigned_customers_count").notNull().default(0),
   performanceScore: decimal("performance_score", { precision: 5, scale: 2 }).notNull().default("100.00"),
+  avgResponseSeconds: integer("avg_response_seconds").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("idx_agents_user_id").on(table.userId),
   index("idx_agents_is_active").on(table.isActive),
+  index("idx_agents_is_online").on(table.isOnline),
 ]);
 
 export const agentsRelations = relations(agents, ({ one, many }) => ({
@@ -275,15 +311,141 @@ export const agentPaymentMethods = pgTable("agent_payment_methods", {
   bankName: text("bank_name"),
   holderName: text("holder_name"),
   details: text("details"),
+  // Per-method targeting & scheduling
+  currency: text("currency").notNull().default("USD"),
+  allowedCountries: jsonb("allowed_countries").notNull().default(sql`'[]'::jsonb`),
+  visibleFromUtc: text("visible_from_utc"),
+  visibleToUtc: text("visible_to_utc"),
+  displayOrder: integer("display_order").notNull().default(0),
+  minAmount: decimal("min_amount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  maxAmount: decimal("max_amount", { precision: 15, scale: 2 }).notNull().default("999999.00"),
   isActive: boolean("is_active").notNull().default(true),
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_agent_payment_methods_agent_id").on(table.agentId),
+  index("idx_agent_payment_methods_currency").on(table.currency, table.isActive),
 ]);
 
 export const agentPaymentMethodsRelations = relations(agentPaymentMethods, ({ one }) => ({
   agent: one(agents, { fields: [agentPaymentMethods.agentId], references: [agents.id] }),
+}));
+
+// ==================== AGENT WALLETS (multi-currency) ====================
+
+export const agentWallets = pgTable("agent_wallets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  currency: text("currency").notNull(),
+  balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  holdAmount: decimal("hold_amount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalCredited: decimal("total_credited", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalDebited: decimal("total_debited", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  lastActivityAt: timestamp("last_activity_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_agent_wallets_agent_currency").on(table.agentId, table.currency),
+  index("idx_agent_wallets_agent_id").on(table.agentId),
+]);
+
+export const agentWalletsRelations = relations(agentWallets, ({ one, many }) => ({
+  agent: one(agents, { fields: [agentWallets.agentId], references: [agents.id] }),
+  ledger: many(agentWalletTransactions),
+}));
+
+// ==================== AGENT WALLET LEDGER (append-only) ====================
+
+export const agentWalletTransactions = pgTable("agent_wallet_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  walletId: varchar("wallet_id").notNull().references(() => agentWallets.id),
+  currency: text("currency").notNull(),
+  type: agentLedgerTypeEnum("type").notNull(),
+  // Signed amount: negative = debit, positive = credit
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  balanceBefore: decimal("balance_before", { precision: 15, scale: 2 }).notNull(),
+  balanceAfter: decimal("balance_after", { precision: 15, scale: 2 }).notNull(),
+  refType: text("ref_type"),
+  refId: varchar("ref_id"),
+  note: text("note"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_agent_wallet_tx_agent").on(table.agentId, table.createdAt),
+  index("idx_agent_wallet_tx_wallet").on(table.walletId, table.createdAt),
+  index("idx_agent_wallet_tx_ref").on(table.refType, table.refId),
+]);
+
+export const agentWalletTransactionsRelations = relations(agentWalletTransactions, ({ one }) => ({
+  agent: one(agents, { fields: [agentWalletTransactions.agentId], references: [agents.id] }),
+  wallet: one(agentWallets, { fields: [agentWalletTransactions.walletId], references: [agentWallets.id] }),
+  createdBy: one(users, { fields: [agentWalletTransactions.createdByUserId], references: [users.id] }),
+}));
+
+// ==================== AGENT TRAFFIC RULES ====================
+
+export const agentTrafficRules = pgTable("agent_traffic_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  // ISO-2 country code or '*' for all
+  country: text("country").notNull().default("*"),
+  currency: text("currency").notNull(),
+  weight: integer("weight").notNull().default(100),
+  dailyCap: integer("daily_cap").notNull().default(0), // 0 = unlimited
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_agent_traffic_rules_agent").on(table.agentId),
+  index("idx_agent_traffic_rules_match").on(table.country, table.currency, table.isActive),
+]);
+
+export const agentTrafficRulesRelations = relations(agentTrafficRules, ({ one }) => ({
+  agent: one(agents, { fields: [agentTrafficRules.agentId], references: [agents.id] }),
+}));
+
+// ==================== AGENT REQUEST ASSIGNMENTS (router audit) ====================
+
+export const agentRequestAssignments = pgTable("agent_request_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestType: agentRequestTypeEnum("request_type").notNull(),
+  requestId: varchar("request_id").notNull(),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  assignedAt: timestamp("assigned_at").notNull().defaultNow(),
+  respondedAt: timestamp("responded_at"),
+  responseAction: agentRequestActionEnum("response_action").notNull().default("pending"),
+  slaDeadlineAt: timestamp("sla_deadline_at").notNull(),
+  attemptNumber: integer("attempt_number").notNull().default(1),
+}, (table) => [
+  index("idx_agent_assignments_agent").on(table.agentId, table.assignedAt),
+  index("idx_agent_assignments_request").on(table.requestType, table.requestId),
+  index("idx_agent_assignments_pending").on(table.responseAction, table.slaDeadlineAt),
+]);
+
+export const agentRequestAssignmentsRelations = relations(agentRequestAssignments, ({ one }) => ({
+  agent: one(agents, { fields: [agentRequestAssignments.agentId], references: [agents.id] }),
+}));
+
+// ==================== AGENT RATINGS ====================
+
+export const agentRatings = pgTable("agent_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  transactionId: varchar("transaction_id"),
+  stars: integer("stars").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_agent_ratings_agent").on(table.agentId),
+  uniqueIndex("idx_agent_ratings_unique_tx").on(table.transactionId, table.userId),
+]);
+
+export const agentRatingsRelations = relations(agentRatings, ({ one }) => ({
+  agent: one(agents, { fields: [agentRatings.agentId], references: [agents.id] }),
+  user: one(users, { fields: [agentRatings.userId], references: [users.id] }),
 }));
 
 // ==================== AFFILIATES ====================
@@ -2844,6 +3006,11 @@ export const insertComplaintSchema = createInsertSchema(complaints).omit({ id: t
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdAt: true });
 export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({ id: true, createdAt: true });
 export const insertAgentPaymentMethodSchema = createInsertSchema(agentPaymentMethods).omit({ id: true, createdAt: true });
+export const insertAgentWalletSchema = createInsertSchema(agentWallets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAgentWalletTransactionSchema = createInsertSchema(agentWalletTransactions).omit({ id: true, createdAt: true });
+export const insertAgentTrafficRuleSchema = createInsertSchema(agentTrafficRules).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAgentRequestAssignmentSchema = createInsertSchema(agentRequestAssignments).omit({ id: true, assignedAt: true });
+export const insertAgentRatingSchema = createInsertSchema(agentRatings).omit({ id: true, createdAt: true });
 export const insertComplaintMessageSchema = createInsertSchema(complaintMessages).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertFinancialLimitSchema = createInsertSchema(financialLimits).omit({ id: true, createdAt: true, updatedAt: true });
@@ -2915,6 +3082,19 @@ export type GameSession = typeof gameSessions.$inferSelect;
 
 export type InsertAgentPaymentMethod = z.infer<typeof insertAgentPaymentMethodSchema>;
 export type AgentPaymentMethod = typeof agentPaymentMethods.$inferSelect;
+export type InsertAgentWallet = z.infer<typeof insertAgentWalletSchema>;
+export type AgentWallet = typeof agentWallets.$inferSelect;
+export type InsertAgentWalletTransaction = z.infer<typeof insertAgentWalletTransactionSchema>;
+export type AgentWalletTransaction = typeof agentWalletTransactions.$inferSelect;
+export type AgentLedgerType = (typeof agentLedgerTypeEnum.enumValues)[number];
+export type InsertAgentTrafficRule = z.infer<typeof insertAgentTrafficRuleSchema>;
+export type AgentTrafficRule = typeof agentTrafficRules.$inferSelect;
+export type InsertAgentRequestAssignment = z.infer<typeof insertAgentRequestAssignmentSchema>;
+export type AgentRequestAssignment = typeof agentRequestAssignments.$inferSelect;
+export type AgentRequestType = (typeof agentRequestTypeEnum.enumValues)[number];
+export type AgentRequestAction = (typeof agentRequestActionEnum.enumValues)[number];
+export type InsertAgentRating = z.infer<typeof insertAgentRatingSchema>;
+export type AgentRating = typeof agentRatings.$inferSelect;
 
 export type InsertComplaintMessage = z.infer<typeof insertComplaintMessageSchema>;
 export type ComplaintMessage = typeof complaintMessages.$inferSelect;

@@ -69,8 +69,14 @@ export default function ArcadePlayPage() {
   }, [rawKey]);
 
   const submitResult = useCallback(
-    async (payload: { score: number; result: "win" | "loss" | "draw"; metadata?: Record<string, unknown> }) => {
-      if (submittedRef.current || !game) return;
+    async (payload: {
+      score: number;
+      result: "win" | "loss" | "draw";
+      metadata?: Record<string, unknown>;
+    }): Promise<{ ok: boolean; data?: ArcadeSubmitResponse; error?: string }> => {
+      if (submittedRef.current || !game) {
+        return { ok: false, error: "already_submitted_or_no_game" };
+      }
       submittedRef.current = true;
       const durationMs = Math.max(0, Date.now() - sessionStartRef.current);
       try {
@@ -93,9 +99,10 @@ export default function ArcadePlayPage() {
             economy: data.economy,
           });
           setPhase("ended");
-        } else {
-          setPhase("ended");
+          return { ok: true, data };
         }
+        setPhase("ended");
+        return { ok: false, error: "server_rejected", data };
       } catch (err) {
         toast({ title: lang === "ar" ? "تعذّر حفظ النتيجة" : "Failed to save score", variant: "destructive" });
         setResultUi({
@@ -106,41 +113,58 @@ export default function ArcadePlayPage() {
           personalBest: payload.score,
         });
         setPhase("ended");
+        return { ok: false, error: err instanceof Error ? err.message : "submit_failed" };
       }
     },
     [game, lang, toast],
   );
 
-  // Lightweight VEX SDK message bridge — same protocol as vex-sdk.js.
+  // VEX SDK message bridge.
+  // Speaks the exact protocol that `/games/vex-sdk.js` uses:
+  //   - Game posts JSON-stringified envelopes shaped like
+  //     `{ source: 'vex-game-sdk', type, payload, id }`.
+  //   - Host must reply with `{ source: 'vex-platform', type, payload, id }`
+  //     using the SDK's expected reply names (`init_response`,
+  //     `session_end_response`, `debit_response`, `credit_response`,
+  //     `score_response`).
   useEffect(() => {
     if (!game || !user) return;
     const expectedOrigin = window.location.origin;
-    // Capture narrowed local copies so the message handler closure
-    // doesn't lose the non-null narrowing across the boundary.
     const safeUser = user;
     const safeGame = game;
 
+    function postReply(target: Window, type: string, payload: unknown, id?: number | string) {
+      // Send as a plain object (not stringified) — vex-sdk.js handles both,
+      // but the platform side stays consistent with object messages.
+      target.postMessage({ source: "vex-platform", type, payload, id }, expectedOrigin);
+    }
+
     function handleMessage(event: MessageEvent) {
-      // Accept messages only from our own iframe (same origin).
       if (event.origin !== expectedOrigin) return;
       const iframe = iframeRef.current;
       if (!iframe || event.source !== iframe.contentWindow) return;
-      const data = event.data;
-      if (!data || typeof data !== "object" || typeof data.type !== "string") return;
 
-      const replyTo = (type: string, payload: unknown, id?: number | string) => {
-        const target = iframe.contentWindow;
-        if (!target) return;
-        target.postMessage({ type, id, payload }, expectedOrigin);
-      };
+      // SDK posts as JSON string — parse it. Also accept raw objects from
+      // the lightweight VexGame fallback path for safety.
+      let data: unknown = event.data;
+      if (typeof data === "string") {
+        try { data = JSON.parse(data); } catch { return; }
+      }
+      if (!data || typeof data !== "object") return;
+      const msg = data as { source?: string; type?: string; id?: number | string; payload?: Record<string, unknown> };
+      if (msg.source !== "vex-game-sdk" || typeof msg.type !== "string") return;
 
-      switch (data.type) {
+      const target = iframe.contentWindow;
+      if (!target) return;
+
+      switch (msg.type) {
         case "game_init":
-        case "game_ready":
         case "game_ping": {
-          // Ack and pass player data so the SDK proceeds to "ready".
-          replyTo(
-            "ready",
+          // Establish the connection: SDK proceeds to "ready" only on
+          // receiving an `init_response`. Send player + session token.
+          postReply(
+            target,
+            "init_response",
             {
               player: {
                 id: safeUser.id,
@@ -151,38 +175,78 @@ export default function ArcadePlayPage() {
               },
               sessionToken: `arcade_${safeGame.key}_${Date.now()}`,
             },
-            data.id,
+            msg.id,
           );
-          if (phase === "boot") setPhase("playing");
-          sessionStartRef.current = Date.now();
+          if (phase === "boot") {
+            setPhase("playing");
+            sessionStartRef.current = Date.now();
+          }
           break;
         }
-        case "game_session_end":
-        case "endSession": {
-          const payload = (data.payload ?? {}) as { score?: number; result?: string; metadata?: Record<string, unknown> };
-          const score = Math.max(0, Math.floor(Number(payload.score) || 0));
-          const rawResult = (payload.result ?? "draw").toString().toLowerCase();
+        case "end_session": {
+          const p = (msg.payload ?? {}) as { score?: number; result?: string; metadata?: Record<string, unknown> };
+          const score = Math.max(0, Math.floor(Number(p.score) || 0));
+          const rawResult = (p.result ?? "draw").toString().toLowerCase();
           const result: "win" | "loss" | "draw" =
-            rawResult === "win" ? "win" : rawResult === "loss" || rawResult === "lose" ? "loss" : score > 0 ? "win" : "loss";
-          // Reply ack so the SDK doesn't hang.
-          replyTo("session_ended", { ok: true }, data.id);
-          submitResult({ score, result, metadata: payload.metadata });
+            rawResult === "win"
+              ? "win"
+              : rawResult === "loss" || rawResult === "lose"
+                ? "loss"
+                : rawResult === "draw"
+                  ? "draw"
+                  : score > 0 ? "win" : "loss";
+          // Persist first, then reply with the server payload so the SDK
+          // callback receives banter / personal-best / economy fields.
+          const savedId = msg.id;
+          submitResult({ score, result, metadata: p.metadata }).then((outcome) => {
+            const liveTarget = iframeRef.current?.contentWindow;
+            if (!liveTarget) return;
+            if (outcome.ok && outcome.data?.session) {
+              postReply(
+                liveTarget,
+                "session_end_response",
+                {
+                  success: true,
+                  session: outcome.data.session,
+                  banter: outcome.data.banter ?? null,
+                  economy: outcome.data.economy ?? null,
+                  personalBest: outcome.data.personalBest ?? outcome.data.session.score,
+                  previousBest: outcome.data.previousBest ?? 0,
+                  isPersonalBest: outcome.data.session.isPersonalBest === true,
+                },
+                savedId,
+              );
+            } else {
+              postReply(
+                liveTarget,
+                "session_end_response",
+                { success: false, error: outcome.error ?? "submit_failed" },
+                savedId,
+              );
+            }
+          });
           break;
         }
-        case "report_score":
-        case "reportScore": {
-          // Intermediate scores — no-op on the host side for now.
-          replyTo("score_reported", { ok: true }, data.id);
+        case "report_score": {
+          // Intermediate scores — no-op host-side for now.
+          postReply(target, "score_response", { success: true }, msg.id);
           break;
         }
         case "debit":
         case "credit": {
-          // Arcade games don't gate on balance — always succeed.
-          replyTo(
-            "balance_updated",
+          // Arcade games don't gate on balance from the iframe side — wallet
+          // moves happen server-side via /api/arcade/sessions when the run
+          // ends. Always succeed so the SDK callback fires.
+          postReply(
+            target,
+            msg.type === "debit" ? "debit_response" : "credit_response",
             { success: true, newBalance: "0" },
-            data.id,
+            msg.id,
           );
+          break;
+        }
+        case "close_request": {
+          navigate("/games");
           break;
         }
         default:
@@ -192,7 +256,7 @@ export default function ArcadePlayPage() {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [game, user, lang, phase, submitResult]);
+  }, [game, user, lang, phase, submitResult, navigate]);
 
   const handleReplay = () => {
     submittedRef.current = false;

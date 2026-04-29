@@ -21,6 +21,7 @@ import { registerAdminPaymentSecurityRoutes } from "./admin-payment-security";
 import { registerAdminGiftsRoutes } from "./admin-gifts";
 import { registerAdminTransactionsRoutes } from "./admin-transactions";
 import { registerAdminRealtimeRoutes } from "./admin-realtime";
+import { registerAdminAgentsRoutes } from "./admin-agents";
 
 /**
  * Register all admin routes.
@@ -51,4 +52,5 @@ export function registerAdminRoutes(app: Express) {
   registerAdminGiftsRoutes(app);
   registerAdminTransactionsRoutes(app);
   registerAdminRealtimeRoutes(app);
+  registerAdminAgentsRoutes(app);
 }
