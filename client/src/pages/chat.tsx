@@ -33,6 +33,7 @@ import { AutoDeleteToggle, AutoDeletePurchaseDialog, AutoDeleteSettingsDialog, A
 import { ChatUnlockDialog } from "@/components/chat/ChatUnlockDialog";
 import { normalizeChatDraft } from "@/lib/chat-text";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
+import { useLocation } from "wouter";
 
 const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
@@ -230,6 +231,8 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
 
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [chatListFilter, setChatListFilter] = useState<"all" | "unread" | "online">("all");
+  const [, navigate] = useLocation();
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [disappearingMode, setDisappearingMode] = useState(false);
@@ -1071,7 +1074,27 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
   };
 
+  // Derived counters for the Stadium-style sidebar header. `totalUnread`
+  // sums every conversation's badge so the header pill matches what the user
+  // sees. `unreadCount` is the count of conversations (rows) that have any
+  // unread messages — used to label the "Unread" filter pill. `chatOnlineCount`
+  // counts conversations whose peer is currently online.
+  const totalUnread = useMemo(
+    () => conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+    [conversations]
+  );
+  const unreadCount = useMemo(
+    () => conversations.filter((c) => (c.unreadCount || 0) > 0).length,
+    [conversations]
+  );
+  const chatOnlineCount = useMemo(
+    () => conversations.filter((c) => onlineUsers.has(c.otherUserId)).length,
+    [conversations, onlineUsers]
+  );
+
   const filteredConversations = conversations.filter((conv) => {
+    if (chatListFilter === "unread" && conv.unreadCount === 0) return false;
+    if (chatListFilter === "online" && !onlineUsers.has(conv.otherUserId)) return false;
     if (!searchQuery) return true;
     const name = `${conv.otherUser.firstName || ""} ${conv.otherUser.lastName || ""} ${conv.otherUser.username}`.toLowerCase();
     return name.includes(searchQuery.toLowerCase());
@@ -1143,33 +1166,140 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
         "border-e flex flex-col bg-muted/40 w-full md:w-80",
         mobileShowMessages ? "hidden md:flex" : "flex"
       )}>
-        <div className="p-3 sm:p-4 border-b">
-          <h2 className="text-base sm:text-lg font-semibold mb-3 flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" />
-            {t("chat.title")}
-            {!isConnected && (
-              <Badge variant="secondary" className="text-xs">
-                {t("chat.reconnecting")}
-              </Badge>
-            )}
-          </h2>
-          <div className="relative">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={t("chat.searchConversations")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="ps-9"
-              data-testid="input-chat-search"
-            />
+        {/* ── Stadium-style sidebar header ── */}
+        <div className="relative overflow-hidden border-b">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0f1730] via-[#0a0e1a] to-[#0f1730] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(30,136,255,0.22),transparent_60%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,182,39,0.08),transparent_60%)] pointer-events-none" />
+          <div className="relative p-3 sm:p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2
+                  className="font-['Bebas_Neue'] tracking-wider text-3xl sm:text-4xl text-white leading-none drop-shadow-[0_2px_8px_rgba(30,136,255,0.5)]"
+                  data-testid="text-chat-title"
+                >
+                  {t("chat.title")}
+                </h2>
+                <p className="text-[11px] text-white/55 mt-1">{t("chat.heroSubtitle")}</p>
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 backdrop-blur-sm shrink-0"
+                    onClick={() => navigate("/friends")}
+                    aria-label={t("chat.newChat")}
+                    data-testid="button-new-chat"
+                  >
+                    <Pencil className="h-4 w-4 text-white" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t("chat.newChat")}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            {/* Status pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {!isConnected && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  {t("chat.reconnecting")}
+                </span>
+              )}
+              {totalUnread > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-[#1e88ff]/15 border border-[#1e88ff]/40 px-2 py-0.5 text-[10px] font-medium text-[#90c8ff] tabular-nums"
+                  data-testid="badge-total-unread"
+                >
+                  <MessageCircle className="w-2.5 h-2.5" />
+                  {t("chat.totalUnread", { count: totalUnread > 99 ? "99+" : totalUnread })}
+                </span>
+              )}
+              {chatOnlineCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-medium text-emerald-300 tabular-nums"
+                  data-testid="badge-online-count"
+                >
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                  {chatOnlineCount}
+                </span>
+              )}
+            </div>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+              <Input
+                placeholder={t("chat.searchConversations")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="ps-9 h-10 rounded-xl bg-white/[0.06] border-white/15 text-white placeholder:text-white/40 focus:bg-white/[0.1] focus:border-[#1e88ff]/50 transition-all"
+                data-testid="input-chat-search"
+              />
+            </div>
+            {/* Filter pills */}
+            <div className="flex gap-1.5" data-testid="chat-filter-pills">
+              {(["all", "unread", "online"] as const).map((f) => {
+                const active = chatListFilter === f;
+                const count = f === "unread" ? unreadCount : f === "online" ? chatOnlineCount : conversations.length;
+                const labelKey = f === "all" ? "chat.filterAll" : f === "unread" ? "chat.filterUnread" : "chat.filterOnline";
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setChatListFilter(f)}
+                    className={cn(
+                      "flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all",
+                      active
+                        ? "bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
+                        : "bg-white/[0.04] text-white/60 hover:bg-white/[0.08] hover:text-white"
+                    )}
+                    data-testid={`chat-filter-${f}`}
+                  >
+                    <span>{t(labelKey)}</span>
+                    {count > 0 && (
+                      <span className={cn("inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold tabular-nums",
+                        active ? "bg-white/25 text-white" : "bg-white/10 text-white/70")}>
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <ScrollArea className="flex-1">
           {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              <MessageCircle className="mx-auto h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">{t("chat.noConversations")}</p>
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-4 grid place-items-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1e88ff]/20 to-[#0a4d9c]/20 border border-[#1e88ff]/30">
+                <MessageCircle className="h-7 w-7 text-[#1e88ff]" />
+              </div>
+              <p className="font-['Bebas_Neue'] tracking-wider text-xl text-foreground">
+                {chatListFilter === "unread" ? t("chat.noUnread") :
+                 chatListFilter === "online" ? t("chat.noOnline") :
+                 conversations.length === 0 ? t("chat.noConvosTitle") : t("chat.noConversations")}
+              </p>
+              <p className="text-xs text-muted-foreground/80 mt-1.5 max-w-[220px] mx-auto leading-relaxed">
+                {chatListFilter === "unread" ? t("chat.noUnreadDesc") :
+                 chatListFilter === "online" ? t("chat.noOnlineDesc") :
+                 t("chat.noConvosDesc")}
+              </p>
+              {conversations.length === 0 && chatListFilter === "all" && (
+                <Button
+                  size="sm"
+                  onClick={() => navigate("/friends")}
+                  className="mt-4 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
+                  data-testid="button-empty-find-friends"
+                >
+                  <Pencil className="w-3.5 h-3.5 me-1.5" />
+                  {t("chat.startChat")}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="p-2 space-y-1">
@@ -1181,20 +1311,40 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     key={conv.otherUserId}
                     onClick={() => handleSelectConversation(conv.otherUserId)}
                     className={cn(
-                      "w-full p-3 min-h-[48px] rounded-xl text-start hover:bg-accent/50 active:bg-accent transition-colors",
-                      activeConversation === conv.otherUserId ? "bg-sidebar-accent" : "bg-transparent"
+                      "group relative w-full p-3 min-h-[48px] rounded-xl text-start transition-all duration-200",
+                      "border border-transparent",
+                      activeConversation === conv.otherUserId
+                        ? "bg-gradient-to-r from-[#1e88ff]/15 to-[#0a4d9c]/10 border-[#1e88ff]/40 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.45)]"
+                        : conv.unreadCount > 0
+                        ? "bg-gradient-to-r from-[#1e88ff]/8 to-transparent border-[#1e88ff]/20 hover:border-[#1e88ff]/40 hover:bg-[#1e88ff]/10"
+                        : "hover:bg-white/[0.05] hover:border-white/10"
                     )}
                     data-testid={`chat-conversation-${conv.otherUserId}`}
                   >
+                    {conv.unreadCount > 0 && (
+                      <span className="absolute start-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-gradient-to-b from-[#1e88ff] to-[#0a4d9c]" />
+                    )}
                     <div className="flex items-start gap-3">
                       <div className="relative">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={conv.otherUser.avatarUrl || undefined} />
-                          <AvatarFallback>{getInitials(conv.otherUser)}</AvatarFallback>
-                        </Avatar>
                         {userOnline && (
-                          <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 border-2 border-background rounded-full" />
+                          <span
+                            className="pointer-events-none absolute inset-0 rounded-full opacity-70"
+                            style={{
+                              boxShadow: "0 0 0 2px rgba(16,185,129,0.55), 0 0 14px rgba(16,185,129,0.55)",
+                            }}
+                            aria-hidden
+                          />
                         )}
+                        <Avatar className={cn("h-10 w-10 ring-2", userOnline ? "ring-emerald-400/70" : "ring-transparent")}>
+                          <AvatarImage src={conv.otherUser.avatarUrl || undefined} />
+                          <AvatarFallback className="bg-[#1e88ff]/15 text-[#1e88ff] text-sm font-semibold">{getInitials(conv.otherUser)}</AvatarFallback>
+                        </Avatar>
+                        <span
+                          className={cn(
+                            "absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-background",
+                            userOnline ? "bg-emerald-500" : "bg-zinc-500"
+                          )}
+                        />
                       </div>
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex items-start justify-between gap-2">
@@ -1287,17 +1437,32 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="relative">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={activeUserProfile?.avatarUrl || undefined} />
-                  <AvatarFallback>{activeUserProfile ? getInitials(activeUserProfile) : "??"}</AvatarFallback>
-                </Avatar>
                 {isActiveUserOnline && (
-                  <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 border-2 border-background rounded-full" />
+                  <span
+                    className="pointer-events-none absolute inset-0 rounded-full opacity-70"
+                    style={{
+                      boxShadow: "0 0 0 2px rgba(16,185,129,0.55), 0 0 14px rgba(16,185,129,0.55)",
+                    }}
+                    aria-hidden
+                  />
                 )}
+                <Avatar className={cn("h-10 w-10 ring-2", isActiveUserOnline ? "ring-emerald-400/70" : "ring-white/10")}>
+                  <AvatarImage src={activeUserProfile?.avatarUrl || undefined} />
+                  <AvatarFallback className="bg-[#1e88ff]/15 text-[#1e88ff] text-sm font-semibold">{activeUserProfile ? getInitials(activeUserProfile) : "??"}</AvatarFallback>
+                </Avatar>
+                <span
+                  className={cn(
+                    "absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-background",
+                    isActiveUserOnline ? "bg-emerald-500" : "bg-zinc-500"
+                  )}
+                />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold flex min-w-0 items-center gap-2">
-                  <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">
+                <h3 className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="font-['Bebas_Neue'] tracking-wider text-xl sm:text-2xl leading-none line-clamp-2 break-words [overflow-wrap:anywhere]"
+                    data-testid="text-active-user-name"
+                  >
                     {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
                   </span>
                   {isActiveConversationNotifMuted && (

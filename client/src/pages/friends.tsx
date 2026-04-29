@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useI18n } from "@/lib/i18n";
@@ -10,6 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Users,
   Globe,
@@ -25,8 +32,17 @@ import {
   ShieldOff,
   Eye,
   EyeOff,
+  MoreHorizontal,
+  Clock3,
+  Flag,
+  BellOff,
+  User as UserIcon,
+  Sparkles,
+  Send,
+  RefreshCw,
 } from "lucide-react";
 import type { User } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 type UserWithFollowStatus = Omit<User, "password"> & {
   isFollowing?: boolean;
@@ -38,9 +54,22 @@ type UserWithFollowStatus = Omit<User, "password"> & {
   isOnline?: boolean;
   level?: number;
   avatarUrl?: string;
+  mutualFriendCount?: number;
 };
 
-/* ═══════════════ User Card ═══════════════ */
+type ActionType =
+  | "friend"
+  | "following"
+  | "follower"
+  | "request"
+  | "outgoing"
+  | "blocked"
+  | "search"
+  | "suggestion";
+
+type TabKey = "friends" | "following" | "followers" | "requests" | "outgoing" | "blocked";
+
+/* ═══════════════ User Card (Stadium-styled) ═══════════════ */
 function UserCard({
   user,
   actionType,
@@ -49,30 +78,56 @@ function UserCard({
   t,
 }: {
   user: UserWithFollowStatus;
-  actionType: "friend" | "following" | "follower" | "request" | "blocked" | "search";
+  actionType: ActionType;
   onAction: (userId: string, action: string) => void;
   isLoading: boolean;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const initials = (user.username || "U").slice(0, 2).toUpperCase();
   const level = user.level || 1;
-  const isOnline = user.isOnline;
+  const isOnline = !!user.isOnline;
+  const mutual = user.mutualFriendCount ?? 0;
 
   return (
     <div
-      className="group relative flex flex-wrap items-start sm:items-center gap-2.5 sm:gap-3 p-3 rounded-xl 
-                 bg-card/50 border border-border/40 hover:border-primary/30
-                 hover:bg-card/80 transition-all duration-200"
+      className="group relative flex flex-wrap items-start sm:items-center gap-3 p-3 rounded-2xl
+                 bg-white/[0.04] dark:bg-white/[0.04] backdrop-blur-sm
+                 border border-white/[0.06] dark:border-white/10
+                 hover:border-[#1e88ff]/40
+                 hover:bg-white/[0.06]
+                 hover:shadow-[0_12px_30px_-12px_rgba(30,136,255,0.5)]
+                 hover:-translate-y-[1px]
+                 transition-all duration-200"
       data-testid={`card-user-${user.id}`}
     >
-      {/* Avatar with online indicator */}
+      {/* Online halo + avatar */}
       <div className="relative flex-shrink-0">
-        <Avatar className="h-12 w-12 ring-2 ring-border/30 group-hover:ring-primary/20 transition-all" data-testid={`avatar-user-${user.id}`}>
+        {isOnline && (
+          <span
+            className="pointer-events-none absolute inset-0 rounded-full opacity-70"
+            style={{
+              boxShadow: "0 0 0 2px rgba(16,185,129,0.55), 0 0 18px rgba(16,185,129,0.55)",
+            }}
+            aria-hidden
+          />
+        )}
+        <Avatar
+          className={cn(
+            "h-12 w-12 ring-2 transition-all",
+            isOnline ? "ring-emerald-400/70" : "ring-white/10 group-hover:ring-[#1e88ff]/40"
+          )}
+          data-testid={`avatar-user-${user.id}`}
+        >
           <AvatarImage src={user.avatarUrl || user.profilePicture || undefined} alt={user.username} />
-          <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">{initials}</AvatarFallback>
+          <AvatarFallback className="text-sm font-semibold bg-[#1e88ff]/15 text-[#1e88ff]">
+            {initials}
+          </AvatarFallback>
         </Avatar>
-        <span className={`absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full border-2 border-card
-          ${isOnline ? "bg-emerald-500" : "bg-gray-400"}`}
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full border-2 border-background",
+            isOnline ? "bg-emerald-500" : "bg-zinc-500"
+          )}
           title={isOnline ? t("friends.online") : t("friends.offline")}
         />
       </div>
@@ -80,49 +135,73 @@ function UserCard({
       {/* User info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="line-clamp-2 text-sm font-semibold leading-tight break-words [overflow-wrap:anywhere]" data-testid={`text-username-${user.id}`}>
+          <span
+            className="line-clamp-2 text-sm font-semibold leading-tight break-words [overflow-wrap:anywhere]"
+            data-testid={`text-username-${user.id}`}
+          >
             {user.username}
           </span>
-          <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono border-primary/20 text-primary/70" data-testid={`badge-level-${user.id}`}>
-            {t("friends.level")} {level}
+          <Badge
+            variant="outline"
+            className="text-[10px] h-5 px-1.5 font-mono border-[#ffb627]/30 text-[#ffb627]/90 bg-[#ffb627]/5"
+            data-testid={`badge-level-${user.id}`}
+          >
+            Lv {level}
           </Badge>
           {actionType === "friend" && (
-            <Badge className="text-[10px] h-5 px-1.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0" data-testid={`badge-mutual-${user.id}`}>
+            <Badge
+              className="text-[10px] h-5 px-1.5 bg-emerald-500/15 text-emerald-500 border-0"
+              data-testid={`badge-mutual-${user.id}`}
+            >
               <UserCheck className="w-3 h-3 me-0.5" />
               {t("friends.mutualFriend")}
             </Badge>
           )}
+          {actionType === "suggestion" && mutual > 0 && (
+            <Badge className="text-[10px] h-5 px-1.5 bg-[#1e88ff]/15 text-[#1e88ff] border-0">
+              <Users className="w-3 h-3 me-0.5" />
+              {t("friends.mutualWithCount", { count: mutual })}
+            </Badge>
+          )}
+          {actionType === "outgoing" && (
+            <Badge className="text-[10px] h-5 px-1.5 bg-amber-500/15 text-amber-500 border-0">
+              <Clock3 className="w-3 h-3 me-0.5" />
+              {t("friends.requestPending")}
+            </Badge>
+          )}
         </div>
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/70 break-words [overflow-wrap:anywhere]" data-testid={`text-accountid-${user.id}`}>
+        <p
+          className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/70 break-words [overflow-wrap:anywhere]"
+          data-testid={`text-accountid-${user.id}`}
+        >
           @{user.accountId}
         </p>
       </div>
 
       {/* Action buttons */}
-      <div className="flex basis-full items-center gap-1.5 flex-wrap justify-start ps-[3.5rem] sm:basis-auto sm:justify-end sm:ps-0">
+      <div className="flex basis-full items-center gap-1.5 flex-wrap justify-start ps-[3.75rem] sm:basis-auto sm:justify-end sm:ps-0">
         {actionType === "friend" && (
           <>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 rounded-full hover:bg-primary/10 hover:text-primary sm:h-9 sm:w-9"
+              size="sm"
+              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
               onClick={() => onAction(user.id, "chat")}
               disabled={isLoading}
               data-testid={`button-chat-${user.id}`}
-              title={t("friends.chat")}
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-3.5 h-3.5 me-1" />
+              {t("friends.chat")}
             </Button>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 rounded-full hover:bg-orange-500/10 hover:text-orange-500 sm:h-9 sm:w-9"
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-full px-3 text-xs border-[#ffb627]/40 text-[#ffb627] hover:bg-[#ffb627]/10 hover:text-[#ffb627]"
               onClick={() => onAction(user.id, "challenge")}
               disabled={isLoading}
               data-testid={`button-challenge-${user.id}`}
-              title={t("friends.challenge")}
             >
-              <Swords className="w-4 h-4" />
+              <Swords className="w-3.5 h-3.5 me-1" />
+              {t("friends.challenge")}
             </Button>
           </>
         )}
@@ -131,7 +210,7 @@ function UserCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
+            className="h-9 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500"
             onClick={() => onAction(user.id, "unfollow")}
             disabled={isLoading}
             data-testid={`button-unfollow-${user.id}`}
@@ -152,35 +231,25 @@ function UserCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
+              className="h-9 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500"
               onClick={() => onAction(user.id, "unfollow")}
               disabled={isLoading}
               data-testid={`button-follower-unfollow-${user.id}`}
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <UserMinus className="w-3.5 h-3.5 me-1" />
-                  {t("friends.unfollow")}
-                </>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <><UserMinus className="w-3.5 h-3.5 me-1" />{t("friends.unfollow")}</>
               )}
             </Button>
           ) : (
             <Button
               size="sm"
-              className="h-10 rounded-full px-3 text-xs bg-primary hover:bg-primary/90 sm:h-8"
+              className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
               onClick={() => onAction(user.id, "friend-request")}
               disabled={isLoading}
               data-testid={`button-followback-${user.id}`}
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <UserPlus className="w-3.5 h-3.5 me-1" />
-                  {t("friends.addFriend")}
-                </>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <><UserPlus className="w-3.5 h-3.5 me-1" />{t("friends.addFriend")}</>
               )}
             </Button>
           )
@@ -190,210 +259,239 @@ function UserCard({
           <>
             <Button
               size="sm"
-              className="h-10 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:h-8"
+              className="h-9 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)]"
               onClick={() => onAction(user.id, "accept-friend-request")}
               disabled={isLoading}
               data-testid={`button-accept-request-${user.id}`}
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <UserCheck className="w-3.5 h-3.5 me-1" />
-                  {t("common.accept")}
-                </>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <><UserCheck className="w-3.5 h-3.5 me-1" />{t("common.accept")}</>
               )}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
+              className="h-9 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500"
               onClick={() => onAction(user.id, "reject-friend-request")}
               disabled={isLoading}
               data-testid={`button-reject-request-${user.id}`}
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <X className="w-3.5 h-3.5 me-1" />
-                  {t("transactions.reject")}
-                </>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <><X className="w-3.5 h-3.5 me-1" />{t("transactions.reject")}</>
               )}
             </Button>
           </>
+        )}
+
+        {actionType === "outgoing" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500"
+            onClick={() => onAction(user.id, "cancel-friend-request")}
+            disabled={isLoading}
+            data-testid={`button-cancel-outgoing-${user.id}`}
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+              <><X className="w-3.5 h-3.5 me-1" />{t("common.cancel")}</>
+            )}
+          </Button>
         )}
 
         {actionType === "blocked" && (
           <Button
             variant="ghost"
             size="sm"
-            className="h-10 rounded-full px-3 text-xs hover:bg-emerald-500/10 hover:text-emerald-500 sm:h-8"
+            className="h-9 rounded-full px-3 text-xs hover:bg-emerald-500/10 hover:text-emerald-500"
             onClick={() => onAction(user.id, "unblock")}
             disabled={isLoading}
             data-testid={`button-unblock-${user.id}`}
           >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <ShieldOff className="w-3.5 h-3.5 me-1" />
-                {t("friends.unblock")}
-              </>
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+              <><ShieldOff className="w-3.5 h-3.5 me-1" />{t("friends.unblock")}</>
             )}
           </Button>
         )}
 
-        {actionType === "search" && !user.isBlocked && (
+        {(actionType === "search" || actionType === "suggestion") && !user.isBlocked && (
           <>
             {user.isFriend ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-10 rounded-full px-3 text-xs text-emerald-600 hover:text-emerald-600 sm:h-8"
-                disabled
-                data-testid={`button-friend-state-${user.id}`}
-              >
-                <UserCheck className="w-3.5 h-3.5 me-1" />
+              <Badge variant="outline" className="h-9 rounded-full px-3 text-xs text-emerald-500 border-emerald-500/40 gap-1">
+                <UserCheck className="w-3.5 h-3.5" />
                 {t("friends.mutualFriend")}
-              </Button>
+              </Badge>
             ) : user.hasPendingRequestSent ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 rounded-full px-3 text-xs text-amber-600 hover:text-amber-600 sm:h-8"
-                  disabled
-                  data-testid={`button-request-pending-${user.id}`}
+              <div className="flex items-center gap-1">
+                <Badge
+                  variant="outline"
+                  className="h-9 rounded-full px-3 text-xs text-amber-500 border-amber-500/40 gap-1"
                 >
-                  <Loader2 className="w-3.5 h-3.5 me-1" />
+                  <Clock3 className="w-3.5 h-3.5" />
                   {t("friends.requestPending")}
-                </Button>
+                </Badge>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
+                  className="h-9 rounded-full px-2 text-xs text-muted-foreground hover:text-red-500"
                   onClick={() => onAction(user.id, "cancel-friend-request")}
                   disabled={isLoading}
+                  aria-label={t("friends.cancelRequest")}
                   data-testid={`button-cancel-request-${user.id}`}
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <X className="w-3.5 h-3.5 me-1" />
-                      {t("common.cancel")}
-                    </>
-                  )}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                 </Button>
-              </>
+              </div>
             ) : user.hasPendingRequestReceived ? (
-              <>
+              <div className="flex items-center gap-1">
                 <Button
                   size="sm"
-                  className="h-10 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:h-8"
+                  className="h-9 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={() => onAction(user.id, "accept-friend-request")}
                   disabled={isLoading}
-                  data-testid={`button-search-accept-request-${user.id}`}
+                  data-testid={`button-accept-request-${user.id}`}
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <UserCheck className="w-3.5 h-3.5 me-1" />
-                      {t("common.accept")}
-                    </>
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                    <><UserCheck className="w-3.5 h-3.5 me-1" />{t("common.accept")}</>
                   )}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
+                  className="h-9 rounded-full px-2 text-xs text-muted-foreground hover:text-red-500"
                   onClick={() => onAction(user.id, "reject-friend-request")}
                   disabled={isLoading}
-                  data-testid={`button-search-reject-request-${user.id}`}
+                  aria-label={t("common.reject")}
+                  data-testid={`button-reject-request-${user.id}`}
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <X className="w-3.5 h-3.5 me-1" />
-                      {t("transactions.reject")}
-                    </>
-                  )}
+                  <X className="w-4 h-4" />
                 </Button>
-              </>
+              </div>
             ) : (
               <Button
                 size="sm"
-                className="h-10 rounded-full px-3 text-xs bg-primary hover:bg-primary/90 sm:h-8"
+                className="h-9 rounded-full px-3 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.7)]"
                 onClick={() => onAction(user.id, "friend-request")}
                 disabled={isLoading}
                 data-testid={`button-add-friend-${user.id}`}
               >
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <UserPlus className="w-3.5 h-3.5 me-1" />
-                    {t("friends.addFriend")}
-                  </>
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                  <><UserPlus className="w-3.5 h-3.5 me-1" />{t("friends.addFriend")}</>
                 )}
               </Button>
             )}
           </>
         )}
 
+        {/* Quick actions menu (always visible except for blocked) */}
         {actionType !== "blocked" && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 rounded-full hover:bg-red-500/10 hover:text-red-500 sm:h-9 sm:w-9"
-            onClick={() => onAction(user.id, user.isBlocked ? "unblock" : "block")}
-            disabled={isLoading}
-            data-testid={`button-block-toggle-${user.id}`}
-            title={user.isBlocked ? t("chat.unblockUser") : t("chat.blockUser")}
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : user.isBlocked ? <ShieldOff className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full hover:bg-white/10"
+                data-testid={`button-menu-${user.id}`}
+                aria-label="more"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={() => onAction(user.id, "view-profile")} className="gap-2" data-testid={`menu-view-profile-${user.id}`}>
+                <UserIcon className="w-4 h-4" />
+                {t("friends.viewProfile")}
+              </DropdownMenuItem>
+              {actionType !== "request" && actionType !== "outgoing" && (
+                <DropdownMenuItem onClick={() => onAction(user.id, "chat")} className="gap-2">
+                  <MessageCircle className="w-4 h-4" />
+                  {t("friends.chat")}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onAction(user.id, "challenge")} className="gap-2">
+                <Swords className="w-4 h-4" />
+                {t("friends.challenge")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAction(user.id, "mute")} className="gap-2">
+                <BellOff className="w-4 h-4" />
+                {t("friends.muteNotifications")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onAction(user.id, "report")} className="gap-2 text-amber-500 focus:text-amber-500">
+                <Flag className="w-4 h-4" />
+                {t("friends.report")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAction(user.id, "block")} className="gap-2 text-red-500 focus:text-red-500">
+                <Ban className="w-4 h-4" />
+                {t("chat.blockUser")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>
   );
 }
 
-/* ═══════════════ Loading Skeleton ═══════════════ */
+/* ═══════════════ Loading Skeleton (Stadium) ═══════════════ */
 function CardSkeleton() {
   return (
     <div className="space-y-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-border/30">
-          <Skeleton className="h-12 w-12 rounded-full" />
+        <div
+          key={i}
+          className="flex items-center gap-3 p-3 rounded-2xl border border-white/[0.06] bg-white/[0.03]"
+        >
+          <Skeleton className="h-12 w-12 rounded-full bg-white/[0.06]" />
           <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-4 w-28 bg-white/[0.06]" />
+            <Skeleton className="h-3 w-20 bg-white/[0.06]" />
           </div>
-          <Skeleton className="h-8 w-20 rounded-full" />
+          <Skeleton className="h-9 w-24 rounded-full bg-white/[0.06]" />
         </div>
       ))}
     </div>
   );
 }
 
-/* ═══════════════ Empty State ═══════════════ */
-function EmptySection({ icon: Icon, message, sub }: { icon: React.ComponentType<{ className?: string }>; message: string; sub: string }) {
+/* ═══════════════ Empty Section (Stadium illustration) ═══════════════ */
+function EmptySection({
+  icon: Icon,
+  title,
+  desc,
+  ctaLabel,
+  onCta,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  desc: string;
+  ctaLabel?: string;
+  onCta?: () => void;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="rounded-2xl bg-muted/40 p-5 mb-4">
-        <Icon className="h-10 w-10 text-muted-foreground/50" />
+    <div className="flex flex-col items-center justify-center py-14 px-4 text-center rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.04] to-transparent">
+      <div className="relative mb-5">
+        <div className="absolute inset-0 -z-10 rounded-3xl blur-2xl bg-[#1e88ff]/20" />
+        <div className="rounded-2xl bg-gradient-to-br from-[#1e88ff]/20 to-[#0a4d9c]/20 border border-[#1e88ff]/30 p-5">
+          <Icon className="h-9 w-9 text-[#1e88ff]" />
+        </div>
       </div>
-      <p className="font-semibold text-muted-foreground">{message}</p>
-      <p className="text-xs text-muted-foreground/60 mt-1 max-w-[260px]">{sub}</p>
+      <p className="font-['Bebas_Neue'] tracking-wider text-2xl text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground/80 mt-1.5 max-w-[280px] leading-relaxed">{desc}</p>
+      {ctaLabel && onCta && (
+        <Button
+          size="sm"
+          onClick={onCta}
+          className="mt-5 h-9 rounded-full px-4 text-xs bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] hover:opacity-95 text-white border-0 shadow-[0_6px_20px_-6px_rgba(30,136,255,0.7)]"
+        >
+          <Sparkles className="w-3.5 h-3.5 me-1.5" />
+          {ctaLabel}
+        </Button>
+      )}
     </div>
   );
 }
 
-/* ═══════════════ Tab Button ═══════════════ */
+/* ═══════════════ Tab Button (with sliding underline) ═══════════════ */
 function TabButton({
   active,
   onClick,
@@ -413,56 +511,68 @@ function TabButton({
     <button
       onClick={onClick}
       data-testid={testId}
-      className={`
-        relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium
-        transition-all duration-200 whitespace-nowrap
-        ${active
-          ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-          : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-        }
-      `}
+      className={cn(
+        "relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium",
+        "transition-all duration-200 whitespace-nowrap shrink-0",
+        active
+          ? "bg-gradient-to-r from-[#1e88ff] to-[#0a4d9c] text-white shadow-[0_6px_18px_-6px_rgba(30,136,255,0.7)]"
+          : "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
+      )}
     >
       <Icon className="w-3.5 h-3.5" />
-      <span className="hidden sm:inline">{label}</span>
+      <span>{label}</span>
       {(count ?? 0) > 0 && (
-        <span className={`
-          inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold
-          ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/15 text-primary"}
-        `}>
-          {count}
+        <span
+          className={cn(
+            "inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[10px] font-bold tabular-nums",
+            active ? "bg-white/25 text-white" : "bg-[#ffb627]/15 text-[#ffb627]"
+          )}
+        >
+          {count! > 99 ? "99+" : count}
         </span>
       )}
     </button>
   );
 }
 
-/* ═══════════════ Stats Card ═══════════════ */
-function StatsBar({
-  friends,
-  following,
-  followers,
-  t,
+/* ═══════════════ Stat Tile ═══════════════ */
+function StatTile({
+  label,
+  value,
+  icon: Icon,
+  accent,
+  highlight,
+  testId,
 }: {
-  friends: number;
-  following: number;
-  followers: number;
-  t: (key: string) => string;
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: "blue" | "gold" | "emerald" | "violet";
+  highlight?: boolean;
+  testId?: string;
 }) {
+  const accentMap = {
+    blue: "from-[#1e88ff]/30 to-[#0a4d9c]/20 text-[#1e88ff] border-[#1e88ff]/30",
+    gold: "from-[#ffb627]/30 to-[#ff8a00]/20 text-[#ffb627] border-[#ffb627]/30",
+    emerald: "from-emerald-500/30 to-emerald-700/20 text-emerald-400 border-emerald-500/30",
+    violet: "from-violet-500/30 to-purple-700/20 text-violet-400 border-violet-500/30",
+  } as const;
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {[
-        { label: t("friends.totalFriends"), value: friends, color: "text-primary" },
-        { label: t("friends.totalFollowing"), value: following, color: "text-blue-500" },
-        { label: t("friends.totalFollowers"), value: followers, color: "text-emerald-500" },
-      ].map((stat) => (
-        <div
-          key={stat.label}
-          className="flex flex-col items-center py-3 rounded-xl bg-card/60 border border-border/30"
-        >
-          <span className={`text-xl font-bold tabular-nums ${stat.color}`}>{stat.value}</span>
-          <span className="text-[10px] text-muted-foreground/70 mt-0.5">{stat.label}</span>
-        </div>
-      ))}
+    <div
+      data-testid={testId}
+      className={cn(
+        "relative flex flex-col items-center justify-center p-3 rounded-2xl border bg-white/[0.03]",
+        highlight ? `bg-gradient-to-br ${accentMap[accent]} border-current` : "border-white/[0.06]"
+      )}
+    >
+      <div className={cn("flex items-center gap-1.5 mb-1", highlight ? "" : accentMap[accent].split(" ").find(c => c.startsWith("text-")))}>
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-[10px] uppercase tracking-wider opacity-80">{label}</span>
+      </div>
+      <span className="font-['Bebas_Neue'] tracking-wider text-3xl leading-none tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }
@@ -473,7 +583,7 @@ export default function FriendsPage() {
   const { t, dir } = useI18n();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "requests" | "blocked">("friends");
+  const [activeTab, setActiveTab] = useState<TabKey>("friends");
   const [searchFilter, setSearchFilter] = useState<"all" | "friends" | "following" | "followers" | "blocked">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -486,28 +596,29 @@ export default function FriendsPage() {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(trimmedSearchQuery);
     }, 250);
-
     return () => clearTimeout(timer);
   }, [trimmedSearchQuery]);
 
   const { data: friends = [], isLoading: friendsLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/friends"],
   });
-
   const { data: following = [], isLoading: followingLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/following"],
   });
-
   const { data: followers = [], isLoading: followersLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/followers"],
   });
-
   const { data: blocked = [], isLoading: blockedLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/blocked"],
   });
-
   const { data: incomingRequests = [], isLoading: incomingRequestsLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/friend-requests/incoming"],
+  });
+  const { data: outgoingRequests = [], isLoading: outgoingRequestsLoading } = useQuery<UserWithFollowStatus[]>({
+    queryKey: ["/api/users/friend-requests/outgoing"],
+  });
+  const { data: suggestions = [], isLoading: suggestionsLoading, refetch: refetchSuggestions } = useQuery<UserWithFollowStatus[]>({
+    queryKey: ["/api/users/suggestions"],
   });
 
   const searchUrl = debouncedSearchQuery.length >= 2
@@ -519,6 +630,11 @@ export default function FriendsPage() {
     enabled: isSearchActive && debouncedSearchQuery.length >= 2,
   });
 
+  const onlineCount = useMemo(
+    () => friends.filter(u => u.isOnline).length,
+    [friends]
+  );
+
   const invalidateSocialQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
@@ -526,6 +642,7 @@ export default function FriendsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/users/blocked"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/incoming"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/outgoing"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/suggestions"] });
     queryClient.invalidateQueries({
       predicate: (query) => {
         const key = query.queryKey?.[0];
@@ -536,60 +653,42 @@ export default function FriendsPage() {
 
   const followMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("POST", `/api/users/follow/${userId}`),
-    onSuccess: () => {
-      toast({ title: t("friends.followSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.followSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
   const unfollowMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/unfollow/${userId}`),
-    onSuccess: () => {
-      toast({ title: t("friends.unfollowSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.unfollowSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
   const sendFriendRequestMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}`),
-    onSuccess: () => {
-      toast({ title: t("friends.requestSentSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.requestSentSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
   const acceptFriendRequestMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}/accept`),
-    onSuccess: () => {
-      toast({ title: t("friends.requestAcceptedSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.requestAcceptedSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
   const rejectFriendRequestMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}/reject`),
-    onSuccess: () => {
-      toast({ title: t("friends.requestRejectedSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.requestRejectedSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
   const cancelFriendRequestMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/friend-request/${userId}`),
-    onSuccess: () => {
-      toast({ title: t("friends.requestCancelledSuccess") });
-      invalidateSocialQueries();
-    },
+    onSuccess: () => { toast({ title: t("friends.requestCancelledSuccess") }); invalidateSocialQueries(); },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
@@ -605,6 +704,22 @@ export default function FriendsPage() {
     onSettled: () => setActionLoadingId(null),
   });
 
+  const muteMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      apiRequest("POST", `/api/users/${userId}/notification-mute`),
+    onSuccess: () => toast({ title: t("chat.muteNotificationsSuccess") }),
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
+  const reportMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      apiRequest("POST", `/api/users/${userId}/report`, { context: "profile" }),
+    onSuccess: () => toast({ title: t("friends.report") + " ✓" }),
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
   const toggleSearchVisibilityMutation = useMutation({
     mutationFn: async () => {
       const nextStealthMode = !(user?.stealthMode ?? false);
@@ -616,9 +731,7 @@ export default function FriendsPage() {
       toast({ title: t("settings.visibilityUpdated") });
       invalidateSocialQueries();
     },
-    onError: () => {
-      toast({ title: t("settings.updateFailed"), variant: "destructive" });
-    },
+    onError: () => toast({ title: t("settings.updateFailed"), variant: "destructive" }),
   });
 
   const handleAction = (userId: string, action: string) => {
@@ -632,6 +745,12 @@ export default function FriendsPage() {
       case "cancel-friend-request": cancelFriendRequestMutation.mutate(userId); break;
       case "block": blockMutation.mutate({ userId, action: "block" }); break;
       case "unblock": blockMutation.mutate({ userId, action: "unblock" }); break;
+      case "mute": muteMutation.mutate(userId); break;
+      case "report": reportMutation.mutate(userId); break;
+      case "view-profile":
+        navigate(`/player/${userId}`);
+        setActionLoadingId(null);
+        break;
       case "chat":
         navigate(`/chat?user=${userId}`);
         setActionLoadingId(null);
@@ -650,258 +769,298 @@ export default function FriendsPage() {
     isFollowing: followingIds.has(user.id),
   }));
 
-  // Determine active content
-  const renderContent = () => {
-    if (isSearchActive && debouncedSearchQuery.length >= 2) {
-      if (searchLoading) return <CardSkeleton />;
-      if (searchResults.length === 0) {
-        return <EmptySection icon={Search} message={t("friends.noResults")} sub={t("friends.noResultsDesc")} />;
-      }
-      return (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground px-1">
-            {t("friends.searchResults")} ({searchResults.length})
-          </p>
-          {searchResults.map((user) => (
-            <UserCard key={user.id} user={user} actionType="search" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
-          ))}
-        </div>
-      );
-    }
-
-    if (isSearchActive && trimmedSearchQuery.length > 0 && trimmedSearchQuery.length < 2) {
-      return <EmptySection icon={Search} message={t("friends.typeToSearch")} sub="" />;
-    }
-
-    if (isSearchActive && trimmedSearchQuery.length === 0) {
-      return <EmptySection icon={Search} message={t("friends.typeToSearch")} sub={t("friends.searchPlaceholder")} />;
-    }
-
+  // Render content for the active tab
+  const renderTabContent = () => {
     switch (activeTab) {
       case "friends":
         if (friendsLoading) return <CardSkeleton />;
-        if (friends.length === 0) return <EmptySection icon={Users} message={t("friends.noFriends")} sub={t("friends.noFriendsDesc")} />;
-        return (
-          <div className="space-y-2">
-            {friends.map((user) => (
-              <UserCard key={user.id} user={user} actionType="friend" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
-            ))}
-          </div>
-        );
-
-      case "following":
-        if (followingLoading) return <CardSkeleton />;
-        if (following.length === 0) return <EmptySection icon={UserPlus} message={t("friends.noFollowing")} sub={t("friends.noFollowingDesc")} />;
-        return (
-          <div className="space-y-2">
-            {following.map((user) => (
-              <UserCard key={user.id} user={user} actionType="following" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
-            ))}
-          </div>
-        );
-
-      case "followers":
-        if (followersLoading) return <CardSkeleton />;
-        if (followerUsers.length === 0) return <EmptySection icon={Users} message={t("friends.noFollowers")} sub={t("friends.noFollowersDesc")} />;
-        return (
-          <div className="space-y-2">
-            {followerUsers.map((user) => (
-              <UserCard key={user.id} user={user} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
-            ))}
-          </div>
-        );
-
-      case "requests":
-        if (incomingRequestsLoading) return <CardSkeleton />;
-        if (incomingRequests.length === 0) {
-          return <EmptySection icon={UserCheck} message={t("friends.noPendingRequests")} sub={t("friends.noPendingRequestsDesc")} />;
+        if (friends.length === 0) {
+          return (
+            <EmptySection
+              icon={Users}
+              title={t("friends.noFriends")}
+              desc={t("friends.noFriendsDesc")}
+              ctaLabel={t("friends.findPlayers")}
+              onCta={() => { setIsSearchActive(true); searchInputRef.current?.focus(); }}
+            />
+          );
         }
         return (
           <div className="space-y-2">
-            {incomingRequests.map((user) => (
-              <UserCard key={user.id} user={user} actionType="request" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+            {friends.map((u) => (
+              <UserCard key={u.id} user={u} actionType="friend" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
             ))}
           </div>
         );
-
-      case "blocked":
-        if (blockedLoading) return <CardSkeleton />;
-        if (blocked.length === 0) return <EmptySection icon={Ban} message={t("friends.noBlocked")} sub={t("friends.noBlockedDesc")} />;
+      case "following":
+        if (followingLoading) return <CardSkeleton />;
+        if (following.length === 0) {
+          return <EmptySection icon={UserPlus} title={t("friends.noFollowing")} desc={t("friends.noFollowingDesc")} />;
+        }
         return (
           <div className="space-y-2">
-            {blocked.map((user) => (
-              <UserCard key={user.id} user={user} actionType="blocked" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+            {following.map((u) => (
+              <UserCard key={u.id} user={u} actionType="following" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
+            ))}
+          </div>
+        );
+      case "followers":
+        if (followersLoading) return <CardSkeleton />;
+        if (followerUsers.length === 0) {
+          return <EmptySection icon={Users} title={t("friends.noFollowers")} desc={t("friends.noFollowersDesc")} />;
+        }
+        return (
+          <div className="space-y-2">
+            {followerUsers.map((u) => (
+              <UserCard key={u.id} user={u} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
+            ))}
+          </div>
+        );
+      case "requests":
+        if (incomingRequestsLoading) return <CardSkeleton />;
+        if (incomingRequests.length === 0) {
+          return <EmptySection icon={UserCheck} title={t("friends.noPendingRequests")} desc={t("friends.noPendingRequestsDesc")} />;
+        }
+        return (
+          <div className="space-y-2">
+            {incomingRequests.map((u) => (
+              <UserCard key={u.id} user={u} actionType="request" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
+            ))}
+          </div>
+        );
+      case "outgoing":
+        if (outgoingRequestsLoading) return <CardSkeleton />;
+        if (outgoingRequests.length === 0) {
+          return <EmptySection icon={Send} title={t("friends.noOutgoing")} desc={t("friends.noOutgoingDesc")} />;
+        }
+        return (
+          <div className="space-y-2">
+            {outgoingRequests.map((u) => (
+              <UserCard key={u.id} user={u} actionType="outgoing" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
+            ))}
+          </div>
+        );
+      case "blocked":
+        if (blockedLoading) return <CardSkeleton />;
+        if (blocked.length === 0) {
+          return <EmptySection icon={Ban} title={t("friends.noBlocked")} desc={t("friends.noBlockedDesc")} />;
+        }
+        return (
+          <div className="space-y-2">
+            {blocked.map((u) => (
+              <UserCard key={u.id} user={u} actionType="blocked" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
             ))}
           </div>
         );
     }
   };
 
+  // Suggestions strip — shown only on Friends tab when not searching
+  const showSuggestions = activeTab === "friends" && !isSearchActive && (suggestionsLoading || suggestions.length > 0);
+
+  // Search content
+  const renderSearchContent = () => {
+    if (debouncedSearchQuery.length < 2) {
+      if (trimmedSearchQuery.length === 0) {
+        return <EmptySection icon={Search} title={t("friends.findPlayers")} desc={t("friends.searchHint")} />;
+      }
+      return <EmptySection icon={Search} title={t("friends.typeToSearch")} desc="" />;
+    }
+    if (searchLoading) return <CardSkeleton />;
+    if (searchResults.length === 0) {
+      return <EmptySection icon={Search} title={t("friends.noResults")} desc={t("friends.noResultsDesc")} />;
+    }
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground/80 px-1 font-medium">
+          {t("friends.searchResults")} <span className="text-[#1e88ff] tabular-nums">({searchResults.length})</span>
+        </p>
+        {searchResults.map((u) => (
+          <UserCard key={u.id} user={u} actionType="search" onAction={handleAction} isLoading={actionLoadingId === u.id} t={t} />
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)]" dir={dir}>
-      <div className="max-w-xl mx-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4">
-
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight" data-testid="text-friends-title">
-            {t("friends.title")}
-          </h1>
-          <p className="text-xs text-muted-foreground/70" data-testid="text-friends-subtitle">
-            {t("friends.subtitle")}
-          </p>
-        </div>
-
-        {/* Stats */}
-        <StatsBar
-          friends={friends.length}
-          following={following.length}
-          followers={followers.length}
-          t={t}
-        />
-
-        {/* Global Search + Filter Trigger */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-            <Input
-              ref={searchInputRef}
-              placeholder={t("friends.searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (e.target.value.length > 0) setIsSearchActive(true);
-              }}
-              onFocus={() => setIsSearchActive(true)}
-              className="ps-10 pe-9 h-11 rounded-xl bg-muted/40 border-border/30 
-                       focus:bg-card focus:border-primary/30 transition-all"
-              data-testid="input-search-users"
-            />
-            {isSearchActive && (
-              <button
-                className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
-                onClick={() => {
-                  setSearchQuery("");
-                  setIsSearchActive(false);
-                  setSearchFilter("all");
-                  searchInputRef.current?.blur();
-                }}
+    <div
+      className="min-h-[100svh] bg-[radial-gradient(ellipse_at_top,rgba(30,136,255,0.18),transparent_55%)]"
+      dir={dir}
+    >
+      <div className="max-w-2xl mx-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4">
+        {/* ═══════ Stadium Hero Header ═══════ */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#0f1730] via-[#0a0e1a] to-[#0f1730] p-5 shadow-[0_20px_50px_-20px_rgba(30,136,255,0.4)]">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(30,136,255,0.25),transparent_55%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,182,39,0.1),transparent_55%)] pointer-events-none" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1
+                className="font-['Bebas_Neue'] tracking-wider text-4xl sm:text-5xl text-white leading-none drop-shadow-[0_2px_10px_rgba(30,136,255,0.5)]"
+                data-testid="text-friends-title"
               >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                {t("friends.title")}
+              </h1>
+              <p
+                className="text-xs sm:text-sm text-white/60 mt-1.5"
+                data-testid="text-friends-subtitle"
+              >
+                {t("friends.heroSubtitle")}
+              </p>
+              {/* Online-now pill */}
+              {friends.length > 0 && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                  <span className="text-[11px] font-medium text-emerald-300 tabular-nums">
+                    {t("friends.totalSubtitle", { online: onlineCount, total: friends.length })}
+                  </span>
+                </div>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 backdrop-blur-sm shrink-0"
+              onClick={() => toggleSearchVisibilityMutation.mutate()}
+              disabled={toggleSearchVisibilityMutation.isPending}
+              title={t("settings.stealthModeDescription")}
+              aria-label={t("settings.stealthModeDescription")}
+              data-testid="button-toggle-search-visibility"
+            >
+              {toggleSearchVisibilityMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              ) : user?.stealthMode ? (
+                <EyeOff className="w-4 h-4 text-white" />
+              ) : (
+                <Eye className="w-4 h-4 text-white" />
+              )}
+            </Button>
           </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-xl"
-            onClick={() => toggleSearchVisibilityMutation.mutate()}
-            disabled={toggleSearchVisibilityMutation.isPending}
-            title={t("settings.stealthModeDescription")}
-            data-testid="button-toggle-search-visibility"
-          >
-            {toggleSearchVisibilityMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : user?.stealthMode ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-          </Button>
         </div>
 
-        {/* Tab Navigation */}
-        {!isSearchActive ? (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" data-testid="tabs-friends">
-            <TabButton
-              active={activeTab === "friends"}
-              onClick={() => setActiveTab("friends")}
-              icon={Users}
-              label={t("friends.friends")}
-              count={friends.length}
-              testId="tab-friends"
-            />
-            <TabButton
-              active={activeTab === "following"}
-              onClick={() => setActiveTab("following")}
-              icon={UserPlus}
-              label={t("friends.following")}
-              count={following.length}
-              testId="tab-following"
-            />
-            <TabButton
-              active={activeTab === "followers"}
-              onClick={() => setActiveTab("followers")}
-              icon={Users}
-              label={t("friends.followers")}
-              count={followers.length}
-              testId="tab-followers"
-            />
-            <TabButton
-              active={activeTab === "requests"}
-              onClick={() => setActiveTab("requests")}
-              icon={UserCheck}
-              label={t("friends.requests")}
-              count={incomingRequests.length}
-              testId="tab-requests"
-            />
-            <TabButton
-              active={activeTab === "blocked"}
-              onClick={() => setActiveTab("blocked")}
-              icon={Ban}
-              label={t("friends.blocked")}
-              count={blocked.length}
-              testId="tab-blocked"
-            />
-          </div>
-        ) : (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" data-testid="tabs-search-scope">
-            <TabButton
-              active={searchFilter === "all"}
-              onClick={() => setSearchFilter("all")}
-              icon={Globe}
-              label={t("common.all")}
-              testId="tab-search-all"
-            />
-            <TabButton
-              active={searchFilter === "friends"}
-              onClick={() => setSearchFilter("friends")}
-              icon={Users}
-              label={t("friends.friends")}
-              count={friends.length}
-              testId="tab-search-friends"
-            />
-            <TabButton
-              active={searchFilter === "following"}
-              onClick={() => setSearchFilter("following")}
-              icon={UserPlus}
-              label={t("friends.following")}
-              count={following.length}
-              testId="tab-search-following"
-            />
-            <TabButton
-              active={searchFilter === "followers"}
-              onClick={() => setSearchFilter("followers")}
-              icon={Users}
-              label={t("friends.followers")}
-              count={followers.length}
-              testId="tab-search-followers"
-            />
-            <TabButton
-              active={searchFilter === "blocked"}
-              onClick={() => setSearchFilter("blocked")}
-              icon={Ban}
-              label={t("friends.blocked")}
-              count={blocked.length}
-              testId="tab-search-blocked"
-            />
+        {/* ═══════ Stat Tiles ═══════ */}
+        <div className="grid grid-cols-4 gap-2">
+          <StatTile
+            label={t("friends.totalFriends")}
+            value={friends.length}
+            icon={Users}
+            accent="blue"
+            highlight
+            testId="stat-friends"
+          />
+          <StatTile label={t("friends.totalFollowing")} value={following.length} icon={UserPlus} accent="violet" testId="stat-following" />
+          <StatTile label={t("friends.totalFollowers")} value={followers.length} icon={UserCheck} accent="emerald" testId="stat-followers" />
+          <StatTile label={t("friends.requests")} value={incomingRequests.length} icon={Sparkles} accent="gold" testId="stat-requests" />
+        </div>
+
+        {/* ═══════ Search Bar ═══════ */}
+        <div className="relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+          <Input
+            ref={searchInputRef}
+            placeholder={t("friends.searchPlaceholder")}
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (e.target.value.length > 0) setIsSearchActive(true);
+            }}
+            onFocus={() => setIsSearchActive(true)}
+            className="ps-10 pe-9 h-11 rounded-xl bg-white/[0.04] border-white/10
+                       focus:bg-white/[0.07] focus:border-[#1e88ff]/40 transition-all"
+            data-testid="input-search-users"
+          />
+          {isSearchActive && (
+            <button
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-muted-foreground/60 hover:text-foreground transition-colors"
+              onClick={() => {
+                setSearchQuery("");
+                setIsSearchActive(false);
+                setSearchFilter("all");
+                searchInputRef.current?.blur();
+              }}
+              aria-label={t("common.clear")}
+              data-testid="button-clear-search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* ═══════ Sticky Tab Bar ═══════ */}
+        <div className="sticky top-0 z-20 -mx-3 px-3 py-2 backdrop-blur-md bg-background/70 border-b border-white/[0.05]">
+          {!isSearchActive ? (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none" data-testid="tabs-friends">
+              <TabButton active={activeTab === "friends"} onClick={() => setActiveTab("friends")} icon={Users} label={t("friends.friends")} count={friends.length} testId="tab-friends" />
+              <TabButton active={activeTab === "requests"} onClick={() => setActiveTab("requests")} icon={UserCheck} label={t("friends.requests")} count={incomingRequests.length} testId="tab-requests" />
+              <TabButton active={activeTab === "outgoing"} onClick={() => setActiveTab("outgoing")} icon={Send} label={t("friends.outgoing")} count={outgoingRequests.length} testId="tab-outgoing" />
+              <TabButton active={activeTab === "following"} onClick={() => setActiveTab("following")} icon={UserPlus} label={t("friends.following")} count={following.length} testId="tab-following" />
+              <TabButton active={activeTab === "followers"} onClick={() => setActiveTab("followers")} icon={Users} label={t("friends.followers")} count={followers.length} testId="tab-followers" />
+              <TabButton active={activeTab === "blocked"} onClick={() => setActiveTab("blocked")} icon={Ban} label={t("friends.blocked")} count={blocked.length} testId="tab-blocked" />
+            </div>
+          ) : (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none" data-testid="tabs-search-scope">
+              <TabButton active={searchFilter === "all"} onClick={() => setSearchFilter("all")} icon={Globe} label={t("common.all")} testId="tab-search-all" />
+              <TabButton active={searchFilter === "friends"} onClick={() => setSearchFilter("friends")} icon={Users} label={t("friends.friends")} count={friends.length} testId="tab-search-friends" />
+              <TabButton active={searchFilter === "following"} onClick={() => setSearchFilter("following")} icon={UserPlus} label={t("friends.following")} count={following.length} testId="tab-search-following" />
+              <TabButton active={searchFilter === "followers"} onClick={() => setSearchFilter("followers")} icon={Users} label={t("friends.followers")} count={followers.length} testId="tab-search-followers" />
+              <TabButton active={searchFilter === "blocked"} onClick={() => setSearchFilter("blocked")} icon={Ban} label={t("friends.blocked")} count={blocked.length} testId="tab-search-blocked" />
+            </div>
+          )}
+        </div>
+
+        {/* ═══════ Suggestions strip (Friends tab only) ═══════ */}
+        {showSuggestions && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br from-[#ffb627] to-[#ff8a00] text-black">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
+                <div>
+                  <h3 className="font-['Bebas_Neue'] tracking-wider text-base leading-none text-foreground" data-testid="text-suggestions-title">
+                    {t("friends.suggestions")}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">{t("friends.suggestionsDesc")}</p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full hover:bg-white/10"
+                onClick={() => refetchSuggestions()}
+                disabled={suggestionsLoading}
+                title={t("friends.refresh")}
+                aria-label={t("friends.refresh")}
+                data-testid="button-refresh-suggestions"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", suggestionsLoading && "animate-spin")} />
+              </Button>
+            </div>
+            {suggestionsLoading ? (
+              <CardSkeleton />
+            ) : (
+              <div className="space-y-2">
+                {suggestions.slice(0, 5).map((u) => (
+                  <UserCard
+                    key={u.id}
+                    user={u}
+                    actionType="suggestion"
+                    onAction={handleAction}
+                    isLoading={actionLoadingId === u.id}
+                    t={t}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Content */}
+        {/* ═══════ Content ═══════ */}
         <div className="min-h-[300px]" data-testid={isSearchActive ? "content-search" : `content-${activeTab}`}>
-          {renderContent()}
+          {isSearchActive ? renderSearchContent() : renderTabContent()}
         </div>
       </div>
     </div>

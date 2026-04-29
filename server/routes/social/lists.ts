@@ -134,6 +134,43 @@ export function registerSocialListRoutes(app: Express): void {
     }
   });
 
+  // "Players you may know" — surface friends-of-friends + recent active
+  // players, with the requester's own follows / pending-requests / blocks
+  // filtered out client-side via the exclusion list we build here.
+  app.get("/api/users/suggestions", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const limitParam = Number(req.query.limit);
+      const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(50, limitParam)) : 12;
+
+      const [following, followers, incoming, outgoing, blockedIds] = await Promise.all([
+        storage.getUserFollowing(userId),
+        storage.getUserFollowers(userId),
+        storage.getIncomingFriendRequests(userId),
+        storage.getOutgoingFriendRequests(userId),
+        getBlockedUserIds(userId),
+      ]);
+
+      const exclude = new Set<string>();
+      following.forEach((r) => exclude.add(r.targetUserId));
+      followers.forEach((r) => exclude.add(r.userId));
+      incoming.forEach((r) => exclude.add(r.userId));
+      outgoing.forEach((r) => exclude.add(r.targetUserId));
+      blockedIds.forEach((id) => exclude.add(id));
+
+      const suggestions = await storage.getFriendSuggestions(userId, Array.from(exclude), limit);
+
+      const safe = suggestions.map((u) => {
+        const { password, ...rest } = u;
+        return rest;
+      });
+
+      res.json(safe);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.post("/api/users/batch", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { userIds } = req.body;

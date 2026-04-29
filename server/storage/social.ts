@@ -4,7 +4,7 @@ import {
   type SocialPlatform, type InsertSocialPlatform,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, desc, and, asc, or, ilike, ne } from "drizzle-orm";
+import { eq, desc, and, asc, or, ilike, ne, inArray, notInArray, sql } from "drizzle-orm";
 import { encryptPlatformSecrets, decryptPlatformSecrets } from "../lib/crypto-utils";
 
 // ==================== USER RELATIONSHIPS ====================
@@ -232,6 +232,108 @@ export async function searchUsers(query: string, excludeUserId: string, options:
     .limit(limit);
 
   return rows.map((row) => row.user);
+}
+
+// ==================== FRIEND SUGGESTIONS ====================
+//
+// "Players you may know" — derives candidates from two pools:
+//   1. Friends-of-friends: target users who are followed by the people we
+//      already follow but who we don't yet follow ourselves. Stronger signal,
+//      so they get priority and a `mutualFriendCount` score.
+//   2. Recent active players: a small fallback so the list never goes empty
+//      for brand-new users with zero follows.
+//
+// All candidates are filtered to exclude:
+//   - the requester themselves
+//   - blocked / blocked-by users
+//   - users we already follow or have an active friend_request with
+//   - users marked stealthMode (they opted out of discovery)
+//   - inactive accounts
+//
+// Returns at most `limit` users sorted by mutualFriendCount desc, with the
+// fallback bucket appended (without a mutual count) only if needed.
+export interface SuggestedUser extends User {
+  mutualFriendCount: number;
+}
+
+export async function getFriendSuggestions(
+  userId: string,
+  excludeIds: string[],
+  limit: number = 12,
+): Promise<SuggestedUser[]> {
+  const safeLimit = Math.max(1, Math.min(50, limit));
+
+  // Reverse-block exclusion: anyone who has blocked the requester must not appear.
+  const reverseBlockers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`${users.blockedUsers} @> ARRAY[${userId}]::text[]`);
+  const reverseBlockerIds = reverseBlockers.map(r => r.id);
+
+  const exclusion = Array.from(new Set([userId, ...excludeIds, ...reverseBlockerIds]));
+
+  const myFollows = await db.select({ targetUserId: userRelationships.targetUserId })
+    .from(userRelationships)
+    .where(and(
+      eq(userRelationships.userId, userId),
+      eq(userRelationships.type, "follow"),
+      eq(userRelationships.status, "active"),
+    ));
+  const myFollowIds = myFollows.map(r => r.targetUserId);
+
+  const out: SuggestedUser[] = [];
+
+  // Bucket 1: friends-of-friends weighted by mutual count
+  if (myFollowIds.length > 0) {
+    const fofRows = await db.select({
+      targetUserId: userRelationships.targetUserId,
+      mutualCount: sql<number>`count(*)::int`.as("mutual_count"),
+    })
+      .from(userRelationships)
+      .where(and(
+        inArray(userRelationships.userId, myFollowIds),
+        eq(userRelationships.type, "follow"),
+        eq(userRelationships.status, "active"),
+        notInArray(userRelationships.targetUserId, exclusion),
+      ))
+      .groupBy(userRelationships.targetUserId)
+      .orderBy(desc(sql`count(*)`))
+      .limit(safeLimit);
+
+    if (fofRows.length > 0) {
+      const fofIds = fofRows.map(r => r.targetUserId);
+      const userRows = await db.select().from(users)
+        .where(and(
+          inArray(users.id, fofIds),
+          eq(users.status, "active"),
+          eq(users.stealthMode, false),
+        ));
+      const usersById = new Map(userRows.map(u => [u.id, u]));
+      for (const r of fofRows) {
+        const u = usersById.get(r.targetUserId);
+        if (u) out.push({ ...u, mutualFriendCount: Number(r.mutualCount) || 0 });
+      }
+    }
+  }
+
+  // Bucket 2: fill remaining slots from recent active players
+  const remaining = safeLimit - out.length;
+  if (remaining > 0) {
+    const alreadyIn = new Set(out.map(u => u.id));
+    const skipIds = [...exclusion, ...alreadyIn];
+    const fallback = await db.select().from(users)
+      .where(and(
+        notInArray(users.id, skipIds.length ? skipIds : [userId]),
+        eq(users.status, "active"),
+        eq(users.stealthMode, false),
+      ))
+      .orderBy(desc(users.lastActiveAt))
+      .limit(remaining);
+
+    for (const u of fallback) out.push({ ...u, mutualFriendCount: 0 });
+  }
+
+  return out.slice(0, safeLimit);
 }
 
 // ==================== SOCIAL PLATFORMS ====================
