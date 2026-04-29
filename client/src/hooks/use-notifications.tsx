@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { invalidatePublicGameCaches } from "@/lib/game-cache-invalidation";
 import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { useToast } from "@/hooks/use-toast";
@@ -121,12 +122,7 @@ export function useNotifications() {
         if (data.type === "system_event") {
           const event = data.event;
           if (event?.type === 'game_config_changed') {
-            // Invalidate multiplayer games cache to refresh game config
-            queryClient.invalidateQueries({ queryKey: ['/api/multiplayer-games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/external-games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/games/available'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/config-version/multiplayer_games_version'] });
+            invalidatePublicGameCaches();
 
             // Show user-facing toast notification
             toast({

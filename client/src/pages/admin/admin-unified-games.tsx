@@ -94,6 +94,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { queryClient } from "@/lib/queryClient";
+import { invalidateAllGameCaches } from "@/lib/game-cache-invalidation";
 import { useToast } from "@/hooks/use-toast";
 
 function getAdminToken() {
@@ -118,13 +119,7 @@ async function adminFetch(url: string, options?: RequestInit) {
 }
 
 function invalidateGameConfigCaches() {
-  queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/multiplayer-games"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/external-games"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/games"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/games/available"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/config-version/multiplayer_games_version"] });
+  invalidateAllGameCaches();
 }
 
 import {

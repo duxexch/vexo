@@ -13,6 +13,7 @@ import { useEffect, useRef, useCallback, createContext, useContext, useState } f
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { invalidatePublicGameCaches } from "@/lib/game-cache-invalidation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { playSound } from "@/hooks/use-sound-effects";
@@ -405,11 +406,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (data.type === "system_event") {
           const event = data.event;
           if (event?.type === 'game_config_changed') {
-            queryClient.invalidateQueries({ queryKey: ['/api/multiplayer-games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/external-games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/games'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/games/available'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/config-version/multiplayer_games_version'] });
+            invalidatePublicGameCaches();
             playSound('notification');
             const lang = languageRef.current;
             window.dispatchEvent(new CustomEvent("vex-show-popup", {

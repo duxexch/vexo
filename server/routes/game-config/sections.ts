@@ -5,6 +5,8 @@ import { db } from "../../db";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { gameSections, games, insertGameSectionSchema, multiplayerGames, externalGames } from "@shared/schema";
+import { broadcastSystemEvent } from "../../websocket";
+import { storage } from "../../storage";
 
 const defaultSectionMeta: Record<string, { nameEn: string; nameAr: string; icon: string; iconColor: string }> = {
   most_played: { nameEn: "Most Played", nameAr: "الأكثر لعباً", icon: "TrendingUp", iconColor: "text-orange-500" },
@@ -82,7 +84,7 @@ export function registerSectionsRoutes(app: Express): void {
   });
 
   // Admin: Initialize missing game sections from existing game categories
-  app.post("/api/admin/game-sections/initialize", adminTokenMiddleware, async (_req: AuthRequest, res: Response) => {
+  app.post("/api/admin/game-sections/initialize", adminTokenMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const [existingSections, singleGameCategories, multiplayerCategories, externalCategories] = await Promise.all([
         db.select().from(gameSections),
@@ -140,6 +142,20 @@ export function registerSectionsRoutes(app: Express): void {
 
       const insertedSections = await db.insert(gameSections).values(rowsToInsert).returning();
 
+      try {
+        await storage.setSystemConfig("multiplayer_games_version", Date.now().toString(), req.user?.id);
+      } catch (versionError) {
+        console.warn("[game-sections] section_initialize version_bump_failed:", versionError);
+      }
+      try {
+        broadcastSystemEvent({
+          type: "game_config_changed",
+          data: { action: "section_initialize", insertedCount: insertedSections.length },
+        });
+      } catch (broadcastError) {
+        console.warn("[game-sections] section_initialize broadcast_failed:", broadcastError);
+      }
+
       res.status(201).json({
         inserted: insertedSections.length,
         discovered: discoveredKeys.size,
@@ -161,6 +177,19 @@ export function registerSectionsRoutes(app: Express): void {
         return res.status(400).json({ error: "A section with this key already exists" });
       }
       const [section] = await db.insert(gameSections).values(data).returning();
+      try {
+        await storage.setSystemConfig("multiplayer_games_version", Date.now().toString(), req.user?.id);
+      } catch (versionError) {
+        console.warn("[game-sections] section_create version_bump_failed:", versionError);
+      }
+      try {
+        broadcastSystemEvent({
+          type: "game_config_changed",
+          data: { action: "section_create", sectionKey: section.key },
+        });
+      } catch (broadcastError) {
+        console.warn("[game-sections] section_create broadcast_failed:", broadcastError);
+      }
       res.status(201).json(section);
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
@@ -183,6 +212,19 @@ export function registerSectionsRoutes(app: Express): void {
         .set({ ...updates, updatedAt: new Date() })
         .where(eq(gameSections.id, id))
         .returning();
+      try {
+        await storage.setSystemConfig("multiplayer_games_version", Date.now().toString(), req.user?.id);
+      } catch (versionError) {
+        console.warn("[game-sections] section_update version_bump_failed:", versionError);
+      }
+      try {
+        broadcastSystemEvent({
+          type: "game_config_changed",
+          data: { action: "section_update", sectionKey: updated?.key },
+        });
+      } catch (broadcastError) {
+        console.warn("[game-sections] section_update broadcast_failed:", broadcastError);
+      }
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -198,6 +240,19 @@ export function registerSectionsRoutes(app: Express): void {
         return res.status(404).json({ error: "Section not found" });
       }
       await db.delete(gameSections).where(eq(gameSections.id, id));
+      try {
+        await storage.setSystemConfig("multiplayer_games_version", Date.now().toString(), req.user?.id);
+      } catch (versionError) {
+        console.warn("[game-sections] section_delete version_bump_failed:", versionError);
+      }
+      try {
+        broadcastSystemEvent({
+          type: "game_config_changed",
+          data: { action: "section_delete", sectionKey: existing.key },
+        });
+      } catch (broadcastError) {
+        console.warn("[game-sections] section_delete broadcast_failed:", broadcastError);
+      }
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
