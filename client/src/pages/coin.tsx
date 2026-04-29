@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
   Area,
@@ -7,513 +8,454 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
 } from "recharts";
 import {
-  Coins,
+  ArrowRight,
+  ArrowLeft,
   TrendingUp,
-  TrendingDown,
-  Users,
-  Activity,
-  Layers,
-  ShieldCheck,
-  Sparkles,
-  ArrowUpRight,
-  Flame,
-  Globe2,
+  Coins,
   Lock,
-  Rocket,
-  CheckCircle2,
+  Shield,
+  Sparkles,
   Wallet,
+  Activity,
+  ChevronRight,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
-import { Link } from "wouter";
+import {
+  MarketingShell,
+  SectionEyebrow,
+  SectionHeading,
+  Reveal,
+  Counter,
+  GlassCard,
+  SpotlightCard,
+  Marquee,
+  BLUE,
+  GOLD,
+} from "@/components/marketing";
 
-const BRAND_BLUE = "#1e88ff";
-const BRAND_GOLD = "#ffb627";
+const BASE_PRICE = 0.42;
 
-function formatNumber(n: number, digits = 2): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function buildHistoricalSeries(): { time: string; price: number }[] {
-  const points = 60;
-  const out: { time: string; price: number }[] = [];
-  let p = 0.42;
+function generateSeries() {
   const now = Date.now();
-  for (let i = points - 1; i >= 0; i--) {
-    const t = new Date(now - i * 60 * 60 * 1000);
-    p = Math.max(0.01, p * (1 + (Math.random() - 0.46) * 0.04));
+  const out: { t: number; p: number; label: string }[] = [];
+  let p = BASE_PRICE * 0.93;
+  for (let i = 60; i >= 0; i--) {
+    const t = now - i * 3600 * 1000;
+    p += (Math.random() - 0.45) * 0.012;
+    p = Math.max(BASE_PRICE * 0.85, Math.min(BASE_PRICE * 1.18, p));
     out.push({
-      time: `${t.getHours().toString().padStart(2, "0")}:00`,
-      price: Number(p.toFixed(4)),
+      t,
+      p: Number(p.toFixed(4)),
+      label: new Date(t).getHours() + ":00",
     });
   }
   return out;
 }
 
 export default function CoinPage() {
-  const { dir } = useI18n();
-  const [series] = useState(buildHistoricalSeries);
-  const [tick, setTick] = useState(0);
+  const { t, dir } = useI18n();
+  const [series, setSeries] = useState(() => generateSeries());
 
   useEffect(() => {
-    const id = setInterval(() => setTick((x) => x + 1), 7000);
+    const id = setInterval(() => {
+      setSeries((s) => {
+        const last = s[s.length - 1].p;
+        const next = Math.max(
+          BASE_PRICE * 0.85,
+          Math.min(BASE_PRICE * 1.18, last + (Math.random() - 0.45) * 0.008),
+        );
+        return [
+          ...s.slice(1),
+          {
+            t: Date.now(),
+            p: Number(next.toFixed(4)),
+            label: new Date().getHours() + ":00",
+          },
+        ];
+      });
+    }, 4000);
     return () => clearInterval(id);
   }, []);
 
-  const current = series[series.length - 1].price;
-  const first = series[0].price;
-  const change = ((current - first) / first) * 100;
-  const isUp = change >= 0;
+  const current = series[series.length - 1].p;
+  const oldest = series[0].p;
+  const delta = ((current - oldest) / oldest) * 100;
+  const positive = delta >= 0;
+  const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
 
-  const stats = useMemo(
+  const useCases = useMemo(
     () => [
-      {
-        icon: Coins,
-        label: "السعر الحالي",
-        value: `$${current.toFixed(4)}`,
-        sub: `${isUp ? "+" : ""}${change.toFixed(2)}% آخر ٢٤ ساعة`,
-        color: BRAND_GOLD,
-      },
-      {
-        icon: Layers,
-        label: "العرض الكلي",
-        value: "100M",
-        sub: "مقفول من الإصدار",
-        color: BRAND_BLUE,
-      },
-      {
-        icon: Activity,
-        label: "حجم التداول",
-        value: `$${formatNumber(842000 + ((tick * 137) % 12000), 0)}`,
-        sub: "آخر ٢٤ ساعة",
-        color: "#10b981",
-      },
-      {
-        icon: Users,
-        label: "المحافظ النشطة",
-        value: `${formatNumber(28419 + ((tick * 11) % 90), 0)}`,
-        sub: "نمو مستمر",
-        color: "#a855f7",
-      },
+      { icon: Coins, k: "1", color: BLUE },
+      { icon: Lock, k: "2", color: GOLD },
+      { icon: Sparkles, k: "3", color: BLUE },
+      { icon: Shield, k: "4", color: GOLD },
     ],
-    [current, change, isUp, tick],
+    [],
   );
 
-  const useCases = [
-    {
-      icon: Wallet,
-      title: "وحدة قيمة داخلية",
-      desc: "تستخدم لكل المعاملات داخل المنصة: المشاركة في البطولات، شراء الميزات الحصرية، إرسال الهدايا، وتحويلها لباقي المستخدمين فوراً وبدون عمولات وسطاء.",
-    },
-    {
-      icon: Lock,
-      title: "إصدار محدود ومحمي",
-      desc: "العرض الإجمالي للعملة محدود ومسجَّل في عقد ذكي شفاف. لا يمكن إصدار وحدات إضافية، ما يحافظ على القيمة على المدى الطويل.",
-    },
-    {
-      icon: Sparkles,
-      title: "مكافآت يومية وحصرية",
-      desc: "احصل على عملات هدية يومياً عبر برامج المكافآت، البطولات، التحديات، وإحالة الأصدقاء. كل مشاركة لها قيمة.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "شفافية وأمان كامل",
-      desc: "كل عملية صرف وتحويل قابلة للتدقيق. النظام مدعوم بمحفظة باردة ومراقبة ٢٤/٧ لضمان أمان أرصدة المستخدمين.",
-    },
-  ];
-
-  const milestones = [
-    {
-      phase: "المرحلة ١",
-      title: "إطلاق العملة الداخلية",
-      done: true,
-      desc: "إطلاق العملة كوحدة قيمة رسمية داخل المنصة، وربطها بنظام البطولات والمكافآت اليومية.",
-    },
-    {
-      phase: "المرحلة ٢",
-      title: "ربط محافظ خارجية",
-      done: true,
-      desc: "دعم سحب وإيداع العملة عبر شركاء معتمدين، وتفعيل تحويلات P2P بين المستخدمين بدون رسوم وسطاء.",
-    },
-    {
-      phase: "المرحلة ٣",
-      title: "إدراج في منصات تداول",
-      done: false,
-      desc: "إدراج العملة في منصات تداول إقليمية وعالمية لتمكين شرائها وبيعها مقابل عملات أخرى بسيولة عالية.",
-    },
-    {
-      phase: "المرحلة ٤",
-      title: "نظام Staking للمساهمين",
-      done: false,
-      desc: "إطلاق برنامج staking يكافئ من يحتفظون بالعملة بنسبة ثابتة ومضافة إلى أرصدتهم تلقائياً.",
-    },
-  ];
+  const roadmap = useMemo(
+    () => [
+      { k: "1", color: BLUE, status: t("mkt.completed") },
+      { k: "2", color: GOLD, status: t("mkt.upcoming") },
+      { k: "3", color: BLUE, status: t("mkt.upcoming") },
+      { k: "4", color: GOLD, status: t("mkt.upcoming") },
+    ],
+    [t],
+  );
 
   return (
-    <div
-      dir={dir}
-      className="min-h-[100svh] bg-[#06080f] text-white relative overflow-hidden"
-    >
-      {/* Ambient blobs */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-[#1e88ff] opacity-20 blur-[120px]" />
-        <div className="absolute top-1/3 -left-40 w-[500px] h-[500px] rounded-full bg-[#ffb627] opacity-15 blur-[120px]" />
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-12">
-        {/* HERO */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-5"
-        >
-          <Badge
-            className="bg-white/5 border border-white/10 text-white/80 px-3 py-1 text-xs"
-            variant="outline"
-          >
-            <Sparkles className="w-3 h-3 me-1.5 inline" />
-            عملة المشروع · بثٌّ مباشر
-          </Badge>
-          <h1
-            className="font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-none"
-            style={{
-              backgroundImage: `linear-gradient(135deg, ${BRAND_BLUE}, ${BRAND_GOLD})`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
-            VEX COIN
-          </h1>
-          <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            عملة المشروع الرسمية — وحدة القيمة التي تشغّل كل تجربة داخل VEX
-            وتفتح لك أبواب البطولات، الجوائز، والشراكات الحصرية.
-          </p>
-
-          {/* Live price ticker */}
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="inline-flex flex-wrap items-center justify-center gap-4 mt-6 px-6 py-4 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.03] to-white/[0.01] backdrop-blur"
-          >
-            <div className="text-left">
-              <div className="text-xs text-slate-400 uppercase tracking-wider">
-                السعر الآن
-              </div>
-              <div className="font-['Bebas_Neue'] text-4xl sm:text-5xl text-white tracking-wider leading-none">
-                ${current.toFixed(4)}
-              </div>
+    <MarketingShell dir={dir} variant="blue-gold">
+      {/* HERO ─────────────────────────────────────────────── */}
+      <section className="pt-4 sm:pt-8">
+        <Reveal>
+          <SectionEyebrow color={BLUE}>{t("coin.eyebrow")}</SectionEyebrow>
+        </Reveal>
+        <div className="mt-6 grid lg:grid-cols-[1.2fr_1fr] gap-10 items-center">
+          <Reveal delay={0.05}>
+            <h1 className="font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage: `linear-gradient(135deg, #fff 0%, ${GOLD} 60%, ${BLUE} 100%)`,
+                }}
+              >
+                {t("coin.title")}
+              </span>
+            </h1>
+            <p className="mt-5 text-base sm:text-lg text-slate-300 leading-relaxed max-w-xl">
+              {t("coin.subtitle")}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button
+                asChild
+                size="lg"
+                className="font-bold text-black shadow-2xl"
+                style={{ background: GOLD, boxShadow: `0 12px 40px ${GOLD}40` }}
+                data-testid="button-coin-cta-primary"
+              >
+                <Link href="/wallet">
+                  <Wallet className="me-2 h-4 w-4" />
+                  {t("mkt.cta.primary.coin")}
+                  <Arrow className="ms-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="border-white/20 bg-white/[0.04] hover:bg-white/[0.1] text-white"
+                data-testid="button-coin-cta-secondary"
+              >
+                <Link href="/p2p">{t("mkt.cta.secondary.coin")}</Link>
+              </Button>
             </div>
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${
-                isUp
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                  : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
-              }`}
-            >
-              {isUp ? (
-                <TrendingUp className="w-4 h-4" />
-              ) : (
-                <TrendingDown className="w-4 h-4" />
-              )}
-              {isUp ? "+" : ""}
-              {change.toFixed(2)}%
-            </div>
-          </motion.div>
-        </motion.div>
+          </Reveal>
 
-        {/* CHART */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <Card className="bg-gradient-to-b from-[#0f1730]/80 to-[#0a0e1a]/80 border-white/10 backdrop-blur p-5 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="font-bold text-lg">حركة السعر — ٦٠ ساعة</div>
-                <div className="text-xs text-slate-400">
-                  بيانات مباشرة من نظام التداول الداخلي
-                </div>
+          {/* Live price card */}
+          <Reveal delay={0.1}>
+            <GlassCard glow={positive ? BLUE : "#ff5252"} className="p-7">
+              <div className="flex items-center justify-between text-xs">
+                <span className="inline-flex items-center gap-2 text-slate-400 uppercase tracking-widest">
+                  <span
+                    className="inline-block w-2 h-2 rounded-full animate-pulse"
+                    style={{ background: positive ? "#22c55e" : "#ef4444" }}
+                  />
+                  {t("mkt.live")}
+                </span>
+                <span className="text-slate-500">{t("coin.priceNow")}</span>
               </div>
-              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                <Flame className="w-3 h-3 me-1.5" />
-                LIVE
-              </Badge>
-            </div>
-            <div className="h-[280px] sm:h-[340px]">
+              <div className="mt-3 font-['Bebas_Neue'] text-6xl tracking-wider">
+                $<Counter to={current} decimals={4} duration={1.2} />
+              </div>
+              <div
+                className="mt-1 inline-flex items-center gap-1 text-sm font-bold"
+                style={{ color: positive ? "#22c55e" : "#ef4444" }}
+              >
+                <TrendingUp
+                  className={"h-4 w-4 " + (positive ? "" : "rotate-180")}
+                />
+                {positive ? "+" : ""}
+                {delta.toFixed(2)}% · {t("coin.last24h")}
+              </div>
+              <div className="mt-4 h-24">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={series}>
+                    <defs>
+                      <linearGradient id="liveG" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={positive ? "#22c55e" : "#ef4444"} stopOpacity={0.5} />
+                        <stop offset="100%" stopColor={positive ? "#22c55e" : "#ef4444"} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="p"
+                      stroke={positive ? "#22c55e" : "#ef4444"}
+                      strokeWidth={1.8}
+                      fill="url(#liveG)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </GlassCard>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* MARQUEE STATS BAR ─────────────────────────────────── */}
+      <Marquee
+        items={[
+          { value: "$" + current.toFixed(4), label: t("coin.stat.price") },
+          { value: "100M", label: t("coin.stat.supply") },
+          { value: "$2.4M", label: t("coin.stat.volume") },
+          { value: "12,847", label: t("coin.stat.wallets") },
+          { value: (positive ? "+" : "") + delta.toFixed(2) + "%", label: t("coin.last24h") },
+        ]}
+      />
+
+      {/* MAIN CHART ────────────────────────────────────────── */}
+      <section>
+        <Reveal>
+          <SectionHeading
+            eyebrow={t("coin.chart.title")}
+            title={
+              <>
+                {t("coin.why.title.a")}{" "}
+                <span style={{ color: GOLD }}>{t("coin.why.title.b")}</span>
+              </>
+            }
+            subtitle={t("coin.chart.sub")}
+            accent={BLUE}
+          />
+        </Reveal>
+
+        <Reveal delay={0.1}>
+          <GlassCard className="mt-8 p-4 sm:p-8">
+            <div className="h-72 sm:h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={series}
-                  margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
-                >
+                <AreaChart data={series}>
                   <defs>
-                    <linearGradient id="coinFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={BRAND_GOLD} stopOpacity={0.6} />
-                      <stop offset="100%" stopColor={BRAND_BLUE} stopOpacity={0} />
+                    <linearGradient id="bigG" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={GOLD} stopOpacity={0.55} />
+                      <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.05)"
-                  />
                   <XAxis
-                    dataKey="time"
-                    stroke="rgba(255,255,255,0.4)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
+                    dataKey="label"
+                    stroke="rgba(255,255,255,0.3)"
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                    interval={Math.floor(series.length / 8)}
+                    reversed={dir === "rtl"}
                   />
                   <YAxis
-                    stroke="rgba(255,255,255,0.4)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    domain={["auto", "auto"]}
-                    tickFormatter={(v) => `$${Number(v).toFixed(3)}`}
+                    domain={["dataMin - 0.005", "dataMax + 0.005"]}
+                    stroke="rgba(255,255,255,0.3)"
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                    orientation={dir === "rtl" ? "right" : "left"}
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "#0a0e1a",
-                      border: "1px solid rgba(255,255,255,0.15)",
+                      background: "rgba(8,12,28,0.92)",
+                      border: `1px solid ${GOLD}40`,
                       borderRadius: 12,
                       color: "#fff",
+                      backdropFilter: "blur(8px)",
                     }}
-                    labelStyle={{ color: "rgba(255,255,255,0.5)" }}
-                    formatter={(v: number) => [`$${v.toFixed(4)}`, "السعر"]}
+                    formatter={(v: number) => "$" + v.toFixed(4)}
                   />
                   <Area
                     type="monotone"
-                    dataKey="price"
-                    stroke={BRAND_GOLD}
+                    dataKey="p"
+                    stroke={GOLD}
                     strokeWidth={2.5}
-                    fill="url(#coinFill)"
+                    fill="url(#bigG)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </Card>
-        </motion.div>
+          </GlassCard>
+        </Reveal>
+      </section>
 
-        {/* STATS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {stats.map((s, i) => {
-            const Icon = s.icon;
-            return (
-              <motion.div
-                key={s.label}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 * i }}
-              >
-                <Card className="relative bg-gradient-to-b from-[#10172a] to-[#0a0e1a] border-white/10 p-4 sm:p-5 rounded-xl overflow-hidden h-full">
-                  <div
-                    className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-20 blur-2xl"
-                    style={{ background: s.color }}
+      {/* STATS GRID ────────────────────────────────────────── */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { k: "price", v: current, prefix: "$", dec: 4, icon: TrendingUp, color: GOLD },
+          { k: "supply", v: 100, suffix: "M", dec: 0, icon: Coins, color: BLUE },
+          { k: "volume", v: 2.4, prefix: "$", suffix: "M", dec: 1, icon: Activity, color: GOLD },
+          { k: "wallets", v: 12847, dec: 0, icon: Wallet, color: BLUE },
+        ].map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <Reveal key={s.k} delay={i * 0.05}>
+              <GlassCard className="p-5 h-full" glow={s.color}>
+                <Icon className="h-7 w-7 mb-3" style={{ color: s.color }} />
+                <div className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider">
+                  <Counter
+                    to={s.v}
+                    prefix={s.prefix || ""}
+                    suffix={s.suffix || ""}
+                    decimals={s.dec}
                   />
+                </div>
+                <div className="mt-1 text-xs uppercase tracking-widest text-slate-400">
+                  {t("coin.stat." + s.k)}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {t("coin.stat." + s.k + "Sub")}
+                </div>
+              </GlassCard>
+            </Reveal>
+          );
+        })}
+      </section>
+
+      {/* WHY COIN ──────────────────────────────────────────── */}
+      <section>
+        <Reveal>
+          <SectionHeading
+            eyebrow={t("coin.why.eyebrow")}
+            title={
+              <>
+                {t("coin.why.title.a")}{" "}
+                <span style={{ color: GOLD }}>{t("coin.why.title.b")}</span>?
+              </>
+            }
+            subtitle={t("coin.why.sub")}
+            accent={BLUE}
+          />
+        </Reveal>
+        <div className="mt-10 grid sm:grid-cols-2 gap-5">
+          {useCases.map((u, i) => {
+            const Icon = u.icon;
+            return (
+              <Reveal key={u.k} delay={i * 0.06}>
+                <GlassCard className="p-7 h-full" glow={u.color}>
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                    className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4"
                     style={{
-                      background: `${s.color}22`,
-                      color: s.color,
+                      background: `${u.color}20`,
+                      border: `1px solid ${u.color}40`,
                     }}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="h-6 w-6" style={{ color: u.color }} />
                   </div>
-                  <div className="text-xs text-slate-400 mb-1">{s.label}</div>
-                  <div className="font-['Bebas_Neue'] text-3xl tracking-wide leading-none">
-                    {s.value}
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-1.5">
-                    {s.sub}
-                  </div>
-                </Card>
-              </motion.div>
+                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                    {t("coin.use." + u.k + ".title")}
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    {t("coin.use." + u.k + ".desc")}
+                  </p>
+                </GlassCard>
+              </Reveal>
             );
           })}
         </div>
+      </section>
 
-        {/* USE CASES */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
-              لماذا <span style={{ color: BRAND_GOLD }}>VEX Coin</span>
-            </h2>
-            <p className="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
-              عملة مصممة لتشغيل اقتصاد كامل، ليس مجرد رمز
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {useCases.map((u, i) => {
-              const Icon = u.icon;
-              return (
-                <motion.div
-                  key={u.title}
-                  initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i }}
-                >
-                  <Card className="group h-full bg-gradient-to-br from-[#10172a] to-[#0a0e1a] border-white/10 p-5 sm:p-6 rounded-2xl hover:border-[#ffb627]/40 transition-all hover:-translate-y-1">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
+      {/* ROADMAP ───────────────────────────────────────────── */}
+      <section>
+        <Reveal>
+          <SectionHeading
+            title={t("coin.road.title")}
+            subtitle={t("coin.road.sub")}
+            accent={GOLD}
+          />
+        </Reveal>
+        <div className="mt-10 relative">
+          {/* Vertical line */}
+          <div
+            className="absolute top-0 bottom-0 w-px ms-7 sm:ms-8"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent, rgba(255,255,255,0.15), transparent)",
+            }}
+          />
+          <div className="space-y-5">
+            {roadmap.map((r, i) => (
+              <Reveal key={r.k} delay={i * 0.07}>
+                <div className="flex gap-4 sm:gap-5 items-start">
+                  <div
+                    className="shrink-0 grid place-items-center w-14 h-14 sm:w-16 sm:h-16 rounded-full font-['Bebas_Neue'] text-2xl tracking-wider relative z-10"
+                    style={{
+                      background: `${r.color}20`,
+                      border: `2px solid ${r.color}`,
+                      color: r.color,
+                      boxShadow: `0 0 30px ${r.color}40`,
+                    }}
+                  >
+                    {r.k}
+                  </div>
+                  <GlassCard className="flex-1 p-5">
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
                         style={{
-                          background: `linear-gradient(135deg, ${BRAND_BLUE}33, ${BRAND_GOLD}33)`,
+                          background: `${r.color}20`,
+                          color: r.color,
                         }}
                       >
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="font-bold text-lg text-white">
-                          {u.title}
-                        </h3>
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                          {u.desc}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ROADMAP */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
-              خارطة الطريق
-            </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
-              أين نحن، وإلى أين نتجه
-            </p>
-          </div>
-
-          <div className="relative">
-            <div className="absolute right-5 sm:right-6 top-0 bottom-0 w-px bg-gradient-to-b from-[#1e88ff] via-[#ffb627] to-transparent opacity-50" />
-            <div className="space-y-5">
-              {milestones.map((m, i) => (
-                <motion.div
-                  key={m.phase}
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08 }}
-                  className="relative pr-12 sm:pr-16"
-                >
-                  <div
-                    className={`absolute right-2 sm:right-3 top-2 w-7 h-7 rounded-full border-2 flex items-center justify-center ${
-                      m.done
-                        ? "border-emerald-400 bg-emerald-500/20"
-                        : "border-white/20 bg-[#0a0e1a]"
-                    }`}
-                  >
-                    {m.done ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <Rocket className="w-3.5 h-3.5 text-slate-500" />
-                    )}
-                  </div>
-                  <Card
-                    className={`p-4 sm:p-5 rounded-xl bg-gradient-to-br ${
-                      m.done
-                        ? "from-emerald-500/10 to-transparent border-emerald-500/30"
-                        : "from-[#10172a] to-[#0a0e1a] border-white/10"
-                    } border`}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span
-                        className="text-[11px] font-bold tracking-widest uppercase"
-                        style={{ color: m.done ? "#34d399" : BRAND_BLUE }}
-                      >
-                        {m.phase}
+                        {t("coin.road." + r.k + ".phase")}
                       </span>
-                      {m.done && (
-                        <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] py-0">
-                          مكتملة
-                        </Badge>
-                      )}
+                      <span className="text-[10px] uppercase tracking-widest text-slate-500">
+                        {r.status}
+                      </span>
                     </div>
-                    <h3 className="font-bold text-base sm:text-lg text-white">
-                      {m.title}
+                    <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                      {t("coin.road." + r.k + ".title")}
                     </h3>
-                    <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">
-                      {m.desc}
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      {t("coin.road." + r.k + ".desc")}
                     </p>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
+                  </GlassCard>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff] via-[#1565c0] to-[#0a3a8c] border-0 p-8 sm:p-12 rounded-3xl text-center">
-            <div className="absolute inset-0 opacity-30">
-              <div className="absolute top-0 left-0 w-72 h-72 rounded-full bg-[#ffb627] blur-[100px]" />
-              <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-white blur-[100px]" />
+      {/* FINAL CTA ─────────────────────────────────────────── */}
+      <section>
+        <Reveal>
+          <SpotlightCard from={BLUE} via="#1565c0" to="#0a3a8c">
+            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+              {t("coin.cta.title")}
+            </h2>
+            <p className="mt-4 text-base sm:text-lg text-blue-100 max-w-2xl mx-auto">
+              {t("coin.cta.sub")}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3 justify-center">
+              <Button
+                asChild
+                size="lg"
+                className="font-bold text-black"
+                style={{ background: GOLD, boxShadow: `0 12px 40px ${GOLD}50` }}
+                data-testid="button-coin-final-cta"
+              >
+                <Link href="/wallet">
+                  <Wallet className="me-2 h-4 w-4" />
+                  {t("mkt.cta.primary.coin")}
+                  <Arrow className="ms-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="bg-white/10 border-white/30 hover:bg-white/20 text-white"
+              >
+                <Link href="/p2p">{t("mkt.cta.secondary.coin")}</Link>
+              </Button>
             </div>
-            <div className="relative space-y-4">
-              <div className="inline-flex w-14 h-14 items-center justify-center rounded-2xl bg-[#ffb627] text-black">
-                <Coins className="w-7 h-7" />
-              </div>
-              <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider text-white">
-                اشترِ. تداول. اربح.
-              </h2>
-              <p className="text-white/85 max-w-xl mx-auto text-sm sm:text-base">
-                ابدأ رحلتك مع عملة VEX اليوم. سواء كنت لاعباً، مستثمراً، أو
-                شريكاً — هنا تجد فرصتك.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-3">
-                <Button
-                  asChild
-                  size="lg"
-                  className="bg-[#ffb627] text-black hover:bg-[#ffb627]/90 font-bold text-base px-8 h-12 rounded-xl shadow-xl"
-                >
-                  <Link href="/wallet">
-                    <Wallet className="w-4 h-4 me-2" />
-                    افتح محفظتي
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="border-white/40 text-white hover:bg-white/10 font-bold text-base px-8 h-12 rounded-xl bg-transparent"
-                >
-                  <Link href="/p2p">
-                    <Globe2 className="w-4 h-4 me-2" />
-                    تداول P2P
-                    <ArrowUpRight className="w-4 h-4 ms-2" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
-        <div className="text-center text-[11px] text-slate-500 pt-2">
-          الأسعار المعروضة لأغراض إعلامية. التداول الفعلي يتم عبر النظام
-          الرسمي للمنصة.
-        </div>
-      </div>
-    </div>
+          </SpotlightCard>
+        </Reveal>
+        <p className="text-center mt-5 text-xs text-slate-500 max-w-2xl mx-auto">
+          {t("coin.disclaimer")}
+        </p>
+      </section>
+    </MarketingShell>
   );
 }

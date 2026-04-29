@@ -1,399 +1,325 @@
-import { motion } from "framer-motion";
+import { Link } from "wouter";
 import {
-  Megaphone,
-  Link2,
+  ArrowRight,
+  ArrowLeft,
   TrendingUp,
   BarChart3,
   Wallet,
+  Shield,
+  Youtube,
+  Megaphone,
   Users,
-  Sparkles,
-  ArrowLeft,
-  Target,
-  Share2,
+  Link2,
+  Send,
+  Trophy,
+  Coins,
   CheckCircle2,
-  PartyPopper,
-  Globe2,
-  MousePointerClick,
-  Lock,
-  Zap,
+  Sparkles,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
-import { Link } from "wouter";
-
-const BLUE = "#1e88ff";
-const GOLD = "#ffb627";
+import {
+  MarketingShell,
+  SectionEyebrow,
+  SectionHeading,
+  Reveal,
+  GlassCard,
+  SpotlightCard,
+  Marquee,
+  BLUE,
+  GOLD,
+} from "@/components/marketing";
 
 export default function AffiliatesPage() {
-  const { dir } = useI18n();
+  const { t, dir } = useI18n();
+  const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
 
   const benefits = [
-    {
-      icon: TrendingUp,
-      title: "عمولات مرتفعة",
-      desc: "احصل على نسبة من كل لاعب نشِط تجلبه. كلما زاد نشاطه ومدة بقائه، كلما زاد دخلك تلقائياً.",
-      color: GOLD,
-    },
-    {
-      icon: BarChart3,
-      title: "إحصائيات لحظية",
-      desc: "تابع كل نقرة وكل تسجيل وكل تحويل في الوقت الفعلي. بياناتك تحت سيطرتك دائماً.",
-      color: BLUE,
-    },
-    {
-      icon: Wallet,
-      title: "سحب سهل وسريع",
-      desc: "استلم أرباحك بطرق متعددة ومرنة. لا حد أدنى مرهق، ولا تأخير في الصرف.",
-      color: "#10b981",
-    },
-    {
-      icon: Lock,
-      title: "تتبع آمن وعادل",
-      desc: "نظام تتبع موثوق يضمن نسب كل إحالة لك. لا فقدان ولا تلاعب — كل نقرة محسوبة.",
-      color: "#a855f7",
-    },
+    { icon: TrendingUp, k: "1", color: BLUE },
+    { icon: BarChart3, k: "2", color: GOLD },
+    { icon: Wallet, k: "3", color: BLUE },
+    { icon: Shield, k: "4", color: GOLD },
   ];
 
-  const steps = [
-    {
-      num: "١",
-      icon: Sparkles,
-      title: "سجّل كمسوّق",
-      desc: "أنشئ حسابك مجاناً واطلب الانضمام لبرنامج التسويق. الموافقة سريعة وبدون شروط معقدة.",
-    },
-    {
-      num: "٢",
-      icon: Link2,
-      title: "احصل على روابطك",
-      desc: "نولّد لك روابط دعوة فريدة ورموز خصم خاصة. شاركها في كل مكان: منصاتك، مجموعاتك، قنواتك.",
-    },
-    {
-      num: "٣",
-      icon: MousePointerClick,
-      title: "ادعُ جمهورك",
-      desc: "كل من ينقر ويسجّل عبر رابطك يصبح ضمن شبكتك تلقائياً، وتبدأ تتبّع عمولاتك من اللحظة الأولى.",
-    },
-    {
-      num: "٤",
-      icon: PartyPopper,
-      title: "استلم أرباحك",
-      desc: "متابعة يومية لإحصائياتك، عمولات تتراكم تلقائياً، وسحب سهل في أي وقت تشاء.",
-    },
+  const audience = [
+    { icon: Youtube, k: "1", color: GOLD },
+    { icon: Megaphone, k: "2", color: BLUE },
+    { icon: Users, k: "3", color: GOLD },
   ];
 
-  const audiences = [
-    {
-      icon: Globe2,
-      title: "صنّاع المحتوى",
-      desc: "يوتيوبر، تيكتوكر، إنستجرامر — حوّل جمهورك إلى مصدر دخل دائم.",
-    },
-    {
-      icon: Megaphone,
-      title: "مسوقي الأداء",
-      desc: "خبير تسويق رقمي؟ منتجاتنا قابلة للتسويق بكل القنوات وبأدوات احترافية.",
-    },
-    {
-      icon: Users,
-      title: "أصحاب المجتمعات",
-      desc: "مدير مجموعة تليجرام، واتساب، ديسكورد؟ كل عضو يمكن أن يصبح عمولة.",
-    },
-  ];
+  const stepIcons = [Sparkles, Link2, Send, Trophy];
 
   return (
-    <div
-      dir={dir}
-      className="min-h-[100svh] bg-[#06080f] text-white relative overflow-hidden"
-    >
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-[#1e88ff] opacity-20 blur-[140px]" />
-        <div className="absolute bottom-0 -left-40 w-[500px] h-[500px] rounded-full bg-[#ffb627] opacity-15 blur-[140px]" />
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-14">
-        {/* HERO */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-5"
-        >
-          <Badge className="bg-[#1e88ff]/15 border-[#1e88ff]/30 text-[#1e88ff] px-3 py-1 text-xs">
-            <Megaphone className="w-3 h-3 me-1.5 inline" />
-            برنامج المسوّقين
-          </Badge>
-          <h1
-            className="font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-none"
-            style={{
-              backgroundImage: `linear-gradient(135deg, ${BLUE}, #6dd5ff, ${GOLD})`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            اكسب مع كل دعوة
+    <MarketingShell dir={dir} variant="blue">
+      {/* HERO */}
+      <section className="pt-4 sm:pt-8 text-center">
+        <Reveal>
+          <SectionEyebrow color={BLUE}>{t("aff.eyebrow")}</SectionEyebrow>
+        </Reveal>
+        <Reveal delay={0.05}>
+          <h1 className="mt-6 font-['Bebas_Neue'] text-6xl sm:text-7xl md:text-8xl tracking-wider leading-[0.9]">
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage: `linear-gradient(135deg, #fff 0%, ${BLUE} 60%, ${GOLD} 100%)`,
+              }}
+            >
+              {t("aff.title")}
+            </span>
           </h1>
-          <p className="text-base sm:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            حوّل جمهورك ومتابعينك إلى دخل حقيقي. سجّل في برنامج التسويق
-            بالعمولة لأقوى منصة ألعاب رقمية في المنطقة، وابدأ من الصفر بدون
-            رسوم اشتراك.
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-5 text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto">
+            {t("aff.subtitle")}
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
+        </Reveal>
+        <Reveal delay={0.15}>
+          <div className="mt-7 flex flex-wrap gap-3 justify-center">
             <Button
               asChild
               size="lg"
-              className="bg-[#1e88ff] text-white hover:bg-[#1e88ff]/90 font-bold text-base px-8 h-12 rounded-xl shadow-[0_8px_30px_rgba(30,136,255,0.4)]"
+              className="font-bold text-white"
+              style={{ background: BLUE, boxShadow: `0 12px 40px ${BLUE}50` }}
+              data-testid="button-aff-get-link"
             >
               <Link href="/referral">
-                <Sparkles className="w-4 h-4 me-2" />
-                انضم للبرنامج
+                <Link2 className="me-2 h-4 w-4" />
+                {t("mkt.cta.getMyLink")}
+                <Arrow className="ms-2 h-4 w-4" />
               </Link>
             </Button>
             <Button
+              asChild
               size="lg"
               variant="outline"
-              className="border-white/30 text-white hover:bg-white/10 font-bold text-base px-8 h-12 rounded-xl bg-transparent"
+              className="border-white/20 bg-white/[0.04] hover:bg-white/[0.1] text-white"
             >
-              تعرف أكثر
-              <ArrowLeft className="w-4 h-4 ms-2" />
+              <Link href="/support">{t("mkt.cta.beAgent")}</Link>
             </Button>
           </div>
-        </motion.div>
+        </Reveal>
 
-        {/* TOP STATS BAR */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <Card className="bg-gradient-to-r from-[#10172a] via-[#0f1730] to-[#10172a] border-white/10 p-5 sm:p-6 rounded-2xl">
-            <div className="grid grid-cols-3 gap-2 sm:gap-6 text-center">
-              <div>
-                <div className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider text-[#ffb627]">
-                  ٢٤/٧
-                </div>
-                <div className="text-xs sm:text-sm text-slate-400 mt-1">
-                  دعم ومتابعة
-                </div>
-              </div>
-              <div className="border-x border-white/10">
-                <div className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider text-[#1e88ff]">
-                  ∞
-                </div>
-                <div className="text-xs sm:text-sm text-slate-400 mt-1">
-                  عدد الدعوات
-                </div>
-              </div>
-              <div>
-                <div className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider text-emerald-400">
-                  ٠
-                </div>
-                <div className="text-xs sm:text-sm text-slate-400 mt-1">
-                  رسوم انضمام
-                </div>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
-        {/* BENEFITS */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
-              مميزات تجعلك <span style={{ color: BLUE }}>تتميّز</span>
-            </h2>
-            <p className="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
-              برنامج مصمم خصيصاً لمن يأخذ التسويق بجدية
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {benefits.map((b, i) => {
-              const Icon = b.icon;
-              return (
-                <motion.div
-                  key={b.title}
-                  initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.05 }}
-                >
-                  <Card className="group h-full bg-gradient-to-br from-[#10172a] to-[#0a0e1a] border-white/10 p-6 rounded-2xl hover:border-[#1e88ff]/40 transition-all hover:-translate-y-1">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
-                        style={{ background: `${b.color}22`, color: b.color }}
-                      >
-                        <Icon className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="font-bold text-lg text-white">
-                          {b.title}
-                        </h3>
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                          {b.desc}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* HOW IT WORKS */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
-              كيف يعمل البرنامج؟
-            </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
-              من التسجيل لأول عمولة في أربع خطوات
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {steps.map((s, i) => {
-              const Icon = s.icon;
-              return (
-                <motion.div
-                  key={s.num}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08 }}
-                >
-                  <Card className="group relative h-full bg-gradient-to-b from-[#10172a] to-[#0a0e1a] border-white/10 p-5 rounded-2xl">
-                    <div className="flex items-start justify-between">
-                      <div
-                        className="font-['Bebas_Neue'] text-6xl tracking-wider leading-none opacity-40"
-                        style={{ color: BLUE }}
-                      >
-                        {s.num}
-                      </div>
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1e88ff]/20 to-[#ffb627]/20 flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-white" />
-                      </div>
-                    </div>
-                    <h3 className="font-bold text-base text-white mt-3 mb-2">
-                      {s.title}
-                    </h3>
-                    <p className="text-sm text-slate-400 leading-relaxed">
-                      {s.desc}
-                    </p>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* AUDIENCES */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
-              هذا البرنامج مناسب لـ
-            </h2>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {audiences.map((a, i) => {
-              const Icon = a.icon;
-              return (
-                <motion.div
-                  key={a.title}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.06 }}
-                >
-                  <Card className="text-center h-full bg-gradient-to-b from-[#10172a] to-[#0a0e1a] border-white/10 p-6 rounded-2xl hover:border-[#ffb627]/40 transition-all">
-                    <div className="inline-flex w-14 h-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1e88ff]/20 to-[#ffb627]/20 mx-auto mb-4">
-                      <Icon className="w-7 h-7 text-white" />
-                    </div>
-                    <h3 className="font-bold text-base text-white mb-2">
-                      {a.title}
-                    </h3>
-                    <p className="text-sm text-slate-400 leading-relaxed">
-                      {a.desc}
-                    </p>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* TRUST CHECKLIST */}
-        <Card className="bg-gradient-to-br from-[#10172a] to-[#0a0e1a] border-white/10 p-6 sm:p-8 rounded-2xl">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
-              <Target className="w-5 h-5" />
-            </div>
-            <h3 className="font-['Bebas_Neue'] text-3xl tracking-wider">
-              ما الذي يميّزنا؟
-            </h3>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-3">
+        {/* Hero stats */}
+        <Reveal delay={0.2}>
+          <div className="mt-10 grid grid-cols-3 gap-3 sm:gap-6 max-w-2xl mx-auto">
             {[
-              "تتبع دقيق لكل نقرة وتسجيل وعملية تحويل",
-              "لوحة تحكم بسيطة وقوية تحت تصرفك دائماً",
-              "أدوات محتوى ترويجي جاهزة (بانرات، نصوص، فيديوهات)",
-              "دعم فني مخصص لمسوقي البرنامج",
-              "مرونة كاملة في اختيار جمهورك المستهدف",
-              "علاقة طويلة الأمد، لا تجارب قصيرة",
-            ].map((p) => (
-              <div key={p} className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
-                <span className="text-sm text-slate-200">{p}</span>
-              </div>
+              { v: t("aff.stats.support"), l: t("aff.stats.supportLabel"), c: BLUE },
+              { v: t("aff.stats.invites"), l: t("aff.stats.invitesLabel"), c: GOLD },
+              { v: t("aff.stats.fees"), l: t("aff.stats.feesLabel"), c: BLUE },
+            ].map((s, i) => (
+              <GlassCard key={i} className="p-4 sm:p-5 text-center">
+                <div
+                  className="font-['Bebas_Neue'] text-3xl sm:text-4xl tracking-wider"
+                  style={{ color: s.c }}
+                >
+                  {s.v}
+                </div>
+                <div className="mt-1 text-[10px] sm:text-xs uppercase tracking-widest text-slate-400">
+                  {s.l}
+                </div>
+              </GlassCard>
             ))}
           </div>
-        </Card>
+        </Reveal>
+      </section>
 
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <Card className="relative overflow-hidden bg-gradient-to-br from-[#1e88ff] via-[#1565c0] to-[#0a3a8c] border-0 p-8 sm:p-12 rounded-3xl text-center">
-            <div className="absolute inset-0 opacity-25">
-              <div className="absolute top-0 left-0 w-72 h-72 rounded-full bg-[#ffb627] blur-[100px]" />
-              <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-white blur-[100px]" />
-            </div>
-            <div className="relative space-y-4">
-              <div className="inline-flex w-14 h-14 items-center justify-center rounded-2xl bg-[#ffb627] text-black">
-                <Share2 className="w-7 h-7" />
+      <Marquee
+        items={[
+          { value: "0%", label: t("aff.stats.feesLabel") },
+          { value: "24/7", label: t("aff.stats.supportLabel") },
+          { value: "∞", label: t("aff.stats.invitesLabel") },
+          { value: "VEX", label: t("aff.benefit.1.title") },
+        ]}
+      />
+
+      {/* BENEFITS */}
+      <section>
+        <Reveal>
+          <SectionHeading
+            title={
+              <>
+                {t("aff.benefits.title.a")}{" "}
+                <span style={{ color: GOLD }}>{t("aff.benefits.title.b")}</span>
+              </>
+            }
+            subtitle={t("aff.benefits.sub")}
+            accent={BLUE}
+          />
+        </Reveal>
+        <div className="mt-10 grid sm:grid-cols-2 gap-5">
+          {benefits.map((b, i) => {
+            const Icon = b.icon;
+            return (
+              <Reveal key={b.k} delay={i * 0.05}>
+                <GlassCard className="p-7 h-full" glow={b.color}>
+                  <div
+                    className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4"
+                    style={{
+                      background: `${b.color}20`,
+                      border: `1px solid ${b.color}40`,
+                    }}
+                  >
+                    <Icon className="h-6 w-6" style={{ color: b.color }} />
+                  </div>
+                  <h3 className="font-['Bebas_Neue'] text-2xl tracking-wider mb-2">
+                    {t("aff.benefit." + b.k + ".title")}
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    {t("aff.benefit." + b.k + ".desc")}
+                  </p>
+                </GlassCard>
+              </Reveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* STEPS */}
+      <section>
+        <Reveal>
+          <SectionHeading
+            title={t("aff.steps.title")}
+            subtitle={t("aff.steps.sub")}
+            accent={GOLD}
+          />
+        </Reveal>
+        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[1, 2, 3, 4].map((n, i) => {
+            const color = n % 2 ? BLUE : GOLD;
+            const Icon = stepIcons[i];
+            return (
+              <Reveal key={n} delay={i * 0.06}>
+                <GlassCard className="p-6 h-full" glow={color}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div
+                      className="grid place-items-center w-12 h-12 rounded-xl"
+                      style={{
+                        background: `${color}20`,
+                        border: `1px solid ${color}40`,
+                      }}
+                    >
+                      <Icon className="h-5 w-5" style={{ color }} />
+                    </div>
+                    <span
+                      className="font-['Bebas_Neue'] text-4xl tracking-wider opacity-30"
+                      style={{ color }}
+                    >
+                      0{n}
+                    </span>
+                  </div>
+                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                    {t("aff.step." + n + ".title")}
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    {t("aff.step." + n + ".desc")}
+                  </p>
+                </GlassCard>
+              </Reveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* AUDIENCE */}
+      <section>
+        <Reveal>
+          <SectionHeading title={t("aff.audience.title")} accent={BLUE} />
+        </Reveal>
+        <div className="mt-10 grid sm:grid-cols-3 gap-5">
+          {audience.map((a, i) => {
+            const Icon = a.icon;
+            return (
+              <Reveal key={a.k} delay={i * 0.06}>
+                <GlassCard className="p-7 h-full text-center" glow={a.color}>
+                  <div
+                    className="mx-auto inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                    style={{
+                      background: `${a.color}20`,
+                      border: `1px solid ${a.color}40`,
+                    }}
+                  >
+                    <Icon className="h-7 w-7" style={{ color: a.color }} />
+                  </div>
+                  <h3 className="font-['Bebas_Neue'] text-xl tracking-wider mb-2">
+                    {t("aff.audience." + a.k + ".title")}
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    {t("aff.audience." + a.k + ".desc")}
+                  </p>
+                </GlassCard>
+              </Reveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* DIFFERENTIATORS */}
+      <section>
+        <Reveal>
+          <GlassCard className="p-8 sm:p-10">
+            <div className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
+              <div>
+                <SectionEyebrow color={GOLD}>{t("mkt.brand.eyebrow")}</SectionEyebrow>
+                <h2 className="mt-4 font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider">
+                  {t("aff.diff.title")}
+                </h2>
               </div>
-              <h2 className="font-['Bebas_Neue'] text-4xl sm:text-5xl tracking-wider text-white">
-                ابدأ الكسب اليوم
-              </h2>
-              <p className="text-white/85 max-w-xl mx-auto text-sm sm:text-base">
-                لا انتظار، لا رسوم، لا التزامات. فقط رابطك وجمهورك.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-3">
-                <Button
-                  asChild
-                  size="lg"
-                  className="bg-[#ffb627] text-black hover:bg-[#ffb627]/90 font-bold text-base px-8 h-12 rounded-xl shadow-xl"
-                >
-                  <Link href="/referral">
-                    <Zap className="w-4 h-4 me-2" />
-                    احصل على رابطي الآن
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="border-white/40 text-white hover:bg-white/10 font-bold text-base px-8 h-12 rounded-xl bg-transparent"
-                >
-                  <Link href="/agents-program">أو انضم كوكيل معتمد</Link>
-                </Button>
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+                {[1, 2, 3, 4, 5, 6].map((n, i) => (
+                  <Reveal key={n} delay={i * 0.04} y={10}>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2
+                        className="h-5 w-5 mt-0.5 shrink-0"
+                        style={{ color: i % 2 ? GOLD : BLUE }}
+                      />
+                      <span className="text-sm text-slate-300">
+                        {t("aff.diff." + n)}
+                      </span>
+                    </div>
+                  </Reveal>
+                ))}
               </div>
             </div>
-          </Card>
-        </motion.div>
-      </div>
-    </div>
+          </GlassCard>
+        </Reveal>
+      </section>
+
+      {/* CTA */}
+      <section>
+        <Reveal>
+          <SpotlightCard from={BLUE} via="#1565c0" to="#0a3a8c">
+            <h2 className="font-['Bebas_Neue'] text-5xl sm:text-6xl tracking-wider">
+              {t("aff.cta.title")}
+            </h2>
+            <p className="mt-4 text-base sm:text-lg text-blue-100 max-w-2xl mx-auto">
+              {t("aff.cta.sub")}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3 justify-center">
+              <Button
+                asChild
+                size="lg"
+                className="font-bold text-black"
+                style={{ background: GOLD, boxShadow: `0 12px 40px ${GOLD}50` }}
+                data-testid="button-aff-final-cta"
+              >
+                <Link href="/referral">
+                  <Coins className="me-2 h-4 w-4" />
+                  {t("mkt.cta.getMyLink")}
+                  <Arrow className="ms-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="bg-white/10 border-white/30 hover:bg-white/20 text-white"
+              >
+                <Link href="/support">{t("mkt.cta.beAgent")}</Link>
+              </Button>
+            </div>
+          </SpotlightCard>
+        </Reveal>
+      </section>
+    </MarketingShell>
   );
 }
