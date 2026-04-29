@@ -4436,3 +4436,43 @@ export const insertChatCallSessionSchema = createInsertSchema(chatCallSessions).
 });
 export type InsertChatCallSession = z.infer<typeof insertChatCallSessionSchema>;
 export type ChatCallSession = typeof chatCallSessions.$inferSelect;
+
+// ==================== ARCADE (HTML5 MINI-GAMES) SESSIONS ====================
+// Solo / casual arcade runs (snake, stack_tower, aim_trainer, ...).
+// Lightweight per-run record so the player profile, leaderboards, and Sam9
+// banter can react to results from these games — they don't run inside the
+// classical WebSocket game engine, so they need their own table.
+export const arcadeSessions = pgTable("arcade_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Underscore key (matches multiplayer_games.key): snake, stack_tower, ...
+  gameKey: text("game_key").notNull(),
+  // Final score reported by the game (can be 0 for losses).
+  score: integer("score").notNull().default(0),
+  // 'win' | 'loss' | 'draw' — for solo arcades, "win" means a positive run
+  // (any score > 0) and "loss" means game-over with 0 score.
+  result: text("result").notNull().default("draw"),
+  durationMs: integer("duration_ms").notNull().default(0),
+  // Was this score the player's new personal best for this game?
+  isPersonalBest: boolean("is_personal_best").notNull().default(false),
+  // Optional payload from the game (level reached, accuracy, party scores …).
+  metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_arcade_sessions_user_id").on(table.userId),
+  index("idx_arcade_sessions_game_key").on(table.gameKey),
+  index("idx_arcade_sessions_user_game").on(table.userId, table.gameKey),
+  index("idx_arcade_sessions_score").on(table.gameKey, table.score),
+  index("idx_arcade_sessions_created_at").on(table.createdAt),
+]);
+
+export const arcadeSessionsRelations = relations(arcadeSessions, ({ one }) => ({
+  user: one(users, { fields: [arcadeSessions.userId], references: [users.id] }),
+}));
+
+export const insertArcadeSessionSchema = createInsertSchema(arcadeSessions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertArcadeSession = z.infer<typeof insertArcadeSessionSchema>;
+export type ArcadeSession = typeof arcadeSessions.$inferSelect;

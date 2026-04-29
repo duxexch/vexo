@@ -98,6 +98,7 @@ const DailyRewardsPage = lazy(() => import("@/pages/daily-rewards"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const ReferralPage = lazy(() => import("@/pages/referral"));
 const GamePlayerPage = lazy(() => import("@/pages/game-player"));
+const ArcadePlayPage = lazy(() => import("@/pages/arcade-play"));
 const TermsPage = lazy(() => import("@/pages/terms"));
 const PrivacyPage = lazy(() => import("@/pages/privacy"));
 const InstallAppPage = lazy(() => import("@/pages/install-app"));
@@ -1206,6 +1207,7 @@ export default function PrivateRoutes() {
                         <Route path="/terms">{() => <ErrorBoundary><TermsPage /></ErrorBoundary>}</Route>
                         <Route path="/privacy">{() => <ErrorBoundary><PrivacyPage /></ErrorBoundary>}</Route>
                         <Route path="/install-app">{() => <ErrorBoundary><InstallAppPage /></ErrorBoundary>}</Route>
+                        <Route path="/arcade/:gameKey">{() => <ErrorBoundary><ArcadePlayPage /></ErrorBoundary>}</Route>
                         <Route path="/arcade">{() => <ErrorBoundary><GamesPage /></ErrorBoundary>}</Route>
                         <Route path="/admin/announcements">{() => <ErrorBoundary><AdminAnnouncementsPage /></ErrorBoundary>}</Route>
                         <Route>{() => <ErrorBoundary><NotFound /></ErrorBoundary>}</Route>

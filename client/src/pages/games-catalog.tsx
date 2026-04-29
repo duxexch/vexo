@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { buildGameConfig, resolveGameConfigEntry, type GameConfigItem, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { isArcadeGameKey } from "@shared/arcade-games";
 import { cn } from "@/lib/utils";
 import {
   Target,
@@ -276,8 +277,11 @@ export default function GamesCatalogPage() {
       navigate("/");
       return;
     }
-    if (gameKey === "snake") {
-      window.location.href = "/games/new-game.html";
+    // New 9 HTML5 mini-games launch through the iframe-based arcade player
+    // so scores reach the server and Sam9 can react. Legacy keys keep the
+    // pre-existing static fallbacks.
+    if (isArcadeGameKey(gameKey)) {
+      navigate(`/arcade/${gameKey}`);
       return;
     }
     if (gameKey === "puzzle") {

@@ -26,6 +26,7 @@ import { registerMatchmakingRoutes } from "./matchmaking";
 import { registerGameConfigRoutes } from "./game-config";
 import { registerSupportChatRoutes } from "./support-chat";
 import { registerExternalGamesRoutes } from "./external-games";
+import { registerArcadeSessionsRoutes } from "./arcade-sessions";
 import { registerRtcRoutes } from "./rtc";
 import { registerSeoRoutes } from "./seo";
 import { registerVoipTokenRoutes } from "./devices/voip-tokens";
@@ -61,6 +62,7 @@ export function registerModularRoutes(app: Express): void {
   registerGameConfigRoutes(app);
   registerSupportChatRoutes(app);
   registerExternalGamesRoutes(app);
+  registerArcadeSessionsRoutes(app);
   registerRtcRoutes(app);
   registerSeoRoutes(app);
   registerVoipTokenRoutes(app);
