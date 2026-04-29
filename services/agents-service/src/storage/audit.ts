@@ -72,8 +72,7 @@ export async function logAdminAction(
     });
   } catch (error) {
     console.error(
-      `[agents-service] audit log failure: action=${action} entity=${entityId}`,
-      error instanceof Error ? error.message : error,
+      `[agents-service] audit log failure: action=${action} entity=${entityId} ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

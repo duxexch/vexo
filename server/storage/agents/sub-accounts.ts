@@ -111,11 +111,11 @@ export interface CreateSubAccountInput {
 
 export interface SubAccountCreationError extends Error {
   code:
-    | "SUB_ACCOUNT_LIMIT_REACHED"
-    | "AGENT_NOT_FOUND"
-    | "USERNAME_TAKEN"
-    | "EMAIL_TAKEN"
-    | "INVALID_INPUT";
+  | "SUB_ACCOUNT_LIMIT_REACHED"
+  | "AGENT_NOT_FOUND"
+  | "USERNAME_TAKEN"
+  | "EMAIL_TAKEN"
+  | "INVALID_INPUT";
 }
 
 function makeError(code: SubAccountCreationError["code"], message: string): SubAccountCreationError {
@@ -141,8 +141,16 @@ export async function createSubAccount(input: CreateSubAccountInput) {
   if (username.length < 3) throw makeError("INVALID_INPUT", "username must be at least 3 chars");
   if (input.password.length < 8) throw makeError("INVALID_INPUT", "password must be at least 8 chars");
   if (label.length < 1) throw makeError("INVALID_INPUT", "label is required");
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw makeError("INVALID_INPUT", "invalid email format");
+  if (email) {
+    // Simple email validation to avoid ReDoS attacks
+    const parts = email.split('@');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      throw makeError("INVALID_INPUT", "invalid email format");
+    }
+    const domainParts = parts[1].split('.');
+    if (domainParts.length < 2) {
+      throw makeError("INVALID_INPUT", "invalid email format");
+    }
   }
 
   const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, input.agentId)).limit(1);

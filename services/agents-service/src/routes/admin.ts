@@ -153,8 +153,16 @@ export function registerAdminAgentsRoutes(app: Express): void {
         if (!allowed.includes(defaultCur)) allowed.push(defaultCur);
 
         const emailStr = email ? String(email).trim().toLowerCase() : null;
-        if (emailStr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
-          return res.status(400).json({ error: "invalid email format" });
+        if (emailStr) {
+          // Simple email validation to avoid ReDoS attacks
+          const parts = emailStr.split('@');
+          if (parts.length !== 2 || !parts[0] || !parts[1]) {
+            return res.status(400).json({ error: "invalid email format" });
+          }
+          const domainParts = parts[1].split('.');
+          if (domainParts.length < 2) {
+            return res.status(400).json({ error: "invalid email format" });
+          }
         }
 
         const existingByCode = await getAgentByCode(codeStr);
