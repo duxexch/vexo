@@ -64,6 +64,7 @@ function ShareRow({
   shareMessage: string;
   onCopied: () => void;
   testIdPrefix: string;
+  key?: React.Key;
 }) {
   const { language } = useI18n();
   const isAr = language === "ar";
@@ -320,7 +321,7 @@ export default function ShareLinksPage() {
                           )
                         }
                         link={link}
-                        shareImageUrl={`${trimmedOrigin}/api/share-image?type=game&title=${encodeURIComponent(key)}&titleAr=${encodeURIComponent(isAr ? cfg.nameAr || cfg.name : cfg.name)}&description=${encodeURIComponent(isAr ? cfg.descriptionAr || cfg.descriptionEn : cfg.descriptionEn)}&descriptionAr=${encodeURIComponent(isAr ? cfg.descriptionAr || cfg.descriptionEn : cfg.descriptionEn)}&url=${encodeURIComponent(link)}`}
+                        shareImageUrl={`${trimmedOrigin}/api/share-image?type=game&title=${encodeURIComponent(key)}&titleAr=${encodeURIComponent((isAr ? cfg.nameAr : cfg.name) || key)}&description=${encodeURIComponent((isAr ? cfg.descriptionAr : cfg.descriptionEn) || "")}&descriptionAr=${encodeURIComponent((isAr ? cfg.descriptionAr : cfg.descriptionEn) || "")}&url=${encodeURIComponent(link)}`}
                         shareMessage={message}
                         onCopied={notifyCopied}
                         testIdPrefix={`game-${key}`}

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { adminFetch } from "@/lib/admin-api";
@@ -39,6 +39,7 @@ import {
   Star,
   MoreVertical,
   Plus,
+  Settings,
 } from "lucide-react";
 
 interface Marketer {
@@ -117,7 +118,7 @@ export default function MarketersDashboard() {
 
   const isAr = language === "ar";
 
-  const handleMarketerAction = async (marketerId, action) => {
+  const handleMarketerAction = async (marketerId: string, action: string) => {
     try {
       await adminFetch(`/api/admin/marketers/${marketerId}/${action}`, { method: "POST" });
       toast({
@@ -134,7 +135,7 @@ export default function MarketersDashboard() {
     }
   };
 
-  const handleCreateMarketer = async (marketerData) => {
+  const handleCreateMarketer = async (marketerData: Record<string, unknown>) => {
     try {
       await adminFetch("/api/admin/marketers", {
         method: "POST",
@@ -155,7 +156,7 @@ export default function MarketersDashboard() {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "active": return "text-green-600 bg-green-50 border-green-200";
       case "inactive": return "text-gray-600 bg-gray-50 border-gray-200";
@@ -164,7 +165,7 @@ export default function MarketersDashboard() {
     }
   };
 
-  const getPerformanceTrend = (trend) => {
+  const getPerformanceTrend = (trend: string) => {
     switch (trend) {
       case "up": return "text-green-500";
       case "down": return "text-red-500";
@@ -186,7 +187,7 @@ export default function MarketersDashboard() {
               {isAr ? "إدارة المسوقين" : "Marketer Management"}
             </Badge>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <Button
               variant="outline"
@@ -196,7 +197,7 @@ export default function MarketersDashboard() {
               <Settings className="h-4 w-4" />
               {isAr ? "الإعدادات" : "Settings"}
             </Button>
-            
+
             <Button
               size="sm"
               onClick={() => setShowMarketerModal(true)}
@@ -287,9 +288,9 @@ export default function MarketersDashboard() {
             <TabsTrigger value="marketers" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               {isAr ? "المسوقون" : "Marketers"}
-              {marketers?.filter(m => m.status === 'suspended').length > 0 && (
+              {marketers?.filter((m: Marketer) => m.status === 'suspended').length > 0 && (
                 <Badge variant="destructive" className="ml-2">
-                  {marketers.filter(m => m.status === 'suspended').length}
+                  {marketers.filter((m: Marketer) => m.status === 'suspended').length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -480,7 +481,7 @@ export default function MarketersDashboard() {
                 {isAr ? "إنشاء حملة" : "Create Campaign"}
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {campaignsLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
