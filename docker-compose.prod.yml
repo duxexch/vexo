@@ -255,8 +255,13 @@ services:
         condition: service_healthy
       ai-agent:
         condition: service_healthy
+      # Soft dependency: app has an in-process fallback for agents routes,
+      # so we only require agents-service to be *started*, not healthy.
+      # This prevents the whole stack from hanging if agents-service is
+      # slow to build, fails its healthcheck, or is intentionally absent.
       agents-service:
-        condition: service_healthy
+        condition: service_started
+        required: false
     environment:
       NODE_ENV: production
       PORT: 3001
