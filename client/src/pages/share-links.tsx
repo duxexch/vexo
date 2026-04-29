@@ -51,6 +51,7 @@ function ShareRow({
   subtitle,
   iconNode,
   link,
+  shareImageUrl,
   shareMessage,
   onCopied,
   testIdPrefix,
@@ -59,6 +60,7 @@ function ShareRow({
   subtitle?: string;
   iconNode: React.ReactNode;
   link: string;
+  shareImageUrl?: string;
   shareMessage: string;
   onCopied: () => void;
   testIdPrefix: string;
@@ -318,7 +320,7 @@ export default function ShareLinksPage() {
                           )
                         }
                         link={link}
-                        shareImageUrl={`${trimmedOrigin}/api/share-image?type=game&title=${encodeURIComponent(key)}&titleAr=${encodeURIComponent(isAr ? cfg.nameAr : cfg.name)}&description=${encodeURIComponent(isAr ? cfg.descriptionAr : cfg.descriptionEn)}&descriptionAr=${encodeURIComponent(isAr ? cfg.descriptionAr : cfg.descriptionEn)}&url=${encodeURIComponent(link)}`}
+                        shareImageUrl={`${trimmedOrigin}/api/share-image?type=game&title=${encodeURIComponent(key)}&titleAr=${encodeURIComponent(isAr ? cfg.nameAr || cfg.name : cfg.name)}&description=${encodeURIComponent(isAr ? cfg.descriptionAr || cfg.descriptionEn : cfg.descriptionEn)}&descriptionAr=${encodeURIComponent(isAr ? cfg.descriptionAr || cfg.descriptionEn : cfg.descriptionEn)}&url=${encodeURIComponent(link)}`}
                         shareMessage={message}
                         onCopied={notifyCopied}
                         testIdPrefix={`game-${key}`}

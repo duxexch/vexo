@@ -5,7 +5,7 @@
  * The game runs inside an iframe and uses PostMessage to talk to VEX.
  *
  * Usage:
- *   <script src="https://vixo.click/games/vex-sdk.js"></script>
+ *   <script src="https://vexo.click/games/vex-sdk.js"></script>
  *   <script>
  *     VEX.init({ onReady: function(player) { startGame(player); } });
  *     // When game ends:
