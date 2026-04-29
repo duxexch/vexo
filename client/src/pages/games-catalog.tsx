@@ -173,11 +173,6 @@ export default function GamesCatalogPage() {
     refetchInterval: 5000,
   });
 
-  const { data: gameStats } = useQuery<Record<string, { waiting: number; live: number }>>({
-    queryKey: ["/api/game-stats"],
-    refetchInterval: 10000,
-  });
-
   const { data: externalGames = [] } = useQuery<ExternalGameItem[]>({
     queryKey: ["/api/external-games"],
     queryFn: async () => {
