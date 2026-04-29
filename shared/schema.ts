@@ -5,7 +5,8 @@ import { z } from "zod";
 
 // ==================== ENUMS ====================
 
-export const userRoleEnum = pgEnum("user_role", ["admin", "agent", "affiliate", "player"]);
+export const userRoleEnum = pgEnum("user_role", ["admin", "agent", "agent_employee", "affiliate", "player"]);
+export const agentSubRoleEnum = pgEnum("agent_sub_role", ["operator", "supervisor", "viewer"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended", "banned"]);
 export const gameStatusEnum = pgEnum("game_status", ["active", "listed", "inactive", "maintenance"]);
 export const gameVolatilityEnum = pgEnum("game_volatility", ["low", "medium", "high"]);
@@ -418,10 +419,16 @@ export const agentRequestAssignments = pgTable("agent_request_assignments", {
   responseAction: agentRequestActionEnum("response_action").notNull().default("pending"),
   slaDeadlineAt: timestamp("sla_deadline_at").notNull(),
   attemptNumber: integer("attempt_number").notNull().default(1),
+  // The actual user (main agent OR agent employee sub-account) who handled
+  // the request — populated when responseAction transitions away from
+  // "pending". Lets the audit log distinguish "agent X" from "employee Y of
+  // agent X" without losing the parent-agent attribution stored in agentId.
+  actorUserId: varchar("actor_user_id").references(() => users.id),
 }, (table) => [
   index("idx_agent_assignments_agent").on(table.agentId, table.assignedAt),
   index("idx_agent_assignments_request").on(table.requestType, table.requestId),
   index("idx_agent_assignments_pending").on(table.responseAction, table.slaDeadlineAt),
+  index("idx_agent_assignments_actor").on(table.actorUserId, table.respondedAt),
 ]);
 
 export const agentRequestAssignmentsRelations = relations(agentRequestAssignments, ({ one }) => ({
@@ -447,6 +454,51 @@ export const agentRatingsRelations = relations(agentRatings, ({ one }) => ({
   agent: one(agents, { fields: [agentRatings.agentId], references: [agents.id] }),
   user: one(users, { fields: [agentRatings.userId], references: [users.id] }),
 }));
+
+// ==================== AGENT SUB-ACCOUNTS (employees) ====================
+// Each agent has 1 main user record (in `agents.userId`) + up to 4 employee
+// sub-accounts. Each sub-account is a real user (own login + own password)
+// linked back to the parent agent here. When a sub-account performs an
+// action, attribution columns elsewhere (transactions.processedByActorId,
+// agent_request_assignments.actorUserId, agent_wallet_transactions
+// .createdByUserId) record the actual user, while the parent agent keeps
+// owning balances, commissions and request routing. The active-count cap
+// is enforced server-side in storage helpers, not via a partial unique
+// index, because we want the cap to apply only to active rows and Drizzle
+// migrations are friendlier without conditional unique indexes.
+
+export const agentSubAccounts = pgTable("agent_sub_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  role: agentSubRoleEnum("role").notNull().default("operator"),
+  permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
+  isActive: boolean("is_active").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  createdByAdminId: varchar("created_by_admin_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_agent_sub_accounts_user_id").on(table.userId),
+  index("idx_agent_sub_accounts_agent_id").on(table.agentId),
+  index("idx_agent_sub_accounts_active").on(table.agentId, table.isActive),
+]);
+
+export const agentSubAccountsRelations = relations(agentSubAccounts, ({ one }) => ({
+  agent: one(agents, { fields: [agentSubAccounts.agentId], references: [agents.id] }),
+  user: one(users, { fields: [agentSubAccounts.userId], references: [users.id] }),
+  createdByAdmin: one(users, { fields: [agentSubAccounts.createdByAdminId], references: [users.id] }),
+}));
+
+export const insertAgentSubAccountSchema = createInsertSchema(agentSubAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastLoginAt: true,
+});
+export type InsertAgentSubAccount = z.infer<typeof insertAgentSubAccountSchema>;
+export type AgentSubAccount = typeof agentSubAccounts.$inferSelect;
 
 // ==================== AFFILIATES ====================
 
@@ -908,6 +960,10 @@ export const transactions = pgTable("transactions", {
   // targets / originated from. NULL = legacy primary balance (USD-equivalent).
   walletCurrencyCode: text("wallet_currency_code"),
   processedBy: varchar("processed_by").references(() => agents.id),
+  // The actual user (main agent OR sub-account employee) who processed the
+  // transaction. processedBy keeps parent-agent attribution; this column
+  // adds the human actor for audit/UI ("معالج بواسطة محمد - موظف الوكيل X").
+  processedByActorId: varchar("processed_by_actor_id").references(() => users.id),
   processedAt: timestamp("processed_at"),
   adminNote: text("admin_note"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -12,6 +12,10 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  KeyRound,
+  Users as UsersIcon,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -532,6 +536,7 @@ function AgentDetailDialog({
 }: { agentId: string; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast();
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [resetMainPwOpen, setResetMainPwOpen] = useState(false);
 
   const { data, isLoading } = useQuery<AgentDetailResponse>({
     queryKey: [`/api/admin/agents/${agentId}`],
@@ -592,6 +597,9 @@ function AgentDetailDialog({
               <Button size="sm" variant="outline" data-testid="button-adjust-balance" onClick={() => setAdjustOpen(true)}>
                 تعديل رصيد
               </Button>
+              <Button size="sm" variant="outline" data-testid="button-reset-main-password" onClick={() => setResetMainPwOpen(true)}>
+                <KeyRound className="w-4 h-4" /> كلمة مرور الوكيل
+              </Button>
             </div>
           </div>
         </DialogHeader>
@@ -601,6 +609,9 @@ function AgentDetailDialog({
             <TabsTrigger value="summary">ملخص</TabsTrigger>
             <TabsTrigger value="wallets">المحافظ</TabsTrigger>
             <TabsTrigger value="ledger">السجل</TabsTrigger>
+            <TabsTrigger value="sub-accounts" data-testid="tab-sub-accounts">
+              <UsersIcon className="w-4 h-4 ml-1" /> الحسابات الفرعية
+            </TabsTrigger>
             <TabsTrigger value="config">الإعدادات</TabsTrigger>
           </TabsList>
 
@@ -695,6 +706,11 @@ function AgentDetailDialog({
             </Card>
           </TabsContent>
 
+          {/* SUB-ACCOUNTS TAB */}
+          <TabsContent value="sub-accounts">
+            <SubAccountsTab agentId={agentId} agentCode={agent.agentCode} />
+          </TabsContent>
+
           {/* CONFIG TAB */}
           <TabsContent value="config">
             <ConfigTab agent={agent} onSaved={() => {
@@ -714,6 +730,15 @@ function AgentDetailDialog({
               onChanged();
               setAdjustOpen(false);
             }}
+          />
+        )}
+
+        {resetMainPwOpen && (
+          <ResetPasswordDialog
+            title={`إعادة تعيين كلمة مرور الوكيل ${agent.agentCode}`}
+            description="سيتم تعيين كلمة مرور جديدة للحساب الأساسي للوكيل. لن يخرج من جلسته الحالية تلقائياً."
+            endpoint={`/api/admin/agents/${agentId}/reset-password`}
+            onClose={() => setResetMainPwOpen(false)}
           />
         )}
       </DialogContent>
@@ -885,5 +910,444 @@ function ConfigTab({ agent, onSaved }: { agent: AgentRow; onSaved: () => void })
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+// =============================================================================
+// SUB-ACCOUNTS TAB (employees: 1 main agent + up to 4 employees)
+// =============================================================================
+interface SubAccountRow {
+  id: string;
+  agentId: string;
+  userId: string;
+  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  label: string;
+  role: "operator" | "supervisor" | "viewer";
+  isActive: boolean;
+  userStatus: string;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SubAccountsResponse {
+  subAccounts: SubAccountRow[];
+  activeCount: number;
+  maxAllowed: number;
+}
+
+const SUB_ROLE_LABELS: Record<SubAccountRow["role"], string> = {
+  operator: "موظف عمليات",
+  supervisor: "مشرف",
+  viewer: "مراقب (قراءة فقط)",
+};
+
+function SubAccountsTab({ agentId, agentCode }: { agentId: string; agentCode: string }) {
+  const { toast } = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<SubAccountRow | null>(null);
+  const [resetTarget, setResetTarget] = useState<SubAccountRow | null>(null);
+
+  const queryKey = [`/api/admin/agents/${agentId}/sub-accounts`];
+  const { data, isLoading } = useQuery<SubAccountsResponse>({ queryKey });
+
+  const setActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/admin/agents/${agentId}/sub-accounts/${id}`, { isActive });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "تم تحديث الحالة" });
+    },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/agents/${agentId}/sub-accounts/${id}`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "تم تعطيل الحساب الفرعي" });
+    },
+    onError: (e: Error) => toast({ title: "فشل التعطيل", description: e.message, variant: "destructive" }),
+  });
+
+  const activeCount = data?.activeCount ?? 0;
+  const maxAllowed = data?.maxAllowed ?? 4;
+  const limitReached = activeCount >= maxAllowed;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <UsersIcon className="w-4 h-4" /> الحسابات الفرعية للوكيل {agentCode}
+            </CardTitle>
+            <CardDescription>
+              يمكن لكل وكيل إنشاء حتى {maxAllowed} حسابات موظفين بصلاحيات محدودة. كل عملية يقومون بها تُسجَّل تحت اسمهم وتُنسب للوكيل الأساسي.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant={limitReached ? "destructive" : "secondary"} data-testid="badge-sub-account-counter">
+              {activeCount} / {maxAllowed}
+            </Badge>
+            <Button
+              size="sm"
+              data-testid="button-create-sub-account"
+              disabled={limitReached}
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="w-4 h-4" /> إضافة موظف
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-right">الاسم/التسمية</TableHead>
+              <TableHead className="text-right">اسم المستخدم</TableHead>
+              <TableHead className="text-right">الصلاحية</TableHead>
+              <TableHead className="text-right">آخر دخول</TableHead>
+              <TableHead className="text-right">الحالة</TableHead>
+              <TableHead className="text-right">إجراءات</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">جاري التحميل…</TableCell></TableRow>
+            ) : (data?.subAccounts ?? []).length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">لا توجد حسابات فرعية بعد</TableCell></TableRow>
+            ) : (data?.subAccounts ?? []).map((s) => (
+              <TableRow key={s.id} data-testid={`row-sub-account-${s.id}`}>
+                <TableCell>
+                  <div className="font-medium">{s.label}</div>
+                  {(s.firstName || s.lastName) && (
+                    <div className="text-xs text-muted-foreground">{[s.firstName, s.lastName].filter(Boolean).join(" ")}</div>
+                  )}
+                </TableCell>
+                <TableCell className="font-mono text-sm">{s.username}</TableCell>
+                <TableCell><Badge variant="outline">{SUB_ROLE_LABELS[s.role]}</Badge></TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {s.lastLoginAt ? new Date(s.lastLoginAt).toLocaleString("ar-SA") : "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={s.isActive ? "default" : "destructive"}>
+                    {s.isActive ? "نشط" : "معطّل"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`button-edit-sub-${s.id}`}
+                      title="تعديل"
+                      onClick={() => setEditTarget(s)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid={`button-reset-pw-sub-${s.id}`}
+                      title="إعادة تعيين كلمة المرور"
+                      onClick={() => setResetTarget(s)}
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </Button>
+                    {s.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        data-testid={`button-disable-sub-${s.id}`}
+                        title="تعطيل"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (confirm(`تعطيل الحساب الفرعي "${s.label}"؟ لن يستطيع تسجيل الدخول بعد ذلك.`)) {
+                            deleteMutation.mutate(s.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        data-testid={`button-enable-sub-${s.id}`}
+                        title="تفعيل"
+                        disabled={setActiveMutation.isPending || limitReached}
+                        onClick={() => setActiveMutation.mutate({ id: s.id, isActive: true })}
+                      >
+                        <Power className="w-4 h-4 text-green-600" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+
+      {createOpen && (
+        <CreateSubAccountDialog
+          agentId={agentId}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            queryClient.invalidateQueries({ queryKey });
+            setCreateOpen(false);
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <EditSubAccountDialog
+          agentId={agentId}
+          sub={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey });
+            setEditTarget(null);
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordDialog
+          title={`إعادة تعيين كلمة مرور: ${resetTarget.label}`}
+          description={`سيتم تعيين كلمة مرور جديدة لـ ${resetTarget.username}.`}
+          endpoint={`/api/admin/agents/${agentId}/sub-accounts/${resetTarget.id}/reset-password`}
+          onClose={() => setResetTarget(null)}
+        />
+      )}
+    </Card>
+  );
+}
+
+function CreateSubAccountDialog({
+  agentId, onClose, onCreated,
+}: { agentId: string; onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    username: "",
+    password: "",
+    label: "",
+    email: "",
+    firstName: "",
+    lastName: "",
+    role: "operator" as SubAccountRow["role"],
+  });
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/admin/agents/${agentId}/sub-accounts`, {
+        username: form.username.trim(),
+        password: form.password,
+        label: form.label.trim(),
+        email: form.email.trim() || null,
+        firstName: form.firstName.trim() || null,
+        lastName: form.lastName.trim() || null,
+        role: form.role,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم إنشاء الحساب الفرعي" });
+      onCreated();
+    },
+    onError: (e: Error) => toast({ title: "فشل الإنشاء", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit =
+    form.username.trim().length >= 3 &&
+    form.password.length >= 8 &&
+    form.label.trim().length >= 1;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>إنشاء حساب موظف فرعي</DialogTitle>
+          <DialogDescription>سيُسجَّل دخوله باسم المستخدم وكلمة المرور أدناه. كل إجراء سيُنسب إليه وللوكيل الأم.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>التسمية الداخلية (إجباري)</Label>
+            <Input data-testid="input-sub-label" placeholder="مثلاً: موظف الفترة الصباحية"
+              value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label>اسم المستخدم</Label>
+              <Input data-testid="input-sub-username" autoComplete="off" value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>كلمة المرور (8+ أحرف)</Label>
+              <Input data-testid="input-sub-password" type="password" autoComplete="new-password" value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label>الاسم الأول</Label>
+              <Input data-testid="input-sub-first-name" value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>الاسم الأخير</Label>
+              <Input data-testid="input-sub-last-name" value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>البريد الإلكتروني (اختياري)</Label>
+            <Input data-testid="input-sub-email" type="email" value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>الصلاحية</Label>
+            <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as SubAccountRow["role"] })}>
+              <SelectTrigger data-testid="select-sub-role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="operator">{SUB_ROLE_LABELS.operator}</SelectItem>
+                <SelectItem value="supervisor">{SUB_ROLE_LABELS.supervisor}</SelectItem>
+                <SelectItem value="viewer">{SUB_ROLE_LABELS.viewer}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button data-testid="button-submit-create-sub" disabled={!canSubmit || mutation.isPending}
+            onClick={() => mutation.mutate()}>
+            {mutation.isPending ? "جاري…" : "إنشاء"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditSubAccountDialog({
+  agentId, sub, onClose, onSaved,
+}: { agentId: string; sub: SubAccountRow; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [label, setLabel] = useState(sub.label);
+  const [role, setRole] = useState<SubAccountRow["role"]>(sub.role);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/admin/agents/${agentId}/sub-accounts/${sub.id}`, {
+        label: label.trim(),
+        role,
+      });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "تم الحفظ" }); onSaved(); },
+    onError: (e: Error) => toast({ title: "فشل الحفظ", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>تعديل الحساب الفرعي</DialogTitle>
+          <DialogDescription>{sub.username}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>التسمية</Label>
+            <Input data-testid="input-edit-sub-label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>الصلاحية</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as SubAccountRow["role"])}>
+              <SelectTrigger data-testid="select-edit-sub-role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="operator">{SUB_ROLE_LABELS.operator}</SelectItem>
+                <SelectItem value="supervisor">{SUB_ROLE_LABELS.supervisor}</SelectItem>
+                <SelectItem value="viewer">{SUB_ROLE_LABELS.viewer}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button data-testid="button-submit-edit-sub" disabled={mutation.isPending || label.trim().length < 1}
+            onClick={() => mutation.mutate()}>
+            {mutation.isPending ? "جاري…" : "حفظ"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Re-usable password reset dialog used by both:
+//   - main agent password reset (POST /api/admin/agents/:id/reset-password)
+//   - sub-account password reset (POST .../sub-accounts/:id/reset-password)
+function ResetPasswordDialog({
+  title, description, endpoint, onClose,
+}: { title: string; description: string; endpoint: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", endpoint, { newPassword: pw });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "تم تعيين كلمة المرور الجديدة" }); onClose(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
+  const mismatched = pw.length > 0 && confirm.length > 0 && pw !== confirm;
+  const canSubmit = pw.length >= 8 && pw === confirm;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><KeyRound className="w-4 h-4" /> {title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>كلمة المرور الجديدة (8 أحرف على الأقل)</Label>
+            <Input data-testid="input-new-password" type="password" autoComplete="new-password"
+              value={pw} onChange={(e) => setPw(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>تأكيد كلمة المرور</Label>
+            <Input data-testid="input-confirm-password" type="password" autoComplete="new-password"
+              value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            {mismatched && (
+              <div className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> كلمتا المرور غير متطابقتين
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button data-testid="button-submit-reset-password" disabled={!canSubmit || mutation.isPending}
+            onClick={() => mutation.mutate()}>
+            {mutation.isPending ? "جاري…" : "تعيين"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

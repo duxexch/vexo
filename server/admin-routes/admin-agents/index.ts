@@ -22,6 +22,7 @@ import {
   topUpAgentWallet,
   ensureAgentWallet,
 } from "../../storage/agents";
+import { registerAdminAgentSubAccountRoutes } from "./sub-accounts";
 
 const SUPPORTED_CURRENCIES = new Set([
   "USD", "EUR", "SAR", "AED", "EGP", "KWD", "QAR", "BHD", "OMR", "JOD", "VEX",
@@ -50,6 +51,10 @@ function clampDecimal(value: unknown, min: number, max: number, fallback: number
 }
 
 export function registerAdminAgentsRoutes(app: Express) {
+  // Mount sub-account management endpoints under the same admin/agents
+  // prefix so they share auth + audit logging conventions.
+  registerAdminAgentSubAccountRoutes(app);
+
   // ---------- LIST ----------
   app.get(
     "/api/admin/agents",

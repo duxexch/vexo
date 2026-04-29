@@ -25,6 +25,17 @@ export interface AuthRequest extends Request {
     tokenFingerprint?: string;
     token?: string;
   };
+  // Populated by `agentMiddleware` when the authenticated user is either a
+  // main agent or an active sub-account employee. Downstream handlers MUST
+  // read agentId/actorUserId from here (not from req.user.id) so that
+  // sub-account actions are correctly scoped to the parent agent and
+  // attributed to the actual user. Always undefined for admin requests.
+  agentContext?: {
+    agentId: string;
+    actorUserId: string;
+    isMainAgent: boolean;
+    subAccountId: string | null;
+  };
 }
 
 function readIntEnv(name: string, fallback: number, min: number, max: number): number {
@@ -390,8 +401,38 @@ export const adminTokenMiddleware = async (req: AuthRequest, res: Response, next
 };
 
 export const agentMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user?.role !== "agent" && req.user?.role !== "admin") {
+  const role = req.user?.role;
+  // Admin support paths are allowed without an agent context (they may be
+  // operating on any agent). Reject anyone else who isn't an agent or one
+  // of its sub-account employees.
+  if (role !== "agent" && role !== "agent_employee" && role !== "admin") {
     return res.status(403).json({ error: "Agent access required" });
   }
-  next();
+  if (role === "admin") return next();
+
+  // Resolve and attach the agent context so downstream handlers can scope
+  // actions to the parent agent and attribute them to the actual user
+  // (main agent OR sub-account employee). Sub-accounts whose row was
+  // deactivated AFTER their JWT was issued resolve to null here and are
+  // immediately rejected — even if the JWT itself is still otherwise valid.
+  // We import lazily to avoid a circular dependency (auth-verification ->
+  // storage -> middleware -> agent-context -> storage/agents).
+  try {
+    const { resolveAgentContext } = await import("../lib/agent-context");
+    const ctx = await resolveAgentContext(req.user!.id);
+    if (!ctx) {
+      return res.status(403).json({ error: "No active agent or sub-account context" });
+    }
+    req.agentContext = {
+      agentId: ctx.agentId,
+      actorUserId: ctx.actorUserId,
+      isMainAgent: ctx.isMainAgent,
+      subAccountId: ctx.subAccount?.id ?? null,
+    };
+    return next();
+  } catch (error: unknown) {
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to resolve agent context",
+    });
+  }
 };

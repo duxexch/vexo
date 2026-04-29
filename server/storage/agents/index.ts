@@ -23,3 +23,20 @@ export {
   type AgentStatsResponse,
   type AgentUpdatableFields,
 } from "./repository";
+
+export {
+  MAX_SUB_ACCOUNTS_PER_AGENT,
+  listSubAccounts,
+  countActiveSubAccounts,
+  getSubAccountById,
+  getSubAccountByUserId,
+  createSubAccount,
+  updateSubAccount,
+  resetSubAccountPassword,
+  touchSubAccountLastLogin,
+  type SubAccountListRow,
+  type CreateSubAccountInput,
+  type UpdateSubAccountInput,
+  type AgentSubRole,
+  type SubAccountCreationError,
+} from "./sub-accounts";

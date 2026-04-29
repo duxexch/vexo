@@ -64,6 +64,8 @@ VEX employs a modern, distributed architecture for scalability and reliability.
     - **Mini-Games Library:** Includes 24 standalone HTML5 mini-games (13 solo, 11 pass-and-play multiplayer) with a unified "VEX 3D KIT" visual identity. Games are bilingual (ar/en) and communicate with the platform via `vex-sdk.js` or function standalone.
     - **Arcade Sessions Backend:** A dedicated pipeline for the newest games, including plausibility checks for scores, personal best tracking, leaderboards, and Sam9's AI-driven banter.
 
+- **Agent Sub-Accounts (Phase 1):** Each agent supports 1 main account + up to 4 active employee sub-accounts (`agent_sub_accounts` table). Sub-accounts are real users with role `agent_employee` linked to their parent agent. New schema columns `transactions.processedByActorId` and `agent_request_assignments.actorUserId` capture which actual user (main agent OR employee) performed each action. `agentMiddleware` resolves and attaches `req.agentContext = { agentId, actorUserId, isMainAgent, subAccountId }`. Active-count cap is enforced via per-agent advisory lock inside the transaction. Admin endpoints under `/api/admin/agents/:agentId/sub-accounts/*` plus `/api/admin/agents/:agentId/reset-password` (main) and `/sub-accounts/:id/reset-password` (employee) — password resets bump `passwordChangedAt` and revoke `userSessions` + `activeSessions`. UI lives in the new "الحسابات الفرعية" tab in `client/src/pages/admin/admin-agents.tsx`.
+
 ## External Dependencies
 
 -   **PostgreSQL 15:** Primary database.
