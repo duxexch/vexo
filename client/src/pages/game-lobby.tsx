@@ -462,8 +462,38 @@ export default function GameLobbyPage() {
     setShowQuickMatch(true);
   }, []);
 
+  // Clicking a game card now opens the Quick-Match dialog AND scrolls/filters
+  // the challenges list to that game. Previously the click only filtered the
+  // list, which surprised users who expected the click to launch the game.
+  // The dialog gives them a one-tap path to start a real match while still
+  // showing existing open challenges they could join instead.
   const handleGameSelect = useCallback((gameType: string) => {
-    setSelectedGame(prev => prev === gameType ? null : gameType);
+    setSelectedGame(gameType);
+    setQuickMatchGame(gameType);
+    setShowQuickMatch(true);
+  }, []);
+
+  // When the user arrives from the home page via /lobby?game=xxx&quickMatch=1
+  // open the Quick-Match dialog automatically for that game.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const gameParam = params.get("game");
+    const quickMatchParam = params.get("quickMatch");
+    if (gameParam) {
+      setSelectedGame(gameParam);
+    }
+    if (gameParam && quickMatchParam === "1") {
+      setQuickMatchGame(gameParam);
+      setShowQuickMatch(true);
+      // Strip the query so a second visit / refresh doesn't re-open the
+      // dialog; the user can still re-trigger it by clicking the card.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("quickMatch");
+      window.history.replaceState({}, "", url.toString());
+    }
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleJoin = useCallback((challengeId: string) => {

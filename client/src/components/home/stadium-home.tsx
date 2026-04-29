@@ -818,10 +818,16 @@ function TournamentCard({ t, lang }: { t: ApiTournament; lang: string }) {
  * "تصنيف غير موجود" when the slug isn't a real category).
  */
 function resolveGameHref(gameKey: string): string {
+  // Solo / arcade games open directly into the player.
   if (isArcadeGameKey(gameKey)) return `/arcade/${gameKey}`;
   if (gameKey === "puzzle") return "/games/puzzle.html";
   if (gameKey === "memory") return "/games/memory.html";
-  return `/lobby?game=${gameKey}`;
+  // Multiplayer games (chess, backgammon, domino, tarneeb, baloot, ...)
+  // need an opponent + stake before a session exists, so we open the lobby
+  // with the Quick-Match dialog auto-opened for that game. The lobby reads
+  // ?quickMatch=1 on mount and immediately shows the bet selector — one
+  // click to start a real match instead of landing on a filtered list.
+  return `/lobby?game=${gameKey}&quickMatch=1`;
 }
 
 function GameTileCard({ g, lang }: { g: ApiGame; lang: string }) {
