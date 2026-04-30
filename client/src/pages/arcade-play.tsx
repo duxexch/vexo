@@ -5,8 +5,9 @@ import { useI18n } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Maximize2, RotateCcw, Trophy, Star, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, RotateCcw, Trophy, Star, Sparkles } from "lucide-react";
 import { getArcadeGame, gameKeyToSlug, isArcadeGameKey } from "@shared/arcade-games";
+import ArcadeInlineLoader from "@/components/games/ArcadeInlineLoader";
 
 interface ArcadeBanter {
   key: string;
@@ -62,9 +63,9 @@ export default function ArcadePlayPage() {
   const { user } = useAuth();
   const { language } = useI18n();
   const { toast } = useToast();
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
   const submittedRef = useRef<boolean>(false);
+  const [replayKey, setReplayKey] = useState<number>(0);
   const [phase, setPhase] = useState<Phase>("boot");
   const [resultUi, setResultUi] = useState<{
     score: number;
@@ -136,161 +137,34 @@ export default function ArcadePlayPage() {
     [game, lang, toast],
   );
 
-  // VEX SDK message bridge.
-  // Speaks the exact protocol that `/games/vex-sdk.js` uses:
-  //   - Game posts JSON-stringified envelopes shaped like
-  //     `{ source: 'vex-game-sdk', type, payload, id }`.
-  //   - Host must reply with `{ source: 'vex-platform', type, payload, id }`
-  //     using the SDK's expected reply names (`init_response`,
-  //     `session_end_response`, `debit_response`, `credit_response`,
-  //     `score_response`).
-  useEffect(() => {
-    if (!game || !user) return;
-    const expectedOrigin = window.location.origin;
-    const safeUser = user;
-    const safeGame = game;
-
-    function postReply(target: Window, type: string, payload: unknown, id?: number | string) {
-      // Send as a plain object (not stringified) — vex-sdk.js handles both,
-      // but the platform side stays consistent with object messages.
-      target.postMessage({ source: "vex-platform", type, payload, id }, expectedOrigin);
+  const handleBoot = useCallback(() => {
+    if (phase === "boot") {
+      setPhase("playing");
+      sessionStartRef.current = Date.now();
     }
+  }, [phase]);
 
-    function handleMessage(event: MessageEvent) {
-      if (event.origin !== expectedOrigin) return;
-      const iframe = iframeRef.current;
-      if (!iframe || event.source !== iframe.contentWindow) return;
+  const handleEndSession = useCallback(
+    (payload: { score: number; result: "win" | "loss" | "draw"; metadata?: Record<string, unknown> }) => {
+      submitResult(payload);
+    },
+    [submitResult],
+  );
 
-      // SDK posts as JSON string — parse it. Also accept raw objects from
-      // the lightweight VexGame fallback path for safety.
-      let data: unknown = event.data;
-      if (typeof data === "string") {
-        try { data = JSON.parse(data); } catch { return; }
-      }
-      if (!data || typeof data !== "object") return;
-      const msg = data as { source?: string; type?: string; id?: number | string; payload?: Record<string, unknown> };
-      if (msg.source !== "vex-game-sdk" || typeof msg.type !== "string") return;
-
-      const target = iframe.contentWindow;
-      if (!target) return;
-
-      switch (msg.type) {
-        case "game_init":
-        case "game_ping": {
-          // Establish the connection: SDK proceeds to "ready" only on
-          // receiving an `init_response`. Send player + session token.
-          postReply(
-            target,
-            "init_response",
-            {
-              player: {
-                id: safeUser.id,
-                username: safeUser.username ?? "",
-                balance: "0",
-                language: lang,
-                avatarUrl: (safeUser as { avatarUrl?: string }).avatarUrl ?? "",
-              },
-              sessionToken: `arcade_${safeGame.key}_${Date.now()}`,
-            },
-            msg.id,
-          );
-          if (phase === "boot") {
-            setPhase("playing");
-            sessionStartRef.current = Date.now();
-          }
-          break;
-        }
-        case "end_session": {
-          const p = (msg.payload ?? {}) as { score?: number; result?: string; metadata?: Record<string, unknown> };
-          const score = Math.max(0, Math.floor(Number(p.score) || 0));
-          const rawResult = (p.result ?? "draw").toString().toLowerCase();
-          const result: "win" | "loss" | "draw" =
-            rawResult === "win"
-              ? "win"
-              : rawResult === "loss" || rawResult === "lose"
-                ? "loss"
-                : rawResult === "draw"
-                  ? "draw"
-                  : score > 0 ? "win" : "loss";
-          // Persist first, then reply with the server payload so the SDK
-          // callback receives banter / personal-best / economy fields.
-          const savedId = msg.id;
-          submitResult({ score, result, metadata: p.metadata }).then((outcome) => {
-            const liveTarget = iframeRef.current?.contentWindow;
-            if (!liveTarget) return;
-            if (outcome.ok && outcome.data?.session) {
-              postReply(
-                liveTarget,
-                "session_end_response",
-                {
-                  success: true,
-                  session: outcome.data.session,
-                  banter: outcome.data.banter ?? null,
-                  economy: outcome.data.economy ?? null,
-                  personalBest: outcome.data.personalBest ?? outcome.data.session.score,
-                  previousBest: outcome.data.previousBest ?? 0,
-                  isPersonalBest: outcome.data.session.isPersonalBest === true,
-                },
-                savedId,
-              );
-            } else {
-              postReply(
-                liveTarget,
-                "session_end_response",
-                { success: false, error: outcome.error ?? "submit_failed" },
-                savedId,
-              );
-            }
-          });
-          break;
-        }
-        case "report_score": {
-          // Intermediate scores — no-op host-side for now.
-          postReply(target, "score_response", { success: true }, msg.id);
-          break;
-        }
-        case "debit":
-        case "credit": {
-          // Arcade games don't gate on balance from the iframe side — wallet
-          // moves happen server-side via /api/arcade/sessions when the run
-          // ends. Always succeed so the SDK callback fires.
-          postReply(
-            target,
-            msg.type === "debit" ? "debit_response" : "credit_response",
-            { success: true, newBalance: "0" },
-            msg.id,
-          );
-          break;
-        }
-        case "close_request": {
-          navigate("/games");
-          break;
-        }
-        default:
-          break;
-      }
-    }
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [game, user, lang, phase, submitResult, navigate]);
+  const handleInlineError = useCallback(
+    (error: string) => {
+      console.error("[ArcadeInline]", error);
+      setPhase("error");
+    },
+    [],
+  );
 
   const handleReplay = () => {
     submittedRef.current = false;
     setResultUi(null);
     setPhase("boot");
     sessionStartRef.current = Date.now();
-    if (iframeRef.current && game) {
-      iframeRef.current.src = `/games/${game.slug}/index.html?t=${Date.now()}`;
-    }
-  };
-
-  const handleFullscreen = () => {
-    const el = iframeRef.current;
-    if (!el) return;
-    const anyEl = el as HTMLIFrameElement & { webkitRequestFullscreen?: () => void };
-    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-    else if (anyEl.webkitRequestFullscreen) anyEl.webkitRequestFullscreen();
+    setReplayKey((k: number) => k + 1);
   };
 
   if (!game) {
@@ -348,28 +222,27 @@ export default function ArcadePlayPage() {
           <Button variant="ghost" size="sm" onClick={handleReplay} className="text-white hover:bg-white/10">
             <RotateCcw className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleFullscreen} className="text-white hover:bg-white/10">
-            <Maximize2 className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
-      {/* Iframe stage */}
-      <div className="relative flex-1 flex items-stretch justify-center bg-black">
+      {/* Inline game stage */}
+      <div className="relative flex-1 flex items-stretch justify-center bg-black overflow-hidden">
         {phase === "boot" && (
           <div className="absolute inset-0 grid place-items-center z-10 pointer-events-none">
             <Loader2 className="h-8 w-8 animate-spin text-white/70" />
           </div>
         )}
-        <iframe
-          ref={iframeRef}
-          src={iframeSrc}
-          title={title}
-          className="w-full h-full block bg-black"
-          allow="autoplay; gamepad; fullscreen"
-          sandbox="allow-scripts allow-same-origin allow-pointer-lock"
-          data-testid="arcade-game-iframe"
-        />
+        {phase !== "error" && (
+          <div key={replayKey} className="contents">
+            <ArcadeInlineLoader
+              gameSlug={slug}
+              lang={lang}
+              onBoot={handleBoot}
+              onEndSession={handleEndSession}
+              onError={handleInlineError}
+            />
+          </div>
+        )}
       </div>
 
       {/* Result overlay */}
@@ -405,13 +278,12 @@ export default function ArcadePlayPage() {
             </div>
             {resultUi.economy && !resultUi.economy.freePlay && (
               <div
-                className={`rounded-xl p-4 my-3 border ${
-                  resultUi.economy.netVex > 0
-                    ? "bg-gradient-to-br from-brand-gold/15 to-brand-gold/5 border-brand-gold/40"
-                    : resultUi.economy.netVex === 0
-                      ? "bg-white/5 border-white/15"
-                      : "bg-rose-500/10 border-rose-500/30"
-                }`}
+                className={`rounded-xl p-4 my-3 border ${resultUi.economy.netVex > 0
+                  ? "bg-gradient-to-br from-brand-gold/15 to-brand-gold/5 border-brand-gold/40"
+                  : resultUi.economy.netVex === 0
+                    ? "bg-white/5 border-white/15"
+                    : "bg-rose-500/10 border-rose-500/30"
+                  }`}
                 data-testid="card-arcade-economy"
               >
                 <div className="flex items-center justify-between mb-2">
