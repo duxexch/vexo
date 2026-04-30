@@ -1,7 +1,7 @@
 # File-provider configuration consumed by the running Traefik (currently the
 # `traefik-mrnn` compose project on the VPS). Router and service names are
 # preserved as `vex-http`, `vex-https`, `vex-service` to stay compatible with
-# the live deployment that is already routing vixo.click through these names.
+# the live deployment.
 #
 # The security middlewares + compression are now wired in here too so the
 # file-provider path serves the same hardened response as the Docker-label
@@ -10,8 +10,7 @@
 http:
   routers:
     vex-http:
-      rule: Host(`vexo.click`) || Host(`www.vexo.click`) || Host(`vixo.click`) ||
-        Host(`www.vixo.click`)
+      rule: Host(`vexo.click`) || Host(`www.vexo.click`)
       entryPoints:
         - web
       middlewares:
@@ -19,8 +18,7 @@ http:
       service: vex-service
 
     vex-https:
-      rule: Host(`vexo.click`) || Host(`www.vexo.click`) || Host(`vixo.click`) ||
-        Host(`www.vixo.click`)
+      rule: Host(`vexo.click`) || Host(`www.vexo.click`)
       entryPoints:
         - websecure
       tls:
