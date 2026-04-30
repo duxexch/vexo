@@ -10,7 +10,8 @@
 http:
   routers:
     vex-http:
-      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
+      rule: Host(`vexo.click`) || Host(`www.vexo.click`) || Host(`vixo.click`) ||
+        Host(`www.vixo.click`)
       entryPoints:
         - web
       middlewares:
@@ -18,7 +19,8 @@ http:
       service: vex-service
 
     vex-https:
-      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
+      rule: Host(`vexo.click`) || Host(`www.vexo.click`) || Host(`vixo.click`) ||
+        Host(`www.vixo.click`)
       entryPoints:
         - websecure
       tls:
@@ -44,7 +46,7 @@ http:
         stsIncludeSubdomains: true
         stsPreload: true
         forceSTSHeader: true
-        frameDeny: true
+        customFrameOptionsValue: "SAMEORIGIN"
         contentTypeNosniff: true
         browserXssFilter: true
         referrerPolicy: strict-origin-when-cross-origin

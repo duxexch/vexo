@@ -277,8 +277,8 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
       // when it fails ("Offending file: ${APK_PATH}").
       console.error(
         `[downloads] ${err.code} serving ${req.method} ${req.originalUrl} — ` +
-          `cannot read ${offendingPath}. Run: ls -l ${offendingPath} (expect 0644 owned by vexuser). ` +
-          `Recovery: bash scripts/server/refresh-android-binaries.sh`,
+        `cannot read ${offendingPath}. Run: ls -l ${offendingPath} (expect 0644 owned by vexuser). ` +
+        `Recovery: bash scripts/server/refresh-android-binaries.sh`,
       );
       // 503 Service Unavailable is more accurate than 500 here: the file
       // exists in the manifest but is temporarily unservable. Some CDNs
@@ -307,7 +307,7 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
         .setHeader("X-Content-Type-Options", "nosniff")
         .send(
           `Download unavailable: ${safeCode} on ${safeBasename}. ` +
-            `Operator: re-run refresh-android-binaries.sh and verify file mode is 0644.`,
+          `Operator: re-run refresh-android-binaries.sh and verify file mode is 0644.`,
         );
     },
   );
@@ -404,8 +404,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Security headers (Helmet-like protection without external dependency)
 app.use((req: Request, res: Response, next: NextFunction) => {
-  // Prevent clickjacking attacks
-  res.setHeader("X-Frame-Options", "DENY");
+  // Allow same-origin framing for arcade mini-games loaded in iframes.
+  // External embedding is still blocked; only vexo.click can frame itself.
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   // Prevent MIME type sniffing
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -458,7 +459,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       "media-src 'self' blob:; " +
       "worker-src 'self' blob:; " +
       "object-src 'none'; " +
-      "frame-ancestors 'none'; " +
+      "frame-ancestors 'self'; " +
       "base-uri 'self'; " +
       "form-action 'self'; " +
       "upgrade-insecure-requests; " +
