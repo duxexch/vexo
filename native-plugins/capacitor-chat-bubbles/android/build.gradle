@@ -24,12 +24,12 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-ktx:1.17.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation project(':capacitor-android')
     // Firebase Messaging — supplied by the host app's google-services
     // plugin. Declared here so ChatBubblesFcmService compiles inside
     // the plugin module. Mirrors the pattern used in
     // capacitor-native-call-ui (#88).
-    implementation 'com.google.firebase:firebase-messaging:23.4.1'
+    implementation 'com.google.firebase:firebase-messaging:25.0.1'
 }
