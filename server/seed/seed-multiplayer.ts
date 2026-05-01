@@ -119,6 +119,25 @@ export async function seedMultiplayerGames() {
       maxPlayers: 2,
       sortOrder: 6,
     },
+    {
+      name: "Aim Trainer",
+      description: "Test your reflexes and precision. Click targets as fast and accurate as you can!",
+      category: "action",
+      sections: ["challenges", "multiplayer"],
+      gameType: "multiplayer",
+      status: "active",
+      rtp: "100.00",
+      houseEdge: "0.00",
+      volatility: "low",
+      minBet: "1.00",
+      maxBet: "500.00",
+      multiplierMin: "1.00",
+      multiplierMax: "2.00",
+      isFeatured: true,
+      minPlayers: 1,
+      maxPlayers: 2,
+      sortOrder: 7,
+    },
   ];
 
   let addedCount = 0;

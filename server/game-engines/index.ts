@@ -5,6 +5,7 @@ import { dominoEngine } from './domino';
 import { tarneebEngine } from './tarneeb';
 import { balootEngine } from './baloot';
 import { languageDuelEngine } from './languageduel';
+import { aimTrainerEngine } from './aim-trainer';
 
 const engines: Map<string, GameEngine> = new Map();
 
@@ -14,6 +15,7 @@ engines.set('domino', dominoEngine);
 engines.set('tarneeb', tarneebEngine);
 engines.set('baloot', balootEngine);
 engines.set('languageduel', languageDuelEngine);
+engines.set('aim_trainer', aimTrainerEngine);
 
 export function getGameEngine(gameType: string): GameEngine | undefined {
   return engines.get(gameType);
@@ -34,3 +36,4 @@ export { dominoEngine } from './domino';
 export { tarneebEngine } from './tarneeb';
 export { balootEngine } from './baloot';
 export { languageDuelEngine } from './languageduel';
+export { aimTrainerEngine } from './aim-trainer';

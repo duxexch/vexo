@@ -97,6 +97,7 @@ const BackgammonGamePage = lazy(() => import("@/pages/games/BackgammonGame"));
 const DominoGamePage = lazy(() => import("@/pages/games/DominoGame"));
 const TarneebGamePage = lazy(() => import("@/pages/games/TarneebGame"));
 const BalootGamePage = lazy(() => import("@/pages/games/BalootGame"));
+const AimTrainerGamePage = lazy(() => import("@/pages/games/AimTrainerGame"));
 const PlayerProfilePage = lazy(() => import("@/pages/player-profile"));
 const LeaderboardPage = lazy(() => import("@/pages/leaderboard"));
 const SeasonalLeaderboardPage = lazy(() => import("@/pages/seasonal-leaderboard"));
@@ -737,111 +738,111 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return (
         <NotificationProvider>
             <PrivateCallLayerProvider>
-              <CallSessionProvider>
-                <SidebarProvider style={style as React.CSSProperties}>
-                    <div className="flex h-screen w-full" dir={dir}>
-                        <a
-                            href="#main-content"
-                            className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2"
-                        >
-                            {t("nav.skipToContent") || "Skip to content"}
-                        </a>
-                        <AppSidebar side={sidebarSide} />
-                        <div className="flex flex-col flex-1 overflow-hidden">
-                            <header className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-                                <SidebarTrigger
-                                    className="h-9 w-9"
-                                    aria-label={t("nav.navigation") || "Navigation"}
-                                    data-testid="button-sidebar-toggle"
-                                />
-                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-visible">
-                                    {/* Primary action — one-tap deposit. Render a single anchor
-                                        styled as a button (no a>button nesting) via Button's asChild slot. */}
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                asChild
-                                                variant="default"
-                                                size="sm"
-                                                className="gap-1.5 font-semibold shadow-sm h-9"
-                                            >
-                                                <Link
-                                                    href="/wallet?modal=deposit"
-                                                    aria-label={t("wallet.deposit") || "Deposit"}
-                                                    data-testid="button-header-deposit"
-                                                >
-                                                    <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
-                                                    <span className="hidden sm:inline">{t("wallet.deposit") || "Deposit"}</span>
-                                                </Link>
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">{t("wallet.deposit") || "Deposit"}</TooltipContent>
-                                    </Tooltip>
-
-                                    {/* Visual separator between the action and the tools cluster */}
-                                    <span
-                                        aria-hidden="true"
-                                        className="hidden sm:block h-6 w-px bg-border/70 mx-0.5"
-                                    />
-
-                                    {/* Tools cluster — wallet emphasised with subtle accent */}
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                asChild
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-9 w-9 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
-                                            >
-                                                <Link
-                                                    href="/wallet"
-                                                    aria-label={t("nav.wallet") || "Wallet"}
-                                                    data-testid="button-header-wallet"
-                                                >
-                                                    <Wallet className="h-[18px] w-[18px]" />
-                                                </Link>
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
-                                    </Tooltip>
-                                    {isHomeRoute && (
-                                        <Suspense fallback={null}>
-                                            <SupportChatHeaderTrigger isLoggedIn={true} />
-                                        </Suspense>
-                                    )}
-                                    <ThemeToggle />
-                                    <NotificationBell />
-                                    <Suspense fallback={null}>
-                                        <LanguageSwitcher />
-                                    </Suspense>
-                                </div>
-                            </header>
-                            <main
-                                id="main-content"
-                                ref={mainContentRef}
-                                onScroll={handleMainContentScroll}
-                                className="flex-1 overflow-auto animate-page-enter pb-[calc(env(safe-area-inset-bottom)+7.25rem)] md:pb-0"
+                <CallSessionProvider>
+                    <SidebarProvider style={style as React.CSSProperties}>
+                        <div className="flex h-screen w-full" dir={dir}>
+                            <a
+                                href="#main-content"
+                                className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2"
                             >
-                                {children}
-                            </main>
-                            <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} isVisible={isBottomNavVisible} />
+                                {t("nav.skipToContent") || "Skip to content"}
+                            </a>
+                            <AppSidebar side={sidebarSide} />
+                            <div className="flex flex-col flex-1 overflow-hidden">
+                                <header className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+                                    <SidebarTrigger
+                                        className="h-9 w-9"
+                                        aria-label={t("nav.navigation") || "Navigation"}
+                                        data-testid="button-sidebar-toggle"
+                                    />
+                                    <div className="flex items-center gap-1.5 sm:gap-2 overflow-visible">
+                                        {/* Primary action — one-tap deposit. Render a single anchor
+                                        styled as a button (no a>button nesting) via Button's asChild slot. */}
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    asChild
+                                                    variant="default"
+                                                    size="sm"
+                                                    className="gap-1.5 font-semibold shadow-sm h-9"
+                                                >
+                                                    <Link
+                                                        href="/wallet?modal=deposit"
+                                                        aria-label={t("wallet.deposit") || "Deposit"}
+                                                        data-testid="button-header-deposit"
+                                                    >
+                                                        <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
+                                                        <span className="hidden sm:inline">{t("wallet.deposit") || "Deposit"}</span>
+                                                    </Link>
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom">{t("wallet.deposit") || "Deposit"}</TooltipContent>
+                                        </Tooltip>
+
+                                        {/* Visual separator between the action and the tools cluster */}
+                                        <span
+                                            aria-hidden="true"
+                                            className="hidden sm:block h-6 w-px bg-border/70 mx-0.5"
+                                        />
+
+                                        {/* Tools cluster — wallet emphasised with subtle accent */}
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
+                                                >
+                                                    <Link
+                                                        href="/wallet"
+                                                        aria-label={t("nav.wallet") || "Wallet"}
+                                                        data-testid="button-header-wallet"
+                                                    >
+                                                        <Wallet className="h-[18px] w-[18px]" />
+                                                    </Link>
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
+                                        </Tooltip>
+                                        {isHomeRoute && (
+                                            <Suspense fallback={null}>
+                                                <SupportChatHeaderTrigger isLoggedIn={true} />
+                                            </Suspense>
+                                        )}
+                                        <ThemeToggle />
+                                        <NotificationBell />
+                                        <Suspense fallback={null}>
+                                            <LanguageSwitcher />
+                                        </Suspense>
+                                    </div>
+                                </header>
+                                <main
+                                    id="main-content"
+                                    ref={mainContentRef}
+                                    onScroll={handleMainContentScroll}
+                                    className="flex-1 overflow-auto animate-page-enter pb-[calc(env(safe-area-inset-bottom)+7.25rem)] md:pb-0"
+                                >
+                                    {children}
+                                </main>
+                                <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} isVisible={isBottomNavVisible} />
+                            </div>
+                            <ChatBottomSheet
+                                isOpen={isChatOpen}
+                                onClose={toggleChat}
+                            />
                         </div>
-                        <ChatBottomSheet
-                            isOpen={isChatOpen}
-                            onClose={toggleChat}
-                        />
-                    </div>
-                    <Suspense fallback={null}>
-                        <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
-                    </Suspense>
-                    {/* Task #89: Messenger-style floating chat bubbles. Mounted
+                        <Suspense fallback={null}>
+                            <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
+                        </Suspense>
+                        {/* Task #89: Messenger-style floating chat bubbles. Mounted
                         inside PrivateCallLayerProvider so it can suppress
                         bubbles while the user is on a private call. */}
-                    <Suspense fallback={null}>
-                        <ChatBubblesLayer />
-                    </Suspense>
-                </SidebarProvider>
-              </CallSessionProvider>
+                        <Suspense fallback={null}>
+                            <ChatBubblesLayer />
+                        </Suspense>
+                    </SidebarProvider>
+                </CallSessionProvider>
             </PrivateCallLayerProvider>
         </NotificationProvider>
     );
@@ -1082,6 +1083,7 @@ export default function PrivateRoutes() {
                         <Route path="/game/domino/:sessionId">{() => <ErrorBoundary><DominoGamePage /></ErrorBoundary>}</Route>
                         <Route path="/game/tarneeb/:sessionId">{() => <ErrorBoundary><TarneebGamePage /></ErrorBoundary>}</Route>
                         <Route path="/game/baloot/:sessionId">{() => <ErrorBoundary><BalootGamePage /></ErrorBoundary>}</Route>
+                        <Route path="/game/aim_trainer/:sessionId">{() => <ErrorBoundary><AimTrainerGamePage /></ErrorBoundary>}</Route>
                         <Route path="/p2p">{() => <ErrorBoundary><P2PPage /></ErrorBoundary>}</Route>
                         <Route path="/p2p/profile/:userId?">{() => <ErrorBoundary><P2PProfilePage /></ErrorBoundary>}</Route>
                         <Route path="/p2p/settings">{() => <ErrorBoundary><P2PSettingsPage /></ErrorBoundary>}</Route>
