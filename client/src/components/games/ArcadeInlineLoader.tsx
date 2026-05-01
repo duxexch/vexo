@@ -10,22 +10,34 @@ interface Props {
 }
 
 const SDK_BLACKLIST = ["/games/vex-sdk.js", "/games/_shared/vex-game.js"];
+const BOOT_FALLBACK_MS = 2500;
 
 export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSession, onReportScore, onError }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const bootedRef = useRef(false);
 
   const cleanup = useCallback(() => {
-    if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null; }
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     cleanup();
+    bootedRef.current = false;
     const container = containerRef.current;
     if (!container) return;
 
+    const triggerBoot = () => {
+      if (bootedRef.current) return;
+      bootedRef.current = true;
+      onBoot();
+    };
+
     const bridge = {
-      init: () => onBoot(),
+      init: () => triggerBoot(),
       endSession: (p: any) => onEndSession({ score: p.score ?? 0, result: p.result ?? "draw", metadata: p.metadata ?? {} }),
       reportScore: (p: any) => onReportScore?.({ score: p.score ?? 0, metadata: p.metadata ?? {} }),
     };
@@ -34,14 +46,14 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
 
     // Provide inline VEX shim
     (window as any).VEX = {
-      init: (config: any) => { bridge.init(); if (config?.onReady) config.onReady({ language: lang, id: 0 }); },
+      init: (config: any) => { triggerBoot(); if (config?.onReady) config.onReady({ language: lang, id: 0 }); },
       endSession: (p: any) => bridge.endSession(p),
       reportScore: (p: any) => bridge.reportScore(p),
     };
 
     (window as any).VexGame = {
       boot: (opts: any) => {
-        bridge.init();
+        triggerBoot();
         if (opts?.onReady) opts.onReady({ language: lang, id: 0 });
       },
       endSession: (p: any) => bridge.endSession(p),
@@ -53,6 +65,7 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
       unlockScroll: () => { document.body.style.overflow = ""; },
     };
 
+    const bootTimer = window.setTimeout(triggerBoot, BOOT_FALLBACK_MS);
     const gameUrl = `/games/${gameSlug}/index.html`;
     let aborted = false;
     let injectedScripts: HTMLScriptElement[] = [];
@@ -65,7 +78,6 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
 
-        // Inject styles
         doc.querySelectorAll('style').forEach(node => {
           const s = document.createElement("style");
           s.textContent = node.textContent ?? "";
@@ -73,7 +85,6 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
           injectedStyles.push(s);
         });
 
-        // Inject link stylesheets
         doc.querySelectorAll('link[rel="stylesheet"]').forEach(node => {
           const href = node.getAttribute("href");
           if (!href) return;
@@ -83,13 +94,11 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
           container.appendChild(link);
         });
 
-        // Inject body HTML (excluding scripts)
         const tempDiv = document.createElement("div");
         tempDiv.innerHTML = doc.body.innerHTML;
         tempDiv.querySelectorAll("script").forEach(s => s.remove());
         Array.from(tempDiv.childNodes).forEach(n => container.appendChild(n));
 
-        // Inject scripts (skip SDK/bridge scripts)
         doc.querySelectorAll("script[src]").forEach(node => {
           const src = node.getAttribute("src");
           if (!src || SDK_BLACKLIST.some(b => src.endsWith(b))) return;
@@ -100,7 +109,6 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
           injectedScripts.push(s);
         });
 
-        // Inject inline scripts
         doc.querySelectorAll("script:not([src])").forEach(node => {
           const s = document.createElement("script");
           s.textContent = node.textContent ?? "";
@@ -108,7 +116,6 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
           injectedScripts.push(s);
         });
 
-        // Some games define init inline, so ensure the shim is visible
         const shim = document.createElement("script");
         shim.textContent = `window.VEX = window.VEX || { init: function(c){ if(c && c.onReady) c.onReady({language:'${lang}',id:0}); }, endSession: function(p){ if(window.__ARCADE_BRIDGE__) window.__ARCADE_BRIDGE__.endSession(p); }, reportScore: function(p){ if(window.__ARCADE_BRIDGE__) window.__ARCADE_BRIDGE__.reportScore(p); } }; window.VexGame = window.VexGame || { boot: function(o){ if(o && o.onReady) o.onReady({language:'${lang}',id:0}); }, endSession: function(p){ if(window.VEX && window.VEX.endSession) window.VEX.endSession(p); }, reportScore: function(p){ if(window.VEX && window.VEX.reportScore) window.VEX.reportScore(p); } };`;
         container.appendChild(shim);
@@ -118,6 +125,7 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
 
     cleanupRef.current = () => {
       aborted = true;
+      window.clearTimeout(bootTimer);
       delete (window as any).__ARCADE_BRIDGE__;
       delete (window as any).VEX;
       delete (window as any).VexGame;

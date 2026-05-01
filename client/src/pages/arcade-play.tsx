@@ -5,7 +5,8 @@ import { useI18n } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, RotateCcw, Trophy, Star, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Loader2, RotateCcw, Trophy, Star, Sparkles, Users, Globe, Monitor, User } from "lucide-react";
 import { getArcadeGame, gameKeyToSlug, isArcadeGameKey } from "@shared/arcade-games";
 import ArcadeInlineLoader from "@/components/games/ArcadeInlineLoader";
 
@@ -38,7 +39,7 @@ interface ArcadeSubmitResponse {
   economy?: ArcadeEconomy;
 }
 
-type Phase = "boot" | "playing" | "ended" | "error";
+type Phase = "mode" | "boot" | "playing" | "ended" | "error";
 
 const RARITY_BADGE_BG = {
   jackpot: "#ffb627",
@@ -57,6 +58,8 @@ const NET_VEX_FG = {
   zero: "#fff",
 } as const;
 
+const BOOT_FALLBACK_MS = 2500;
+
 export default function ArcadePlayPage() {
   const { gameKey: rawKey } = useParams<{ gameKey: string }>();
   const [, navigate] = useLocation();
@@ -65,8 +68,10 @@ export default function ArcadePlayPage() {
   const { toast } = useToast();
   const sessionStartRef = useRef<number>(Date.now());
   const submittedRef = useRef<boolean>(false);
+  const bootTimerRef = useRef<number | null>(null);
   const [replayKey, setReplayKey] = useState<number>(0);
-  const [phase, setPhase] = useState<Phase>("boot");
+  const [phase, setPhase] = useState<Phase>("mode");
+  const [playMode, setPlayMode] = useState<"online" | "local">("online");
   const [resultUi, setResultUi] = useState<{
     score: number;
     result: string;
@@ -85,6 +90,13 @@ export default function ArcadePlayPage() {
       setPhase("error");
     }
   }, [rawKey]);
+
+  const clearBootTimer = useCallback(() => {
+    if (bootTimerRef.current) {
+      window.clearTimeout(bootTimerRef.current);
+      bootTimerRef.current = null;
+    }
+  }, []);
 
   const submitResult = useCallback(
     async (payload: {
@@ -137,16 +149,29 @@ export default function ArcadePlayPage() {
     [game, lang, toast],
   );
 
+  const beginGame = useCallback((mode: "online" | "local") => {
+    setPlayMode(mode);
+    submittedRef.current = false;
+    setResultUi(null);
+    setPhase("boot");
+    sessionStartRef.current = Date.now();
+    clearBootTimer();
+    bootTimerRef.current = window.setTimeout(() => {
+      setPhase((current) => (current === "boot" ? "playing" : current));
+    }, BOOT_FALLBACK_MS);
+  }, [clearBootTimer]);
+
   const handleBoot = useCallback(() => {
+    clearBootTimer();
     if (phase === "boot") {
       setPhase("playing");
       sessionStartRef.current = Date.now();
     }
-  }, [phase]);
+  }, [clearBootTimer, phase]);
 
   const handleEndSession = useCallback(
     (payload: { score: number; result: "win" | "loss" | "draw"; metadata?: Record<string, unknown> }) => {
-      submitResult(payload);
+      void submitResult(payload);
     },
     [submitResult],
   );
@@ -162,10 +187,15 @@ export default function ArcadePlayPage() {
   const handleReplay = () => {
     submittedRef.current = false;
     setResultUi(null);
-    setPhase("boot");
+    setPhase("mode");
+    clearBootTimer();
     sessionStartRef.current = Date.now();
     setReplayKey((k: number) => k + 1);
   };
+
+  useEffect(() => {
+    return () => clearBootTimer();
+  }, [clearBootTimer]);
 
   if (!game) {
     return (
@@ -185,11 +215,71 @@ export default function ArcadePlayPage() {
 
   const slug = gameKeyToSlug(game.key);
   const title = lang === "ar" ? game.titleAr : game.titleEn;
-  const iframeSrc = `/games/${slug}/index.html`;
+
+  if (phase === "mode") {
+    return (
+      <div className="min-h-[100svh] bg-gradient-to-b from-[#070b14] via-[#0a0f1a] to-[#040713] text-white flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 sm:p-8 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="h-12 w-12 rounded-2xl grid place-items-center text-2xl shrink-0"
+              style={{ background: `linear-gradient(135deg, ${game.color}, ${game.color}aa)`, boxShadow: `0 0 18px -3px ${game.color}` }}
+            >
+              {game.iconEmoji}
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold truncate">{title}</h1>
+              <p className="text-sm text-slate-300">{lang === "ar" ? "اختر طريقة اللعب قبل البدء" : "Choose how you want to play"}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Monitor className="h-4 w-4 text-cyan-300" />
+                <span className="font-semibold">{lang === "ar" ? "أونلاين" : "Online"}</span>
+                <Badge variant="secondary" className="ms-auto">{lang === "ar" ? "مستحسن" : "Recommended"}</Badge>
+              </div>
+              <p className="text-sm text-slate-300 mb-3">
+                {lang === "ar"
+                  ? "اللاعبون يتصلون من أجهزة مختلفة والجلسة تُسجل على السيرفر."
+                  : "Players can join from different devices and the session is saved on the server."}
+              </p>
+              <Button className="w-full min-h-[44px]" onClick={() => beginGame("online")}>
+                <Globe className="h-4 w-4 me-2" />
+                {lang === "ar" ? "ابدأ أونلاين" : "Start online"}
+              </Button>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="h-4 w-4 text-fuchsia-300" />
+                <span className="font-semibold">{lang === "ar" ? "محلي" : "Local"}</span>
+              </div>
+              <p className="text-sm text-slate-300 mb-3">
+                {lang === "ar"
+                  ? "وضع تجريبي لنفس الجهاز، مفيد للاختبار فقط."
+                  : "Single-device test mode, useful only for local testing."}
+              </p>
+              <Button variant="outline" className="w-full min-h-[44px]" onClick={() => beginGame("local")}>
+                <Users className="h-4 w-4 me-2" />
+                {lang === "ar" ? "ابدأ محلي" : "Start local"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-xs text-slate-400">
+            {lang === "ar"
+              ? "تنبيه: الألعاب التي تدعم أكثر من لاعب ستعمل أونلاين افتراضيًا، وليس على نفس الجهاز."
+              : "Note: multiplayer-capable games default to online play, not same-device play."}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100svh] bg-gradient-to-b from-[#070b14] via-[#0a0f1a] to-[#040713] text-white flex flex-col">
-      {/* Top bar */}
       <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-white/10 bg-black/40 backdrop-blur">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Button
@@ -210,11 +300,14 @@ export default function ArcadePlayPage() {
           <div className="min-w-0">
             <div className="font-bold text-sm sm:text-base truncate">{title}</div>
             <div className="text-[11px] sm:text-xs text-slate-400 truncate">
-              {game.kind === "solo"
+              {(game.kind === "solo"
                 ? lang === "ar" ? "لاعب واحد" : "Single player"
                 : game.kind === "duo"
                   ? lang === "ar" ? "1-2 لاعبين" : "1-2 players"
-                  : lang === "ar" ? "2-8 لاعبين" : "2-8 players"}
+                  : lang === "ar" ? "2-8 لاعبين" : "2-8 players") +
+                (playMode === "online"
+                  ? (lang === "ar" ? " · أونلاين" : " · Online")
+                  : (lang === "ar" ? " · محلي" : " · Local"))}
             </div>
           </div>
         </div>
@@ -225,7 +318,6 @@ export default function ArcadePlayPage() {
         </div>
       </div>
 
-      {/* Inline game stage */}
       <div className="relative flex-1 flex items-stretch justify-center bg-black overflow-hidden">
         {phase === "boot" && (
           <div className="absolute inset-0 grid place-items-center z-10 pointer-events-none">
@@ -243,9 +335,15 @@ export default function ArcadePlayPage() {
             />
           </div>
         )}
+        {phase === "boot" && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-300 bg-black/50 border border-white/10 rounded-full px-3 py-1">
+            {playMode === "online"
+              ? (lang === "ar" ? "جارٍ إعداد جلسة أونلاين..." : "Preparing online session...")
+              : (lang === "ar" ? "جارٍ إعداد جلسة محلية..." : "Preparing local session...")}
+          </div>
+        )}
       </div>
 
-      {/* Result overlay */}
       {phase === "ended" && resultUi && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl p-6 text-center bg-gradient-to-b from-[#10172a] to-[#070b14] border border-white/10 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.8)]">
@@ -276,6 +374,7 @@ export default function ArcadePlayPage() {
                 <div className="text-2xl font-bold text-white">{resultUi.personalBest}</div>
               </div>
             </div>
+
             {resultUi.economy && !resultUi.economy.freePlay && (
               <div
                 className={`rounded-xl p-4 my-3 border ${resultUi.economy.netVex > 0
@@ -342,8 +441,7 @@ export default function ArcadePlayPage() {
                     {lang === "ar" ? "الرسوم" : "Entry"}: {resultUi.economy.entryCostVex} VEX
                   </span>
                   <span>
-                    {lang === "ar" ? "صافي الجائزة" : "Payout"}:{" "}
-                    {resultUi.economy.rewardVex.toFixed(2)} VEX
+                    {lang === "ar" ? "صافي الجائزة" : "Payout"}: {resultUi.economy.rewardVex.toFixed(2)} VEX
                   </span>
                 </div>
                 <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
@@ -356,6 +454,7 @@ export default function ArcadePlayPage() {
                 </div>
               </div>
             )}
+
             {resultUi.economy?.freePlay && (
               <div
                 className="rounded-xl p-3 my-3 border border-blue-500/30 bg-blue-500/10 text-center text-xs text-blue-200"
@@ -366,6 +465,7 @@ export default function ArcadePlayPage() {
                   : "Free play mode — no entry fee or reward"}
               </div>
             )}
+
             {resultUi.banter && (
               <div className="text-sm text-slate-200 mb-4 px-2 py-3 rounded-xl bg-white/5 border border-white/10 flex gap-2 items-start">
                 <Sparkles className="h-4 w-4 text-brand-gold shrink-0 mt-0.5" />
@@ -374,6 +474,7 @@ export default function ArcadePlayPage() {
                 </span>
               </div>
             )}
+
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
