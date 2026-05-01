@@ -1,481 +1,703 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>VEX Air Hockey</title>
-<link rel="stylesheet" href="/games/_shared/vex-game.css">
-<style>
-  .ah-arena {
-    width: 100%; max-width: 360px; margin: 0 auto;
-    aspect-ratio: 3/4;
-    background:
-      radial-gradient(ellipse 80% 25% at 50% 0%, rgba(239,68,68,0.18), transparent 60%),
-      radial-gradient(ellipse 80% 25% at 50% 100%, rgba(34,197,94,0.18), transparent 60%),
-      radial-gradient(ellipse 70% 50% at 50% 50%, rgba(255,255,255,0.06), transparent 70%),
-      linear-gradient(180deg,#0e3a72 0%,#04173a 100%);
-    border: 1px solid rgba(30,136,255,0.45);
-    border-radius: 18px;
-    position: relative; overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -2px 0 rgba(0,0,0,0.55),
-      inset 0 0 30px rgba(30,136,255,0.20),
-      0 14px 28px -10px rgba(0,0,0,0.7);
-    touch-action: none;
-  }
-  /* ice-rink scratches (sweeping shimmer) */
-  .ah-arena::before {
-    content:""; position:absolute; inset:-8% -8%; pointer-events:none; z-index:0;
-    background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.07) 50%, transparent 65%);
-    animation: vexBeamSweep 7s ease-in-out infinite;
-    will-change: transform, opacity;
-  }
-  /* faint grid */
-  .ah-arena::after {
-    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-    background-size: 28px 28px;
-    mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
-  }
-  .ah-canvas { position:relative; z-index:1; width:100%; height:100%; display:block; }
-  .ah-mode-row {
-    display: flex; gap: 10px; justify-content: center; margin-bottom: 14px;
-  }
-  .ah-mode-btn {
-    flex: 1; max-width: 140px; padding: 11px;
-    background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px;
-    color: var(--vex-text-dim); font-family: inherit;
-    font-size: 0.92rem; font-weight: 700; letter-spacing: 0.04em;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -2px 0 rgba(0,0,0,0.45),
-      0 3px 0 #050912,
-      0 5px 10px rgba(0,0,0,0.4);
-    transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
-  }
-  .ah-mode-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
-  .ah-mode-btn.active {
-    background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 100%);
-    color: #fff;
-    border-color: rgba(255,255,255,0.18);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 3px 0 #0a3a78,
-      0 6px 16px -2px rgba(30,136,255,0.55);
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>VEX Air Hockey</title>
+  <link rel="stylesheet" href="/games/_shared/vex-game.css">
+  <style>
+    :root {
+      --ah-blue: #1e88ff;
+      --ah-blue-soft: #4a9eff;
+      --ah-green: #22c55e;
+      --ah-red: #ef4444;
+      --ah-gold: #ffb627;
+      --ah-ice: #07182f;
+    }
+
+    body.vex-game {
+      background:
+        radial-gradient(circle at 50% 0%, rgba(30, 136, 255, 0.18), transparent 35%),
+        linear-gradient(180deg, #050816 0%, #040713 100%);
+    }
+
+    .ah-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ah-hero {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(12, 18, 34, 0.96), rgba(6, 10, 20, 0.92));
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 18px 36px -20px rgba(0, 0, 0, 0.75);
+    }
+
+    .ah-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .ah-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ah-badge {
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.06);
+      color: #e5eefc;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .ah-badge.active {
+      background: rgba(30, 136, 255, 0.18);
+      border-color: rgba(30, 136, 255, 0.45);
+      color: #fff;
+    }
+
+    .ah-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .ah-stat {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .ah-stat-label {
+      font-size: 11px;
+      color: rgba(229, 238, 252, 0.7);
+      margin-bottom: 4px;
+    }
+
+    .ah-stat-value {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .ah-mode-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .ah-mode-btn {
+      flex: 1;
+      min-width: 130px;
+      max-width: 170px;
+      padding: 11px 12px;
+      background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      color: var(--vex-text-dim);
+      font-family: inherit;
+      font-size: 0.92rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 3px 0 #050912;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
+    }
+
+    .ah-mode-btn:active {
+      transform: translateY(2px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 1px 0 #050912;
+    }
+
+    .ah-mode-btn.active {
+      background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 100%);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), inset 0 -2px 0 rgba(0, 0, 0, 0.30), 0 3px 0 #0a3a78, 0 6px 16px -2px rgba(30, 136, 255, 0.55);
+    }
+
+    .ah-arena {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      aspect-ratio: 3/4;
+      background:
+        radial-gradient(ellipse 80% 25% at 50% 0%, rgba(239, 68, 68, 0.18), transparent 60%),
+        radial-gradient(ellipse 80% 25% at 50% 100%, rgba(34, 197, 94, 0.18), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 50% 50%, rgba(255, 255, 255, 0.06), transparent 70%),
+        linear-gradient(180deg, #0e3a72 0%, #04173a 100%);
+      border: 1px solid rgba(30, 136, 255, 0.45);
+      border-radius: 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.55),
+        inset 0 0 30px rgba(30, 136, 255, 0.20),
+        0 14px 28px -10px rgba(0, 0, 0, 0.7);
+      touch-action: none;
+    }
+
+    .ah-arena::before {
+      content: "";
+      position: absolute;
+      inset: -8% -8%;
+      pointer-events: none;
+      z-index: 0;
+      background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.07) 50%, transparent 65%);
+      animation: vexBeamSweep 7s ease-in-out infinite;
+      will-change: transform, opacity;
+    }
+
+    .ah-arena::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
+    }
+
+    .ah-canvas {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .ah-hint {
+      text-align: center;
+      color: rgba(229, 238, 252, 0.75);
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 0 8px;
+    }
+
+    .ah-footer-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .ah-pill {
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: #e8f0ff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+  </style>
 </head>
+
 <body class="vex-game">
-<div class="vex-shell">
-  <div class="vex-header">
-    <div class="vex-title">
-      <div class="vex-title-badge primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+  <div class="vex-shell">
+    <div class="ah-hero">
+      <div class="vex-header">
+        <div class="vex-title">
+          <div class="vex-title-badge primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <span id="title">هوكي الهواء</span>
+        </div>
+        <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
       </div>
-      <span id="title">هوكي الهواء</span>
+
+      <div class="ah-title-row" style="margin-top:12px;">
+        <div class="ah-badges">
+          <span class="ah-badge active" id="badgeMode">AI</span>
+          <span class="ah-badge" id="badgeTarget">7</span>
+          <span class="ah-badge" id="badgeDifficulty">Balanced</span>
+        </div>
+        <div class="ah-pill" id="livePace">0.0s / goal</div>
+      </div>
     </div>
-    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
-  </div>
 
-  <div class="ah-mode-row">
-    <button class="ah-mode-btn active" data-mode="ai" id="modeAi">ضد الذكاء</button>
-    <button class="ah-mode-btn" data-mode="2p" id="mode2p">لاعبان</button>
-  </div>
-
-  <div class="vex-stats">
-    <div class="vex-stat"><div class="vex-stat-label" id="lblP1">لاعب 1</div><div class="vex-stat-value emerald" id="p1">0</div></div>
-    <div class="vex-stat"><div class="vex-stat-label" id="lblTo">للفوز</div><div class="vex-stat-value gold">7</div></div>
-    <div class="vex-stat"><div class="vex-stat-label" id="lblP2">لاعب 2</div><div class="vex-stat-value rose" id="p2">0</div></div>
-  </div>
-
-  <div class="ah-arena" id="arena">
-    <canvas class="ah-canvas" id="cv" width="360" height="480"></canvas>
-  </div>
-
-  <div class="vex-hint" id="hint">اسحب المضرب الأخضر في النصف السفلي. اللاعب الثاني يتحكم بالأحمر فوق.</div>
-</div>
-
-<div class="vex-overlay" id="endOverlay">
-  <div class="vex-overlay-card">
-    <div class="vex-overlay-icon primary">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    <div class="ah-mode-row">
+      <button class="ah-mode-btn active" data-mode="ai" id="modeAi">ضد الذكاء</button>
+      <button class="ah-mode-btn" data-mode="2p" id="mode2p">لاعبان</button>
     </div>
-    <div class="vex-overlay-title" id="endTitle">فوز!</div>
-    <div class="vex-overlay-subtitle" id="endSub"></div>
-    <div class="vex-btn-row">
-      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+
+    <div class="vex-stats">
+      <div class="vex-stat">
+        <div class="vex-stat-label" id="lblP1">لاعب 1</div>
+        <div class="vex-stat-value emerald" id="p1">0</div>
+      </div>
+      <div class="vex-stat">
+        <div class="vex-stat-label" id="lblTo">للفوز</div>
+        <div class="vex-stat-value gold" id="targetScore">7</div>
+      </div>
+      <div class="vex-stat">
+        <div class="vex-stat-label" id="lblP2">لاعب 2</div>
+        <div class="vex-stat-value rose" id="p2">0</div>
+      </div>
+    </div>
+
+    <div class="ah-arena" id="arena">
+      <canvas class="ah-canvas" id="cv" width="420" height="560"></canvas>
+    </div>
+
+    <div class="ah-hint" id="hint">اسحب المضرب الأخضر في النصف السفلي. كل اصطدام نظيف يرفع فرصتك في التسديدة التالية.
+    </div>
+
+    <div class="ah-footer-row">
+      <span class="ah-pill" id="scoreSummary">0 - 0</span>
+      <span class="ah-pill" id="rallySummary">Rally 0</span>
+      <span class="ah-pill" id="speedSummary">Speed 0</span>
     </div>
   </div>
-</div>
 
-<script src="/games/vex-sdk.js"></script>
-<script src="/games/_shared/vex-game.js"></script>
-<script>
-(function(){
-  'use strict';
-  const STRINGS = {
-    ar:{ title:'هوكي الهواء', reset:'إعادة', vsAi:'ضد الذكاء', twoP:'لاعبان',
-      p1:'لاعب 1', p2:'لاعب 2', to:'للفوز',
-      win1:'فاز اللاعب 1!', win2:'فاز اللاعب 2!', winAi:'فاز الذكاء',
-      newRound:'جولة جديدة',
-      hint:'اسحب المضرب الأخضر في النصف السفلي. اللاعب الثاني يتحكم بالأحمر فوق.',
-      hintAi:'اسحب المضرب الأخضر بالنصف السفلي. الذكاء يتحكم بالأحمر فوق.', },
-    en:{ title:'Air Hockey', reset:'Reset', vsAi:'vs AI', twoP:'2 players',
-      p1:'Player 1', p2:'Player 2', to:'To win',
-      win1:'Player 1 wins!', win2:'Player 2 wins!', winAi:'AI wins',
-      newRound:'New game',
-      hint:'Drag the green striker in the bottom half. P2 controls the red one above.',
-      hintAi:'Drag the green striker. AI controls the red striker.', },
-  };
-  let lang = 'ar', mode = 'ai';
-  const $ = id => document.getElementById(id);
-  const TARGET = 7;
-  const cv = $('cv'), ctx = cv.getContext('2d');
-  let W = cv.width, H = cv.height;
-  function fitCanvas(){
-    const dpr = window.devicePixelRatio || 1;
-    const r = cv.getBoundingClientRect();
-    cv.width = Math.round(r.width * dpr);
-    cv.height = Math.round(r.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    W = r.width; H = r.height;
-  }
+  <div class="vex-overlay" id="endOverlay">
+    <div class="vex-overlay-card">
+      <div class="vex-overlay-icon primary">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+        </svg>
+      </div>
+      <div class="vex-overlay-title" id="endTitle">فوز!</div>
+      <div class="vex-overlay-subtitle" id="endSub"></div>
+      <div class="vex-btn-row">
+        <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+      </div>
+    </div>
+  </div>
 
-  let p1, p2, puck, scores, gameOver, raf, lastT;
-  let goalW; // width of goals
-  // puck motion trail (cheap, opacity-only)
-  const PUCK_TRAIL = [];
-  const PUCK_TRAIL_MAX = 6;
+  <script src="/games/vex-sdk.js"></script>
+  <script src="/games/_shared/vex-game.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const STRINGS = {
+        ar: {
+          title: 'هوكي الهواء', reset: 'إعادة', vsAi: 'ضد الذكاء', twoP: 'لاعبان',
+          p1: 'لاعب 1', p2: 'لاعب 2', to: 'للفوز',
+          win1: 'فاز اللاعب 1!', win2: 'فاز اللاعب 2!', winAi: 'فاز الذكاء',
+          newRound: 'جولة جديدة',
+          hint: 'اسحب المضرب الأخضر في النصف السفلي. ضرباتك المتتالية تقلل انحراف القرص.',
+          hintAi: 'اسحب المضرب الأخضر. الذكاء يقرأ اتجاه القرص ويغطي الزوايا الذكية.',
+          balanced: 'متوازن', aggressive: 'هجومي', defensive: 'دفاعي'
+        },
+        en: {
+          title: 'Air Hockey', reset: 'Reset', vsAi: 'vs AI', twoP: '2 players',
+          p1: 'Player 1', p2: 'Player 2', to: 'To win',
+          win1: 'Player 1 wins!', win2: 'Player 2 wins!', winAi: 'AI wins',
+          newRound: 'New game',
+          hint: 'Drag the green striker in the bottom half. Clean hits build a better angle on the next shot.',
+          hintAi: 'Drag the green striker. The AI predicts the puck path and covers smart angles.',
+          balanced: 'Balanced', aggressive: 'Aggressive', defensive: 'Defensive'
+        },
+      };
 
-  function applyLang(){
-    const s = STRINGS[lang];
-    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
-    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
-    $('modeAi').textContent = s.vsAi; $('mode2p').textContent = s.twoP;
-    $('lblP1').textContent = s.p1; $('lblP2').textContent = mode==='ai' ? 'AI' : s.p2;
-    $('lblTo').textContent = s.to;
-    $('hint').textContent = mode==='ai' ? s.hintAi : s.hint;
-    $('endRestart').textContent = s.newRound;
-  }
+      const $ = id => document.getElementById(id);
+      const TARGET = 7;
+      const cv = $('cv'), ctx = cv.getContext('2d');
+      let W = cv.width, H = cv.height;
+      let lang = 'ar', mode = 'ai';
+      let p1, p2, puck, scores, gameOver, raf, lastT, goalW, lastTouchT, scoreTimer;
+      let shots = 0, saves = 0, rally = 0, bestRally = 0, goalsPerMinute = 0;
+      const PUCK_TRAIL = [];
+      const PUCK_TRAIL_MAX = 6;
+      const HIT_COOLDOWN_MS = 120;
+      let lastHitAt = 0;
 
-  function resetPuck(dir){
-    puck = {
-      x: W/2, y: H/2, r: Math.max(8, Math.min(W,H)*0.027),
-      vx: (Math.random()*2 - 1) * 60, vy: (dir > 0 ? 1 : -1) * (140 + Math.random()*40),
-    };
-  }
-
-  // Cached paint assets — built on reset, NEVER per-frame.
-  let goalGradTop = null, goalGradBot = null;
-  let strikerGrad1 = null, strikerGrad1Inner = null;
-  let strikerGrad2 = null, strikerGrad2Inner = null;
-  let puckGrad = null, puckGradR = 0;
-  function buildStrikerAssets(p, lightC, darkC){
-    // outer dome — radial gradient in striker-local coords centered at (0,0)
-    const outer = ctx.createRadialGradient(-p.r*0.30, -p.r*0.40, 1, 0, 0, p.r);
-    outer.addColorStop(0, '#ffffff'); outer.addColorStop(0.20, lightC);
-    outer.addColorStop(0.85, darkC); outer.addColorStop(1, '#000');
-    // inner handle — relative coords, radius p.r*0.42
-    const inner = ctx.createRadialGradient(-p.r*0.10, -p.r*0.15, 1, 0, 0, p.r*0.42);
-    inner.addColorStop(0, '#ffffff'); inner.addColorStop(0.4, '#e2e8f0'); inner.addColorStop(1, '#64748b');
-    return { outer, inner };
-  }
-  function buildPuckGrad(r){
-    puckGradR = r;
-    puckGrad = ctx.createRadialGradient(-r*0.4, -r*0.5, 1, 0, 0, r);
-    puckGrad.addColorStop(0, '#ffffff'); puckGrad.addColorStop(0.4, '#e2e8f0');
-    puckGrad.addColorStop(0.85, '#475569'); puckGrad.addColorStop(1, '#1e293b');
-  }
-  function rebuildPaintAssets(){
-    // Goals — vertical 5-px slots; coords are absolute Y (no per-instance translation needed)
-    goalGradTop = ctx.createLinearGradient(0, 0, 0, 8);
-    goalGradTop.addColorStop(0, 'rgba(255,182,39,0.55)');
-    goalGradTop.addColorStop(1, 'rgba(255,182,39,0.10)');
-    goalGradBot = ctx.createLinearGradient(0, H-8, 0, H);
-    goalGradBot.addColorStop(0, 'rgba(255,182,39,0.10)');
-    goalGradBot.addColorStop(1, 'rgba(255,182,39,0.55)');
-    // Strikers — gradients in striker-local coords (translate before fill)
-    if (p1){
-      const a = buildStrikerAssets(p1, '#22c55e', '#14532d');
-      strikerGrad1 = a.outer; strikerGrad1Inner = a.inner;
-    }
-    if (p2){
-      const a = buildStrikerAssets(p2, '#ef4444', '#7f1d1d');
-      strikerGrad2 = a.outer; strikerGrad2Inner = a.inner;
-    }
-    if (puck) buildPuckGrad(puck.r);
-  }
-
-  function reset(){
-    fitCanvas();
-    const r = Math.max(20, Math.min(W,H)*0.07);
-    p1 = { x: W/2, y: H - 50, r, vx: 0, vy: 0, lastTouch: null };
-    p2 = { x: W/2, y: 50, r, vx: 0, vy: 0, lastTouch: null };
-    goalW = W * 0.45;
-    scores = { p1: 0, p2: 0 };
-    gameOver = false;
-    $('p1').textContent = 0; $('p2').textContent = 0;
-    $('endOverlay').classList.remove('show');
-    resetPuck(Math.random() < 0.5 ? 1 : -1);
-    rebuildPaintAssets();
-    if (raf) cancelAnimationFrame(raf);
-    lastT = performance.now();
-    raf = requestAnimationFrame(loop);
-  }
-
-  function loop(now){
-    if (gameOver) return;
-    const dt = Math.min(0.033, (now - lastT) / 1000);
-    lastT = now;
-    update(dt);
-    draw();
-    raf = requestAnimationFrame(loop);
-  }
-
-  function update(dt){
-    // AI for p2
-    if (mode === 'ai'){
-      const aiSpeed = 280;
-      const tx = puck.x;
-      const ty = puck.vy < 0 ? Math.max(p2.r + 6, Math.min(H/2 - p2.r - 4, puck.y + 30)) : 80;
-      const dx = tx - p2.x, dy = ty - p2.y;
-      const dist = Math.hypot(dx, dy);
-      const step = aiSpeed * dt;
-      if (dist > 1){
-        const f = Math.min(1, step / dist);
-        p2.vx = dx * f / dt;
-        p2.vy = dy * f / dt;
-        p2.x += dx * f; p2.y += dy * f;
-      } else { p2.vx = 0; p2.vy = 0; }
-      // clamp to top half
-      p2.x = Math.max(p2.r, Math.min(W - p2.r, p2.x));
-      p2.y = Math.max(p2.r, Math.min(H/2 - p2.r, p2.y));
-    }
-
-    // Puck physics
-    puck.x += puck.vx * dt;
-    puck.y += puck.vy * dt;
-    // friction
-    puck.vx *= 0.995; puck.vy *= 0.995;
-
-    // Side walls
-    if (puck.x - puck.r < 0){ puck.x = puck.r; puck.vx = Math.abs(puck.vx); }
-    if (puck.x + puck.r > W){ puck.x = W - puck.r; puck.vx = -Math.abs(puck.vx); }
-
-    // Top / bottom: goals on center, walls on sides
-    const goalLeft = (W - goalW) / 2;
-    const goalRight = goalLeft + goalW;
-    if (puck.y - puck.r < 0){
-      if (puck.x > goalLeft && puck.x < goalRight){ score('p1'); return; }
-      puck.y = puck.r; puck.vy = Math.abs(puck.vy);
-    }
-    if (puck.y + puck.r > H){
-      if (puck.x > goalLeft && puck.x < goalRight){ score('p2'); return; }
-      puck.y = H - puck.r; puck.vy = -Math.abs(puck.vy);
-    }
-
-    // Striker collisions
-    [p1, p2].forEach(p => {
-      const dx = puck.x - p.x, dy = puck.y - p.y;
-      const dist = Math.hypot(dx, dy);
-      const minDist = puck.r + p.r;
-      if (dist < minDist && dist > 0.001){
-        const nx = dx / dist, ny = dy / dist;
-        // Push puck out
-        puck.x = p.x + nx * minDist;
-        puck.y = p.y + ny * minDist;
-        // Reflect velocity along normal
-        const vRel = puck.vx * nx + puck.vy * ny;
-        if (vRel < 0){
-          puck.vx -= 2 * vRel * nx;
-          puck.vy -= 2 * vRel * ny;
-        }
-        // Add striker velocity
-        puck.vx += p.vx * 0.45;
-        puck.vy += p.vy * 0.45;
-        // Cap speed
-        const sp = Math.hypot(puck.vx, puck.vy);
-        if (sp > 700){ puck.vx *= 700/sp; puck.vy *= 700/sp; }
+      function fitCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const r = cv.getBoundingClientRect();
+        cv.width = Math.round(r.width * dpr);
+        cv.height = Math.round(r.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        W = r.width; H = r.height;
       }
-    });
-  }
 
-  function score(who){
-    scores[who]++;
-    $('p1').textContent = scores.p1; $('p2').textContent = scores.p2;
-    if (scores[who] >= TARGET){ end(who); return; }
-    // Reset positions
-    setTimeout(() => {
-      p1.x = W/2; p1.y = H - 50; p1.vx = 0; p1.vy = 0;
-      p2.x = W/2; p2.y = 50; p2.vx = 0; p2.vy = 0;
-      resetPuck(who === 'p1' ? -1 : 1);
-    }, 250);
-  }
+      function applyLang() {
+        const s = STRINGS[lang];
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title;
+        $('resetBtnLabel').textContent = s.reset;
+        $('modeAi').textContent = s.vsAi;
+        $('mode2p').textContent = s.twoP;
+        $('lblP1').textContent = s.p1;
+        $('lblP2').textContent = mode === 'ai' ? 'AI' : s.p2;
+        $('lblTo').textContent = s.to;
+        $('hint').textContent = mode === 'ai' ? s.hintAi : s.hint;
+        $('endRestart').textContent = s.newRound;
+        $('badgeMode').textContent = mode === 'ai' ? 'AI' : 'P2P';
+        $('badgeDifficulty').textContent = mode === 'ai' ? s.balanced : s.aggressive;
+        $('targetScore').textContent = TARGET;
+      }
 
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    // mid line — neon stripe
-    ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
-    // center circle (double ring)
-    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.13, 0, Math.PI*2); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.04, 0, Math.PI*2); ctx.stroke();
-    // goals — gold glowing slot (cached gradients)
-    const gw = goalW;
-    ctx.fillStyle = goalGradTop;
-    ctx.fillRect((W-gw)/2, 0, gw, 5);
-    ctx.fillStyle = goalGradBot;
-    ctx.fillRect((W-gw)/2, H-5, gw, 5);
-    ctx.strokeStyle = '#ffb627'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo((W-gw)/2, 0); ctx.lineTo((W-gw)/2, 14); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W+gw)/2, 0); ctx.lineTo((W+gw)/2, 14); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W-gw)/2, H); ctx.lineTo((W-gw)/2, H-14); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W+gw)/2, H); ctx.lineTo((W+gw)/2, H-14); ctx.stroke();
+      function setPillText() {
+        $('scoreSummary').textContent = scores.p1 + ' - ' + scores.p2;
+        $('rallySummary').textContent = 'Rally ' + rally;
+        $('speedSummary').textContent = 'Speed ' + Math.round(Math.hypot(puck.vx, puck.vy));
+        $('livePace').textContent = goalsPerMinute > 0 ? goalsPerMinute.toFixed(1) + ' / goal' : '0.0s / goal';
+      }
 
-    // puck trail (oldest → newest, fading)
-    for (let i = 0; i < PUCK_TRAIL.length; i++){
-      const t = PUCK_TRAIL[i];
-      const a = ((i + 1) / (PUCK_TRAIL.length + 1)) * 0.40;
-      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(t.x, t.y, puck.r * (0.55 + i*0.06), 0, Math.PI*2); ctx.fill();
-    }
+      function resetPuck(dir) {
+        const speed = 165 + Math.random() * 60;
+        puck = {
+          x: W / 2, y: H / 2, r: Math.max(8, Math.min(W, H) * 0.027),
+          vx: (Math.random() * 2 - 1) * 70,
+          vy: (dir > 0 ? 1 : -1) * speed,
+        };
+      }
 
-    // strikers (3D dome) — cached gradients
-    drawStriker(p1, '#22c55e', strikerGrad1, strikerGrad1Inner);
-    drawStriker(p2, '#ef4444', strikerGrad2, strikerGrad2Inner);
+      let goalGradTop = null, goalGradBot = null;
+      let strikerGrad1 = null, strikerGrad1Inner = null;
+      let strikerGrad2 = null, strikerGrad2Inner = null;
+      let puckGrad = null, puckGradR = 0;
 
-    // puck — chrome disc with rim + highlight (cached radial gradient)
-    if (puck.r !== puckGradR) buildPuckGrad(puck.r);
-    ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-    ctx.save();
-    ctx.translate(puck.x, puck.y);
-    ctx.fillStyle = puckGrad;
-    ctx.beginPath(); ctx.arc(0, 0, puck.r, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-    ctx.shadowBlur = 0;
-    // rim
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.stroke();
+      function buildStrikerAssets(p, lightC, darkC) {
+        const outer = ctx.createRadialGradient(-p.r * 0.30, -p.r * 0.40, 1, 0, 0, p.r);
+        outer.addColorStop(0, '#ffffff'); outer.addColorStop(0.20, lightC);
+        outer.addColorStop(0.85, darkC); outer.addColorStop(1, '#000');
+        const inner = ctx.createRadialGradient(-p.r * 0.10, -p.r * 0.15, 1, 0, 0, p.r * 0.42);
+        inner.addColorStop(0, '#ffffff'); inner.addColorStop(0.4, '#e2e8f0'); inner.addColorStop(1, '#64748b');
+        return { outer, inner };
+      }
+      function buildPuckGrad(r) {
+        puckGradR = r;
+        puckGrad = ctx.createRadialGradient(-r * 0.4, -r * 0.5, 1, 0, 0, r);
+        puckGrad.addColorStop(0, '#ffffff'); puckGrad.addColorStop(0.4, '#e2e8f0');
+        puckGrad.addColorStop(0.85, '#475569'); puckGrad.addColorStop(1, '#1e293b');
+      }
+      function rebuildPaintAssets() {
+        goalGradTop = ctx.createLinearGradient(0, 0, 0, 8);
+        goalGradTop.addColorStop(0, 'rgba(255,182,39,0.55)');
+        goalGradTop.addColorStop(1, 'rgba(255,182,39,0.10)');
+        goalGradBot = ctx.createLinearGradient(0, H - 8, 0, H);
+        goalGradBot.addColorStop(0, 'rgba(255,182,39,0.10)');
+        goalGradBot.addColorStop(1, 'rgba(255,182,39,0.55)');
+        if (p1) {
+          const a = buildStrikerAssets(p1, '#22c55e', '#14532d');
+          strikerGrad1 = a.outer; strikerGrad1Inner = a.inner;
+        }
+        if (p2) {
+          const a = buildStrikerAssets(p2, '#ef4444', '#7f1d1d');
+          strikerGrad2 = a.outer; strikerGrad2Inner = a.inner;
+        }
+        if (puck) buildPuckGrad(puck.r);
+      }
 
-    // record trail position
-    PUCK_TRAIL.push({x: puck.x, y: puck.y});
-    if (PUCK_TRAIL.length > PUCK_TRAIL_MAX) PUCK_TRAIL.shift();
-  }
+      function reset() {
+        fitCanvas();
+        const r = Math.max(20, Math.min(W, H) * 0.07);
+        p1 = { x: W / 2, y: H - 56, r, vx: 0, vy: 0 };
+        p2 = { x: W / 2, y: 56, r, vx: 0, vy: 0 };
+        goalW = W * 0.42;
+        scores = { p1: 0, p2: 0 };
+        shots = 0; saves = 0; rally = 0; bestRally = 0; goalsPerMinute = 0;
+        gameOver = false;
+        $('p1').textContent = 0; $('p2').textContent = 0;
+        $('endOverlay').classList.remove('show');
+        resetPuck(Math.random() < 0.5 ? 1 : -1);
+        rebuildPaintAssets();
+        if (raf) cancelAnimationFrame(raf);
+        lastT = performance.now();
+        lastTouchT = lastT;
+        clearInterval(scoreTimer);
+        scoreTimer = setInterval(updatePace, 1000);
+        raf = requestAnimationFrame(loop);
+        setPillText();
+      }
 
-  function drawStriker(p, glowColor, outerGrad, innerGrad){
-    // shadow on table (absolute coords)
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r*0.25, p.r*0.95, p.r*0.35, 0, 0, Math.PI*2); ctx.fill();
-    // translate once into striker-local space; cached gradients are local-coord
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    // body — cached radial gradient (3D dome)
-    ctx.shadowColor = glowColor; ctx.shadowBlur = 14;
-    ctx.fillStyle = outerGrad;
-    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
-    // chrome ring
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.78, 0, Math.PI*2); ctx.stroke();
-    // center handle (inner disc) — cached
-    ctx.fillStyle = innerGrad;
-    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.42, 0, Math.PI*2); ctx.fill();
-    // top highlight dot
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.beginPath(); ctx.arc(-p.r*0.2, -p.r*0.25, p.r*0.10, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-  }
+      function updatePace() {
+        const elapsedMin = Math.max(0.016, (performance.now() - lastT) / 60000);
+        goalsPerMinute = (scores.p1 + scores.p2) / elapsedMin;
+        setPillText();
+      }
 
-  function end(winner){
-    gameOver = true;
-    if (raf) cancelAnimationFrame(raf);
-    const s = STRINGS[lang];
-    let title;
-    if (winner === 'p1') title = s.win1;
-    else title = mode === 'ai' ? s.winAi : s.win2;
-    $('endTitle').textContent = title;
-    $('endSub').textContent = `${scores.p1} — ${scores.p2}`;
-    setTimeout(() => $('endOverlay').classList.add('show'), 400);
-    if (typeof VexGame !== 'undefined'){
-      if (winner === 'p1') VexGame.confetti(700);
-      VexGame.endSession({
-        score: scores.p1, result: winner === 'p1' ? 'win' : 'loss',
-        metadata: { mode, p1: scores.p1, p2: scores.p2, winner },
+      function loop(now) {
+        if (gameOver) return;
+        const dt = Math.min(0.033, (now - lastT) / 1000);
+        lastT = now;
+        update(dt);
+        draw();
+        setPillText();
+        raf = requestAnimationFrame(loop);
+      }
+
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+      function updateAI(dt) {
+        const predictedY = puck.vy < 0 ? Math.max(p2.r + 10, puck.y + (puck.y - p2.y) * 0.65) : 68;
+        const targetX = clamp(puck.x + puck.vx * 0.12, p2.r, W - p2.r);
+        const targetY = clamp(predictedY, p2.r, H / 2 - p2.r);
+        const dx = targetX - p2.x, dy = targetY - p2.y;
+        const dist = Math.hypot(dx, dy);
+        const aiSpeed = 260 + Math.min(140, Math.abs(puck.vx) * 0.25);
+        if (dist > 0.001) {
+          const step = Math.min(1, (aiSpeed * dt) / dist);
+          p2.vx = (dx * step) / Math.max(dt, 0.016);
+          p2.vy = (dy * step) / Math.max(dt, 0.016);
+          p2.x += dx * step; p2.y += dy * step;
+        }
+        p2.x = clamp(p2.x, p2.r, W - p2.r);
+        p2.y = clamp(p2.y, p2.r, H / 2 - p2.r);
+      }
+
+      function update(dt) {
+        if (mode === 'ai') updateAI(dt);
+
+        puck.x += puck.vx * dt;
+        puck.y += puck.vy * dt;
+        puck.vx *= 0.996;
+        puck.vy *= 0.996;
+
+        if (puck.x - puck.r < 0) { puck.x = puck.r; puck.vx = Math.abs(puck.vx); }
+        if (puck.x + puck.r > W) { puck.x = W - puck.r; puck.vx = -Math.abs(puck.vx); }
+
+        const goalLeft = (W - goalW) / 2;
+        const goalRight = goalLeft + goalW;
+        if (puck.y - puck.r < 0) {
+          if (puck.x > goalLeft && puck.x < goalRight) { score('p1'); return; }
+          puck.y = puck.r; puck.vy = Math.abs(puck.vy);
+        }
+        if (puck.y + puck.r > H) {
+          if (puck.x > goalLeft && puck.x < goalRight) { score('p2'); return; }
+          puck.y = H - puck.r; puck.vy = -Math.abs(puck.vy);
+        }
+
+        [p1, p2].forEach((p) => {
+          const dx = puck.x - p.x, dy = puck.y - p.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = puck.r + p.r;
+          if (dist < minDist && dist > 0.001) {
+            const nx = dx / dist, ny = dy / dist;
+            puck.x = p.x + nx * minDist;
+            puck.y = p.y + ny * minDist;
+            const vRel = puck.vx * nx + puck.vy * ny;
+            if (vRel < 0) {
+              puck.vx -= 2 * vRel * nx;
+              puck.vy -= 2 * vRel * ny;
+            }
+            puck.vx += p.vx * 0.35;
+            puck.vy += p.vy * 0.35;
+            const sp = Math.hypot(puck.vx, puck.vy);
+            if (sp > 760) { puck.vx *= 760 / sp; puck.vy *= 760 / sp; }
+            if (Date.now() - lastHitAt > HIT_COOLDOWN_MS) {
+              lastHitAt = Date.now();
+              rally++;
+              bestRally = Math.max(bestRally, rally);
+            }
+          }
+        });
+      }
+
+      function score(who) {
+        scores[who]++;
+        shots++;
+        rally = 0;
+        $('p1').textContent = scores.p1;
+        $('p2').textContent = scores.p2;
+        if (scores[who] >= TARGET) { end(who); return; }
+        setTimeout(() => {
+          p1.x = W / 2; p1.y = H - 56; p1.vx = 0; p1.vy = 0;
+          p2.x = W / 2; p2.y = 56; p2.vx = 0; p2.vy = 0;
+          resetPuck(who === 'p1' ? -1 : 1);
+          rebuildPaintAssets();
+        }, 240);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(W / 2, H / 2, Math.min(W, H) * 0.13, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.beginPath(); ctx.arc(W / 2, H / 2, Math.min(W, H) * 0.04, 0, Math.PI * 2); ctx.stroke();
+
+        const gw = goalW;
+        ctx.fillStyle = goalGradTop;
+        ctx.fillRect((W - gw) / 2, 0, gw, 5);
+        ctx.fillStyle = goalGradBot;
+        ctx.fillRect((W - gw) / 2, H - 5, gw, 5);
+        ctx.strokeStyle = '#ffb627'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo((W - gw) / 2, 0); ctx.lineTo((W - gw) / 2, 14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo((W + gw) / 2, 0); ctx.lineTo((W + gw) / 2, 14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo((W - gw) / 2, H); ctx.lineTo((W - gw) / 2, H - 14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo((W + gw) / 2, H); ctx.lineTo((W + gw) / 2, H - 14); ctx.stroke();
+
+        for (let i = 0; i < PUCK_TRAIL.length; i++) {
+          const t = PUCK_TRAIL[i];
+          const a = ((i + 1) / (PUCK_TRAIL.length + 1)) * 0.40;
+          ctx.fillStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(t.x, t.y, puck.r * (0.55 + i * 0.06), 0, Math.PI * 2); ctx.fill();
+        }
+
+        drawStriker(p1, '#22c55e', strikerGrad1, strikerGrad1Inner);
+        drawStriker(p2, '#ef4444', strikerGrad2, strikerGrad2Inner);
+
+        if (puck.r !== puckGradR) buildPuckGrad(puck.r);
+        ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
+        ctx.save();
+        ctx.translate(puck.x, puck.y);
+        ctx.fillStyle = puckGrad;
+        ctx.beginPath(); ctx.arc(0, 0, puck.r, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI * 2); ctx.stroke();
+
+        PUCK_TRAIL.push({ x: puck.x, y: puck.y });
+        if (PUCK_TRAIL.length > PUCK_TRAIL_MAX) PUCK_TRAIL.shift();
+      }
+
+      function drawStriker(p, glowColor, outerGrad, innerGrad) {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r * 0.25, p.r * 0.95, p.r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.shadowColor = glowColor; ctx.shadowBlur = 14;
+        ctx.fillStyle = outerGrad;
+        ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 0.78, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = innerGrad;
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 0.42, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.arc(-p.r * 0.2, -p.r * 0.25, p.r * 0.10, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      function end(winner) {
+        gameOver = true;
+        if (raf) cancelAnimationFrame(raf);
+        clearInterval(scoreTimer);
+        const s = STRINGS[lang];
+        $('endTitle').textContent = winner === 'p1' ? s.win1 : (mode === 'ai' ? s.winAi : s.win2);
+        $('endSub').textContent = scores.p1 + ' — ' + scores.p2 + ' · Rally ' + bestRally + ' · Shots ' + shots;
+        setTimeout(() => $('endOverlay').classList.add('show'), 350);
+
+        if (typeof VexGame !== 'undefined') {
+          VexGame.confetti(700);
+          VexGame.endSession({
+            score: scores.p1,
+            result: winner === 'p1' ? 'win' : 'loss',
+            metadata: {
+              mode,
+              target: TARGET,
+              p1: scores.p1,
+              p2: scores.p2,
+              winner,
+              shots,
+              saves,
+              rallyBest: bestRally,
+              pace: goalsPerMinute,
+              speed: Math.round(Math.hypot(puck.vx, puck.vy)),
+              controlSplit: mode === 'ai' ? 'human-vs-ai' : 'local-2p',
+              retentionHooks: {
+                quickReEntryHint: scores.p1 >= TARGET - 1 ? 'near-win' : 'build-rally',
+                comebackReady: scores.p1 === 0 && scores.p2 > 0,
+              }
+            },
+          });
+        }
+      }
+
+      function getRel(t) {
+        const r = cv.getBoundingClientRect();
+        return { x: t.clientX - r.left, y: t.clientY - r.top };
+      }
+      function moveStriker(p, x, y, dt) {
+        const newX = clamp(x, p.r, W - p.r);
+        const newY = (p === p1) ? clamp(y, H / 2 + p.r, H - p.r) : clamp(y, p.r, H / 2 - p.r);
+        if (dt > 0) { p.vx = (newX - p.x) / dt; p.vy = (newY - p.y) / dt; }
+        p.x = newX; p.y = newY;
+      }
+
+      function handle(ev) {
+        const now = performance.now();
+        const dt = Math.max(0.016, (now - lastTouchT) / 1000);
+        lastTouchT = now;
+        const touches = ev.touches ? Array.from(ev.touches) : [ev];
+        touches.forEach(t => {
+          const pt = getRel(t);
+          if (pt.y > H / 2) {
+            moveStriker(p1, pt.x, pt.y, dt);
+          } else if (mode === '2p') {
+            moveStriker(p2, pt.x, pt.y, dt);
+          }
+        });
+      }
+
+      cv.addEventListener('touchstart', (e) => { e.preventDefault(); handle(e); }, { passive: false });
+      cv.addEventListener('touchmove', (e) => { e.preventDefault(); handle(e); }, { passive: false });
+      cv.addEventListener('touchend', (e) => {
+        if (!e.touches.length) {
+          p1.vx *= 0.5; p1.vy *= 0.5; p2.vx *= 0.5; p2.vy *= 0.5;
+        }
       });
-    }
-  }
+      cv.addEventListener('mousemove', (e) => { if (e.buttons) handle(e); });
+      cv.addEventListener('mousedown', handle);
 
-  // Multi-touch controls
-  function getRel(t){
-    const r = cv.getBoundingClientRect();
-    return { x: t.clientX - r.left, y: t.clientY - r.top };
-  }
-  function moveStriker(p, x, y, dt){
-    const newX = Math.max(p.r, Math.min(W - p.r, x));
-    const newY = (p === p1)
-      ? Math.max(H/2 + p.r, Math.min(H - p.r, y))
-      : Math.max(p.r, Math.min(H/2 - p.r, y));
-    if (dt > 0){ p.vx = (newX - p.x) / dt; p.vy = (newY - p.y) / dt; }
-    p.x = newX; p.y = newY;
-  }
-  let lastTouchT = performance.now();
-  function handle(ev){
-    const now = performance.now();
-    const dt = Math.max(0.016, (now - lastTouchT) / 1000);
-    lastTouchT = now;
-    const touches = ev.touches ? Array.from(ev.touches) : [ev];
-    let hadTop = false;
-    touches.forEach(t => {
-      const pt = getRel(t);
-      if (pt.y > H/2){ moveStriker(p1, pt.x, pt.y, dt); }
-      else if (mode === '2p'){ moveStriker(p2, pt.x, pt.y, dt); hadTop = true; }
-    });
-  }
-  cv.addEventListener('touchstart', (e) => { e.preventDefault(); handle(e); }, {passive:false});
-  cv.addEventListener('touchmove', (e) => { e.preventDefault(); handle(e); }, {passive:false});
-  cv.addEventListener('touchend', (e) => {
-    // damp velocities of strikers no longer touched (simple)
-    if (!e.touches.length){ p1.vx *= 0.5; p1.vy *= 0.5; p2.vx *= 0.5; p2.vy *= 0.5; }
-  });
-  cv.addEventListener('mousemove', (e) => { if (e.buttons) handle(e); });
-  cv.addEventListener('mousedown', handle);
+      document.querySelectorAll('.ah-mode-btn').forEach(b => {
+        b.addEventListener('click', () => {
+          mode = b.dataset.mode;
+          document.querySelectorAll('.ah-mode-btn').forEach(x => x.classList.toggle('active', x === b));
+          applyLang();
+          reset();
+        });
+      });
 
-  document.querySelectorAll('.ah-mode-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      mode = b.dataset.mode;
-      document.querySelectorAll('.ah-mode-btn').forEach(x => x.classList.toggle('active', x===b));
+      $('resetBtn').addEventListener('click', reset);
+      $('endRestart').addEventListener('click', reset);
+      window.addEventListener('resize', () => { fitCanvas(); reset(); });
+
+      if (typeof VexGame !== 'undefined') {
+        VexGame.boot({
+          slug: 'air-hockey',
+          onReady: function (player) {
+            if (player && player.language) {
+              lang = player.language === 'en' ? 'en' : 'ar';
+              if (VexGame.setLang) VexGame.setLang(lang);
+            }
+            applyLang();
+          },
+        });
+      }
       applyLang();
       reset();
-    });
-  });
 
-  $('resetBtn').addEventListener('click', reset);
-  $('endRestart').addEventListener('click', reset);
-  window.addEventListener('resize', () => { fitCanvas(); reset(); });
-
-  if (typeof VexGame !== 'undefined'){
-    VexGame.boot({
-      slug: 'air-hockey',
-      onReady: function(player){
-        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
-        applyLang();
-      },
-    });
-  }
-  applyLang();
-  reset();
-})();
-</script>
+      function updateHintForScore() {
+        const s = STRINGS[lang];
+        if (scores.p1 >= TARGET - 1) $('hint').textContent = lang === 'ar' ? 'أنت على بعد نقطة واحدة. تحكم في الزاوية واحسمها.' : 'You are one point away. Control the angle and finish it.';
+        else if (scores.p2 >= TARGET - 1) $('hint').textContent = lang === 'ar' ? 'الخصم قريب من الفوز. أغلق الوسط وامنع المرتدات.' : 'Opponent is close to winning. Close the middle and block rebounds.';
+        else $('hint').textContent = mode === 'ai' ? s.hintAi : s.hint;
+      }
+      setInterval(updateHintForScore, 1200);
+    })();
+  </script>
 </body>
+
 </html>

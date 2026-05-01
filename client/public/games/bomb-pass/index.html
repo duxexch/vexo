@@ -1,521 +1,1118 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>VEX Bomb Pass</title>
-<link rel="stylesheet" href="/games/_shared/vex-game.css">
-<style>
-  .bp-arena {
-    width: 100%; max-width: 380px; margin: 0 auto;
-    aspect-ratio: 3/4;
-    background:
-      radial-gradient(circle at 50% 38%, rgba(249,115,22,0.30), transparent 55%),
-      radial-gradient(ellipse 100% 60% at 50% 100%, rgba(249,115,22,0.12), transparent 80%),
-      linear-gradient(180deg, #1a0c06 0%, #060306 100%);
-    border: 1px solid rgba(249,115,22,0.40);
-    border-radius: 18px;
-    position: relative; overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -2px 0 rgba(0,0,0,0.55),
-      inset 0 0 36px rgba(249,115,22,0.25),
-      0 14px 28px -10px rgba(0,0,0,0.7);
-  }
-  /* Pulsing concentric danger rings around bomb */
-  .bp-arena::before {
-    content:""; position:absolute; left:50%; top:38%; width:300px; height:300px;
-    transform: translate(-50%,-50%);
-    border-radius: 50%;
-    background:
-      radial-gradient(circle, transparent 30%, rgba(249,115,22,0.18) 32%, transparent 36%),
-      radial-gradient(circle, transparent 50%, rgba(249,115,22,0.12) 52%, transparent 56%);
-    pointer-events: none; z-index: 0;
-    animation: bpRingPulse 1.6s ease-in-out infinite;
-  }
-  @keyframes bpRingPulse { 0%,100% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.92); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); } }
-  /* Stadium floor lines fading toward horizon */
-  .bp-arena::after {
-    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
-    background-image:
-      linear-gradient(rgba(249,115,22,0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(249,115,22,0.06) 1px, transparent 1px);
-    background-size: 28px 28px;
-    mask-image: linear-gradient(180deg, transparent 0%, transparent 60%, #000 100%);
-    -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 60%, #000 100%);
-  }
-  .bp-bomb {
-    position: absolute; left: 50%; top: 38%; transform: translate(-50%,-50%);
-    width: 140px; height: 140px;
-    display: grid; place-items: center;
-    z-index: 2;
-  }
-  .bp-bomb-inner {
-    width: 118px; height: 118px; border-radius: 50%;
-    background:
-      radial-gradient(circle at 30% 25%, #ffffff 0%, #b9c1d2 6%, #525b6e 22%, #1f2937 55%, #0a0f1c 90%);
-    box-shadow:
-      0 0 38px rgba(249,115,22,0.55),
-      0 12px 24px rgba(0,0,0,0.55),
-      inset -10px -12px 18px rgba(0,0,0,0.55),
-      inset 6px 8px 14px rgba(255,255,255,0.10);
-    position: relative;
-    animation: bpJiggle 0.4s ease-in-out infinite;
-  }
-  /* Gloss highlight crescent */
-  .bp-bomb-inner::before {
-    content:""; position:absolute; top:8%; left:18%; width:40%; height:22%;
-    border-radius: 50%;
-    background: linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0));
-    filter: blur(2px);
-    pointer-events: none;
-  }
-  @keyframes bpJiggle { 0%,100%{transform:translate(0,0) rotate(0deg)} 25%{transform:translate(-1px,2px) rotate(-1.5deg)} 75%{transform:translate(1px,-1px) rotate(1.5deg)} }
-  .bp-bomb-inner::after {
-    content: ''; position: absolute; top: -14px; left: 50%; width: 5px; height: 36px;
-    background: linear-gradient(to top, #2a2a2a, #525b6e 30%, #737373);
-    transform: translateX(-50%) rotate(22deg); transform-origin: bottom center;
-    border-radius: 2px;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.30) inset, 0 -1px 0 rgba(0,0,0,0.4) inset;
-  }
-  .bp-spark {
-    position: absolute; top: -38px; left: calc(50% + 12px);
-    width: 16px; height: 16px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fffbeb, #fef08a 35%, #f97316 70%, #c2410c);
-    box-shadow:
-      0 0 22px #f97316,
-      0 0 40px #fb923c,
-      0 0 60px rgba(249,115,22,0.55);
-    animation: bpSpark 0.3s ease-in-out infinite alternate;
-    z-index: 3;
-  }
-  @keyframes bpSpark { 0%{transform:scale(0.85) rotate(0deg)} 100%{transform:scale(1.30) rotate(20deg)} }
-  .bp-pass-btn {
-    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-    padding: 18px 44px;
-    background: linear-gradient(180deg, #fb923c 0%, #ea580c 50%, #7c2d12 100%);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 999px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; letter-spacing: 0.20em;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      inset 0 -2px 0 rgba(0,0,0,0.40),
-      0 5px 0 #4a1505,
-      0 8px 22px -3px rgba(249,115,22,0.65);
-    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
-    transition: transform 0.08s ease, box-shadow 0.08s ease;
-    z-index: 5;
-  }
-  .bp-pass-btn:active {
-    transform: translateX(-50%) translateY(4px);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.30),
-      inset 0 -1px 0 rgba(0,0,0,0.35),
-      0 1px 0 #4a1505,
-      0 2px 6px rgba(249,115,22,0.50);
-  }
-  .bp-current-name {
-    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    z-index: 3;
-    padding: 8px 24px; border-radius: 12px;
-    background: linear-gradient(180deg, #fdba74, #c2410c);
-    color: #1a0c06;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.14em;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.45),
-      inset 0 -1px 0 rgba(0,0,0,0.30),
-      0 4px 0 #4a1505,
-      0 6px 14px -2px rgba(249,115,22,0.55);
-    text-shadow: 0 1px 0 rgba(255,255,255,0.30);
-  }
-  .bp-players {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-    width: 100%; margin: 12px 0;
-  }
-  .bp-player {
-    background: linear-gradient(180deg, #1a1f3a 0%, #0a0e1c 100%);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px; padding: 10px 12px;
-    display: flex; align-items: center; gap: 10px;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -1px 0 rgba(0,0,0,0.40),
-      0 3px 0 #050912,
-      0 4px 8px rgba(0,0,0,0.30);
-    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-  }
-  .bp-player.active {
-    background: linear-gradient(180deg, #ea580c 0%, #7c2d12 100%);
-    color: #fff;
-    border-color: rgba(255,255,255,0.20);
-    transform: translateY(-2px);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.35),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 4px 0 #4a1505,
-      0 6px 16px -2px rgba(249,115,22,0.55);
-  }
-  .bp-player.dead {
-    opacity: 0.30; filter: grayscale(0.85);
-    transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 0 #050912;
-  }
-  .bp-player-dot {
-    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
-    box-shadow: inset 0 -2px 3px rgba(0,0,0,0.4), inset 0 2px 2px rgba(255,255,255,0.35);
-  }
-  .bp-player-name {
-    flex: 1; font-weight: 800; font-size: 0.98rem;
-    text-shadow: 0 1px 0 rgba(0,0,0,0.45);
-  }
-  .bp-lives {
-    display: flex; gap: 4px;
-  }
-  .bp-life {
-    width: 11px; height: 11px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fca5a5, #dc2626 70%, #4a0a0a);
-    box-shadow: 0 0 8px rgba(239,68,68,0.7), inset 0 1px 1px rgba(255,255,255,0.30);
-  }
-  .bp-life.gone {
-    background: rgba(0,0,0,0.40);
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
-  }
-  .bp-explosion {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    background: radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(249,115,22,0.7) 25%, rgba(0,0,0,0.75) 70%);
-    z-index: 8; opacity: 0; pointer-events: none;
-    transition: opacity 0.2s;
-  }
-  .bp-explosion.show { opacity: 1; }
-  .bp-explosion-text {
-    font-family: 'Bebas Neue', sans-serif; font-size: 4.4rem; color: #fff;
-    text-shadow: 0 0 32px #f97316, 0 0 56px #ef4444, 0 4px 0 #4a1505;
-    letter-spacing: 0.08em;
-    animation: bpExplode 0.55s ease-out;
-  }
-  @keyframes bpExplode { 0%{transform:scale(0.3) rotate(-10deg); opacity: 0;} 60%{transform:scale(1.4) rotate(2deg); opacity: 1;} 100%{transform:scale(1.3) rotate(0); opacity: 1;} }
-  .bp-setup-overlay {
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(15,8,4,0.97), rgba(7,4,2,0.97));
-    z-index: 20; padding: 18px; display: flex; flex-direction: column; gap: 10px;
-    align-items: stretch; justify-content: center; border-radius: 18px;
-  }
-  .bp-setup-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; color: #fdba74;
-    text-align: center; letter-spacing: 0.12em;
-    text-shadow: 0 0 14px rgba(249,115,22,0.55), 0 3px 0 rgba(0,0,0,0.5);
-  }
-  .bp-setup-row { display: flex; gap: 8px; align-items: center; }
-  .bp-setup-row input {
-    flex: 1; padding: 11px;
-    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 10px;
-    color: var(--vex-text); font-family: inherit; font-size: 0.95rem;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 2px 4px rgba(0,0,0,0.4);
-  }
-  .bp-setup-start {
-    margin-top: 14px; padding: 16px;
-    background: linear-gradient(180deg, #fb923c 0%, #ea580c 50%, #7c2d12 100%);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,0.20);
-    border-radius: 14px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 5px 0 #4a1505,
-      0 8px 22px -4px rgba(249,115,22,0.55);
-    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
-    transition: transform 0.08s ease, box-shadow 0.08s ease;
-  }
-  .bp-setup-start:active {
-    transform: translateY(4px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 0 #4a1505;
-  }
-  .bp-count-row { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
-  .bp-count-btn {
-    width: 46px; height: 46px; border-radius: 12px;
-    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: var(--vex-text);
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.12),
-      inset 0 -2px 0 rgba(0,0,0,0.40),
-      0 3px 0 #050912;
-    transition: transform 0.08s ease, box-shadow 0.08s ease;
-  }
-  .bp-count-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
-  .bp-count-btn.active {
-    background: linear-gradient(180deg, #fb923c, #c2410c);
-    color: #1a0c06;
-    border-color: rgba(255,255,255,0.25);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.45),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 3px 0 #4a1505,
-      0 5px 12px -2px rgba(249,115,22,0.55);
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>VEX Bomb Pass</title>
+  <link rel="stylesheet" href="/games/_shared/vex-game.css">
+  <style>
+    :root {
+      --bp-orange: #f97316;
+      --bp-orange-dark: #7c2d12;
+      --bp-gold: #fdba74;
+      --bp-cyan: #22d3ee;
+      --bp-bg: #05070d;
+      --bp-panel: rgba(10, 16, 32, .92);
+      --bp-border: rgba(255, 255, 255, .09);
+      --bp-danger: #fb7185;
+      --bp-good: #22c55e;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body.vex-game {
+      background: radial-gradient(circle at top, rgba(249, 115, 22, .14), transparent 36%), linear-gradient(180deg, #090400 0%, #05070d 45%, #02030a 100%);
+      color: #fff;
+    }
+
+    .bp-shell {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 14px;
+      display: grid;
+      gap: 12px
+    }
+
+    .bp-hero {
+      background: linear-gradient(180deg, rgba(18, 12, 8, .94), rgba(7, 10, 18, .98));
+      border: 1px solid var(--bp-border);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+    }
+
+    .bp-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--bp-border);
+      background: linear-gradient(90deg, rgba(249, 115, 22, .14), transparent 35%, rgba(34, 211, 238, .08));
+    }
+
+    .bp-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0
+    }
+
+    .bp-logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #fb923c, #7c2d12);
+      box-shadow: 0 0 24px rgba(249, 115, 22, .28)
+    }
+
+    .bp-title {
+      min-width: 0
+    }
+
+    .bp-title h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.1
+    }
+
+    .bp-title p {
+      margin: 4px 0 0;
+      color: #cbd5e1;
+      font-size: .84rem
+    }
+
+    .bp-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end
+    }
+
+    .bp-pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .05);
+      border: 1px solid rgba(255, 255, 255, .08);
+      color: #e2e8f0;
+      font-size: .82rem
+    }
+
+    .bp-btn {
+      min-height: 44px;
+      padding: 11px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      background: linear-gradient(180deg, #1c2442, #0b1020);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .2)
+    }
+
+    .bp-btn-primary {
+      background: linear-gradient(180deg, #ffb627 0%, #f97316 50%, #7c2d12 100%);
+      color: #1a0c00
+    }
+
+    .bp-btn-ghost {
+      background: rgba(255, 255, 255, .04)
+    }
+
+    .bp-layout {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 12px;
+      padding: 14px
+    }
+
+    .bp-card {
+      background: var(--bp-panel);
+      border: 1px solid var(--bp-border);
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04)
+    }
+
+    .bp-arena {
+      position: relative;
+      overflow: hidden;
+      min-height: 560px;
+      background:
+        radial-gradient(circle at 50% 36%, rgba(249, 115, 22, .22), transparent 33%),
+        radial-gradient(circle at 50% 100%, rgba(249, 115, 22, .12), transparent 65%),
+        linear-gradient(180deg, #1a0c06 0%, #07070b 100%);
+    }
+
+    .bp-arena::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .5;
+      background-image: linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(180deg, transparent 0%, transparent 58%, #000 100%);
+    }
+
+    .bp-ring {
+      position: absolute;
+      left: 50%;
+      top: 38%;
+      width: 310px;
+      height: 310px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, transparent 30%, rgba(249, 115, 22, .18) 32%, transparent 36%),
+        radial-gradient(circle, transparent 50%, rgba(249, 115, 22, .12) 52%, transparent 56%);
+      animation: bpPulse 1.8s ease-in-out infinite;
+      pointer-events: none
+    }
+
+    @keyframes bpPulse {
+
+      0%,
+      100% {
+        opacity: .55;
+        transform: translate(-50%, -50%) scale(.92)
+      }
+
+      50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.08)
+      }
+    }
+
+    .bp-bomb {
+      position: absolute;
+      left: 50%;
+      top: 38%;
+      transform: translate(-50%, -50%);
+      width: 148px;
+      height: 148px;
+      display: grid;
+      place-items: center;
+      z-index: 2
+    }
+
+    .bp-bomb-inner {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 25%, #fff 0%, #b9c1d2 6%, #525b6e 22%, #1f2937 55%, #0a0f1c 90%);
+      box-shadow: 0 0 38px rgba(249, 115, 22, .55), 0 12px 24px rgba(0, 0, 0, .55), inset -10px -12px 18px rgba(0, 0, 0, .55), inset 6px 8px 14px rgba(255, 255, 255, .1);
+      position: relative;
+      animation: bpJiggle .42s ease-in-out infinite
+    }
+
+    @keyframes bpJiggle {
+
+      0%,
+      100% {
+        transform: translate(0, 0) rotate(0)
+      }
+
+      25% {
+        transform: translate(-1px, 2px) rotate(-1.5deg)
+      }
+
+      75% {
+        transform: translate(1px, -1px) rotate(1.5deg)
+      }
+    }
+
+    .bp-bomb-inner::before {
+      content: "";
+      position: absolute;
+      top: 8%;
+      left: 18%;
+      width: 40%;
+      height: 22%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0));
+      filter: blur(2px)
+    }
+
+    .bp-bomb-inner::after {
+      content: "";
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      width: 5px;
+      height: 36px;
+      background: linear-gradient(to top, #2a2a2a, #525b6e 30%, #737373);
+      transform: translateX(-50%) rotate(22deg);
+      transform-origin: bottom center;
+      border-radius: 2px
+    }
+
+    .bp-spark {
+      position: absolute;
+      top: -38px;
+      left: calc(50% + 12px);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fffbeb, #fef08a 35%, #f97316 70%, #c2410c);
+      box-shadow: 0 0 22px #f97316, 0 0 40px #fb923c;
+      animation: bpSpark .3s ease-in-out infinite alternate;
+      z-index: 3
+    }
+
+    @keyframes bpSpark {
+      0% {
+        transform: scale(.85) rotate(0)
+      }
+
+      100% {
+        transform: scale(1.3) rotate(20deg)
+      }
+    }
+
+    .bp-pass-btn {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 18px 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      background: linear-gradient(180deg, #fb923c 0%, #ea580c 50%, #7c2d12 100%);
+      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.7rem;
+      letter-spacing: .18em;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 -2px 0 rgba(0, 0, 0, .4), 0 5px 0 #4a1505, 0 8px 22px -3px rgba(249, 115, 22, .65);
+      z-index: 5
+    }
+
+    .bp-pass-btn:disabled {
+      opacity: .42;
+      cursor: not-allowed;
+      filter: saturate(.6)
+    }
+
+    .bp-pass-btn:active {
+      transform: translateX(-50%) translateY(4px)
+    }
+
+    .bp-turn {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      padding: 8px 20px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fdba74, #c2410c);
+      color: #1a0c06;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.55rem;
+      letter-spacing: .12em;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 4px 0 #4a1505, 0 6px 14px -2px rgba(249, 115, 22, .55)
+    }
+
+    .bp-subturn {
+      position: absolute;
+      top: 66px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      font-size: .78rem;
+      color: #cbd5e1;
+      background: rgba(7, 11, 20, .55);
+      border: 1px solid rgba(255, 255, 255, .08);
+      padding: 6px 12px;
+      border-radius: 999px
+    }
+
+    .bp-players {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 12px
+    }
+
+    .bp-player {
+      background: linear-gradient(180deg, #1a1f3a 0%, #0a0e1c 100%);
+      border: 1px solid rgba(255, 255, 255, .06);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 4px 8px rgba(0, 0, 0, .3)
+    }
+
+    .bp-player.active {
+      background: linear-gradient(180deg, #ea580c 0%, #7c2d12 100%);
+      transform: translateY(-2px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 4px 0 #4a1505, 0 6px 16px -2px rgba(249, 115, 22, .55)
+    }
+
+    .bp-player.dead {
+      opacity: .3;
+      filter: grayscale(.9)
+    }
+
+    .bp-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex: none;
+      box-shadow: 0 0 8px currentColor
+    }
+
+    .bp-name {
+      flex: 1;
+      min-width: 0;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .bp-lives {
+      display: flex;
+      gap: 4px
+    }
+
+    .bp-life {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fca5a5, #dc2626 70%, #4a0a0a);
+      box-shadow: 0 0 8px rgba(239, 68, 68, .7)
+    }
+
+    .bp-life.gone {
+      background: rgba(255, 255, 255, .12);
+      box-shadow: none
+    }
+
+    .bp-explosion {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle, rgba(255, 255, 255, .16) 0%, rgba(249, 115, 22, .72) 25%, rgba(0, 0, 0, .82) 70%);
+      z-index: 8;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s
+    }
+
+    .bp-explosion.show {
+      opacity: 1
+    }
+
+    .bp-explosion-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 4.2rem;
+      color: #fff;
+      text-shadow: 0 0 32px #f97316, 0 0 56px #ef4444, 0 4px 0 #4a1505;
+      letter-spacing: .08em;
+      animation: bpExplode .55s ease-out
+    }
+
+    @keyframes bpExplode {
+      0% {
+        transform: scale(.3) rotate(-10deg);
+        opacity: 0
+      }
+
+      60% {
+        transform: scale(1.4) rotate(2deg);
+        opacity: 1
+      }
+
+      100% {
+        transform: scale(1.25) rotate(0);
+        opacity: 1
+      }
+    }
+
+    .bp-setup {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(9, 4, 2, .98), rgba(7, 4, 2, .98));
+      z-index: 20;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      justify-content: center
+    }
+
+    .bp-setup-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.7rem;
+      color: #fdba74;
+      text-align: center;
+      letter-spacing: .12em
+    }
+
+    .bp-setup-sub {
+      font-size: .9rem;
+      color: #cbd5e1;
+      text-align: center;
+      line-height: 1.5
+    }
+
+    .bp-count-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 6px 0
+    }
+
+    .bp-count-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+      border: 1px solid rgba(255, 255, 255, .06);
+      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.5rem;
+      cursor: pointer
+    }
+
+    .bp-count-btn.active {
+      background: linear-gradient(180deg, #fb923c, #c2410c);
+      color: #1a0c06
+    }
+
+    .bp-row {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .bp-row input {
+      flex: 1;
+      min-width: 0;
+      padding: 11px;
+      background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 10px;
+      color: #fff;
+      font: inherit
+    }
+
+    .bp-modes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 8px 0
+    }
+
+    .bp-mode-btn {
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, .08);
+      background: rgba(255, 255, 255, .04);
+      color: #e2e8f0;
+      font-weight: 800;
+      cursor: pointer
+    }
+
+    .bp-mode-btn.active {
+      background: linear-gradient(180deg, rgba(249, 115, 22, .3), rgba(124, 45, 18, .7));
+      color: #fff;
+      border-color: rgba(249, 115, 22, .35)
+    }
+
+    .bp-mini {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px
+    }
+
+    .bp-mini-card {
+      border: 1px solid rgba(255, 255, 255, .08);
+      background: rgba(255, 255, 255, .04);
+      border-radius: 14px;
+      padding: 10px 12px
+    }
+
+    .bp-mini-card .l {
+      font-size: .72rem;
+      color: #cbd5e1
+    }
+
+    .bp-mini-card .v {
+      margin-top: 4px;
+      font-weight: 900;
+      font-size: 1.02rem
+    }
+
+    .bp-invest {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 12px
+    }
+
+    .bp-invest-card {
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .03));
+      padding: 12px
+    }
+
+    .bp-invest-card h3 {
+      margin: 0 0 6px;
+      font-size: .96rem
+    }
+
+    .bp-invest-card p {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: .85rem;
+      line-height: 1.5
+    }
+
+    .bp-foot {
+      padding: 0 14px 14px;
+      color: #94a3b8;
+      font-size: .82rem;
+      line-height: 1.5
+    }
+
+    .bp-hidden {
+      display: none !important
+    }
+
+    .bp-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(3, 7, 18, .72);
+      backdrop-filter: blur(10px);
+      padding: 16px
+    }
+
+    .bp-overlay-card {
+      width: min(100%, 440px);
+      background: linear-gradient(180deg, #10172a, #070b14);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 24px;
+      padding: 20px;
+      text-align: center
+    }
+
+    .bp-overlay-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      margin: 0 auto 12px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #ffb627, #f97316);
+      color: #1a0c00
+    }
+
+    .bp-overlay-title {
+      font-size: 1.4rem;
+      font-weight: 900;
+      margin: 0 0 8px
+    }
+
+    .bp-overlay-sub {
+      color: #cbd5e1;
+      line-height: 1.55;
+      margin-bottom: 14px
+    }
+
+    .bp-econ {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .08);
+      text-align: right
+    }
+
+    .bp-econ-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .bp-econ-main {
+      font-size: 1.35rem;
+      font-weight: 900
+    }
+
+    .bp-econ-sub {
+      margin-top: 6px;
+      color: #cbd5e1;
+      font-size: .85rem;
+      line-height: 1.5
+    }
+
+    @media (max-width: 900px) {
+      .bp-layout {
+        grid-template-columns: 1fr
+      }
+
+      .bp-arena {
+        min-height: 500px
+      }
+
+      .bp-invest {
+        grid-template-columns: 1fr
+      }
+    }
+
+    @media (max-width: 640px) {
+      .bp-shell {
+        padding: 10px
+      }
+
+      .bp-top,
+      .bp-layout,
+      .bp-card {
+        padding: 12px
+      }
+
+      .bp-players {
+        grid-template-columns: 1fr
+      }
+
+      .bp-modes,
+      .bp-mini {
+        grid-template-columns: 1fr
+      }
+
+      .bp-arena {
+        min-height: 460px
+      }
+
+      .bp-title h1 {
+        font-size: 1rem
+      }
+
+      .bp-pass-btn {
+        font-size: 1.45rem;
+        padding: 16px 32px
+      }
+    }
+  </style>
 </head>
+
 <body class="vex-game">
-<div class="vex-shell">
-  <div class="vex-header">
-    <div class="vex-title">
-      <div class="vex-title-badge" style="background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -4px #f97316;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 7V4"/><path d="M14 4l3-2"/></svg>
+  <div class="bp-shell">
+    <div class="bp-hero">
+      <div class="bp-top">
+        <div class="bp-title-wrap">
+          <div class="bp-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M8 8l8 8" />
+              <path d="M16 8l-8 8" />
+            </svg>
+          </div>
+          <div class="bp-title">
+            <h1 id="title">تمرير القنبلة</h1>
+            <p id="subtitle">لعبة جماعية سريعة + اقتصاد VEX + مؤشرات استثمارية</p>
+          </div>
+        </div>
+        <div class="bp-toolbar">
+          <div class="bp-pill" id="modePill">Party mode</div>
+          <div class="bp-pill" id="fusePill">Fuse 0s</div>
+          <button class="bp-btn bp-btn-ghost" id="langBtn">EN</button>
+          <button class="bp-btn bp-btn-ghost" id="resetBtn">إعادة</button>
+        </div>
       </div>
-      <span id="title">تمرير القنبلة</span>
+
+      <div class="bp-layout">
+        <div class="bp-card">
+          <div class="bp-players" id="players"></div>
+          <div class="bp-arena" id="arena">
+            <div class="bp-ring"></div>
+            <div class="bp-turn" id="currentName">—</div>
+            <div class="bp-subturn" id="subTurn">—</div>
+            <div class="bp-bomb">
+              <div class="bp-bomb-inner">
+                <div class="bp-spark" id="spark"></div>
+              </div>
+            </div>
+            <button class="bp-pass-btn" id="passBtn">PASS</button>
+            <div class="bp-explosion" id="boom">
+              <div class="bp-explosion-text">💥 BOOM</div>
+            </div>
+
+            <div class="bp-setup" id="setupOverlay">
+              <div class="bp-setup-title" id="setupTitle">إعداد المباراة</div>
+              <div class="bp-setup-sub" id="setupSub">اختر عدد اللاعبين ووضع الخطر ثم ابدأ. كل انفجار يخصم حياة، وآخر
+                لاعب باقٍ يفوز ويُسجل كجلسة جماعية.</div>
+              <div class="bp-count-row" id="countRow">
+                <button class="bp-count-btn active" data-c="2">2</button>
+                <button class="bp-count-btn" data-c="3">3</button>
+                <button class="bp-count-btn" data-c="4">4</button>
+                <button class="bp-count-btn" data-c="6">6</button>
+              </div>
+              <div class="bp-modes" id="modeRow">
+                <button class="bp-mode-btn" data-m="safe">آمن</button>
+                <button class="bp-mode-btn active" data-m="party">Party</button>
+                <button class="bp-mode-btn" data-m="rage">Rage</button>
+              </div>
+              <div id="namesArea"></div>
+              <button class="bp-btn bp-btn-primary" id="setupStart" style="margin-top:14px;width:100%">ابدأ</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bp-card">
+          <div class="bp-mini">
+            <div class="bp-mini-card">
+              <div class="l" id="lblRound">الجولة</div>
+              <div class="v" id="roundValue">1</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblFuse">الوقت المتبقي</div>
+              <div class="v" id="fuseValue">0s</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblLives">الأحياء</div>
+              <div class="v" id="aliveValue">0</div>
+            </div>
+          </div>
+          <div class="bp-mini" style="margin-top:8px">
+            <div class="bp-mini-card">
+              <div class="l" id="lblPressure">مؤشر الضغط</div>
+              <div class="v" id="pressureValue">0%</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblValue">عائد متوقع</div>
+              <div class="v" id="valueValue">0 VEX</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblRank">الترتيب</div>
+              <div class="v" id="rankValue">—</div>
+            </div>
+          </div>
+
+          <div class="bp-invest" style="margin-top:12px">
+            <div class="bp-invest-card">
+              <h3 id="pitchTitle">لماذا هذه النسخة تجذب اللاعبين؟</h3>
+              <p id="pitchText">جلسة قصيرة، قرارات سريعة، ومخاطرة محسوبة تجعل اللعبة قابلة للإعادة وتخدم الاحتفاظ
+                اليومي.</p>
+            </div>
+            <div class="bp-invest-card">
+              <h3 id="economyTitle">الاقتصاد</h3>
+              <p id="economyText">الربح يعتمد على عدد النجاة، سرعة التمرير، ومستوى المخاطرة، ثم يُرسل للسيرفر ضمن arcade
+                session واحدة.</p>
+            </div>
+          </div>
+
+          <div class="bp-mini" style="margin-top:12px">
+            <div class="bp-mini-card">
+              <div class="l" id="lblReward">مكافأة الجولة</div>
+              <div class="v" id="rewardValue">0.00</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblNet">صافي VEX</div>
+              <div class="v" id="netValue">0.00</div>
+            </div>
+            <div class="bp-mini-card">
+              <div class="l" id="lblInvestor">جاذبية الاستثمار</div>
+              <div class="v" id="investorValue">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bp-foot" id="hint">مرّر القنبلة قبل أن تنفجر. اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ
+        يفوز.</div>
     </div>
-    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
   </div>
 
-  <div class="bp-players" id="players"></div>
-
-  <div class="bp-arena" id="arena">
-    <div class="bp-current-name" id="currentName">—</div>
-    <div class="bp-bomb">
-      <div class="bp-bomb-inner">
-        <div class="bp-spark" id="spark"></div>
+  <div class="bp-overlay bp-hidden" id="endOverlay">
+    <div class="bp-overlay-card">
+      <div class="bp-overlay-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+        </svg>
       </div>
-    </div>
-    <button class="bp-pass-btn" id="passBtn">PASS</button>
-    <div class="bp-explosion" id="boom">
-      <div class="bp-explosion-text">💥 BOOM</div>
-    </div>
-
-    <div class="bp-setup-overlay" id="setupOverlay">
-      <div class="bp-setup-title" id="setupTitle">عدد اللاعبين</div>
-      <div class="bp-count-row" id="countRow">
-        <button class="bp-count-btn" data-c="2">2</button>
-        <button class="bp-count-btn active" data-c="3">3</button>
-        <button class="bp-count-btn" data-c="4">4</button>
+      <div class="bp-overlay-title" id="endTitle">انتهت اللعبة!</div>
+      <div class="bp-overlay-sub" id="endSub"></div>
+      <div class="bp-econ">
+        <div class="bp-econ-top">
+          <div id="econLabel">نتيجة الجلسة</div>
+          <div class="bp-econ-main" id="finalVex">0.00 VEX</div>
+        </div>
+        <div class="bp-econ-sub" id="econSub">تم حفظ النتيجة وإرسالها للسيرفر.</div>
       </div>
-      <div id="namesArea"></div>
-      <button class="bp-setup-start" id="setupStart">ابدأ</button>
+      <div class="bp-btn-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+        <button class="bp-btn bp-btn-primary" id="endRestart">جولة جديدة</button>
+        <button class="bp-btn bp-btn-ghost" id="endClose">إغلاق</button>
+      </div>
     </div>
   </div>
 
-  <div class="vex-hint" id="hint">مرّر القنبلة قبل أن تنفجر! اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ يفوز.</div>
-</div>
+  <script src="/games/vex-sdk.js"></script>
+  <script src="/games/_shared/vex-game.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const STRINGS = {
+        ar: {
+          title: 'تمرير القنبلة', subtitle: 'لعبة جماعية سريعة + اقتصاد VEX + مؤشرات استثمارية', modePill: (m) => m === 'safe' ? 'Safe' : m === 'rage' ? 'Rage' : 'Party',
+          setupTitle: 'إعداد المباراة', setupSub: 'اختر عدد اللاعبين ووضع الخطر ثم ابدأ. كل انفجار يخصم حياة، وآخر لاعب باقٍ يفوز ويُسجل كجلسة جماعية.',
+          setupStart: 'ابدأ', reset: 'إعادة', pass: 'مرّر', passHint: 'مرّر بسرعة!', boom: '💥 BOOM', end: 'انتهت اللعبة!', newRound: 'جولة جديدة', close: 'إغلاق',
+          hint: 'مرّر القنبلة قبل أن تنفجر. اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ يفوز.',
+          defaultName: 'لاعب', round: 'الجولة', fuse: 'الوقت المتبقي', lives: 'الأحياء', pressure: 'مؤشر الضغط', value: 'عائد متوقع', rank: 'الترتيب',
+          reward: 'مكافأة الجولة', net: 'صافي VEX', investor: 'جاذبية الاستثمار', pitchTitle: 'لماذا هذه النسخة تجذب اللاعبين؟',
+          pitchText: 'جلسة قصيرة، قرارات سريعة، ومخاطرة محسوبة تجعل اللعبة قابلة للإعادة وتخدم الاحتفاظ اليومي.',
+          economyTitle: 'الاقتصاد', economyText: 'الربح يعتمد على عدد النجاة، سرعة التمرير، ومستوى المخاطرة، ثم يُرسل للسيرفر ضمن arcade session واحدة.',
+          econLabel: 'نتيجة الجلسة', econSub: 'تم حفظ النتيجة وإرسالها للسيرفر.', winner: (n) => `${n} فاز!`, alive: 'أحياء', fuseLabel: 'Fuse', safe: 'آمن', party: 'Party', rage: 'Rage',
+          investorHot: 'جاذبة جدًا', investorGood: 'جيدة', investorOk: 'مقبولة', investorWeak: 'ضعيفة'
+        },
+        en: {
+          title: 'Bomb Pass', subtitle: 'Fast party play + VEX economy + investor signals', modePill: (m) => m === 'safe' ? 'Safe' : m === 'rage' ? 'Rage' : 'Party',
+          setupTitle: 'Match setup', setupSub: 'Choose the player count and risk mode. Every explosion costs a life; the last alive wins and the session is saved.',
+          setupStart: 'Start', reset: 'Reset', pass: 'PASS', passHint: 'Pass fast!', boom: '💥 BOOM', end: 'Game over!', newRound: 'New game', close: 'Close',
+          hint: 'Pass the bomb before it explodes. The holder loses a life. Last alive wins.',
+          defaultName: 'Player', round: 'Round', fuse: 'Time left', lives: 'Alive', pressure: 'Pressure', value: 'Expected value', rank: 'Rank',
+          reward: 'Round reward', net: 'Net VEX', investor: 'Investor appeal', pitchTitle: 'Why does this attract players?',
+          pitchText: 'Short sessions, fast decisions, and calculated risk make the game replayable and retention-friendly.',
+          economyTitle: 'Economy', economyText: 'Profit is driven by survival count, pass speed, and risk mode, then saved to the server in one arcade session.',
+          econLabel: 'Session result', econSub: 'Result saved and sent to the server.', winner: (n) => `${n} wins!`, alive: 'Alive', fuseLabel: 'Fuse', safe: 'Safe', party: 'Party', rage: 'Rage',
+          investorHot: 'Very strong', investorGood: 'Good', investorOk: 'Fair', investorWeak: 'Weak'
+        }
+      };
 
-<div class="vex-overlay" id="endOverlay">
-  <div class="vex-overlay-card">
-    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -4px #f97316;">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
-    </div>
-    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
-    <div class="vex-overlay-subtitle" id="endSub"></div>
-    <div class="vex-btn-row">
-      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -3px #f97316;">جولة جديدة</button>
-    </div>
-  </div>
-</div>
+      const $ = (id) => document.getElementById(id);
+      const playerColors = ['#22c55e', '#ef4444', '#1e88ff', '#ffb627', '#a855f7', '#22d3ee'];
+      const state = { lang: 'ar', count: 3, mode: 'party', players: [], current: 0, running: false, fuseMs: 0, fuseEndsAt: 0, timer: null, explosionTimer: null, round: 1, passCount: 0, startedAt: Date.now(), submitted: false, pendingTimers: [] };
+      const MODE = { safe: { baseFuse: [8500, 14500], rewardMul: 0.9, passBonus: 0.7, risk: 'low' }, party: { baseFuse: [6000, 12000], rewardMul: 1.1, passBonus: 1, risk: 'medium' }, rage: { baseFuse: [4200, 8600], rewardMul: 1.28, passBonus: 1.15, risk: 'high' } };
 
-<script src="/games/vex-sdk.js"></script>
-<script src="/games/_shared/vex-game.js"></script>
-<script>
-(function(){
-  'use strict';
-  const STRINGS = {
-    ar:{ title:'تمرير القنبلة', reset:'إعادة', pass:'مرّر', setupTitle:'عدد اللاعبين',
-      defaultName:'لاعب', start:'ابدأ', boom:'انفجر!', winner:(n)=>`${n} فاز!`,
-      newRound:'جولة جديدة', endSub:'تهانينا للناجي.',
-      hint:'مرّر القنبلة قبل أن تنفجر! اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ يفوز.', },
-    en:{ title:'Bomb Pass', reset:'Reset', pass:'PASS', setupTitle:'Number of players',
-      defaultName:'Player', start:'Start', boom:'BOOM!', winner:(n)=>`${n} wins!`,
-      newRound:'New game', endSub:'Congratulations to the survivor.',
-      hint:'Pass the bomb before it explodes! The holder loses a life. Last alive wins.', },
-  };
-  let lang = 'ar';
-  const $ = id => document.getElementById(id);
+      function later(fn, ms) { const id = setTimeout(() => { state.pendingTimers = state.pendingTimers.filter(x => x !== id); fn(); }, ms); state.pendingTimers.push(id); return id; }
+      function clearPending() { state.pendingTimers.forEach(clearTimeout); state.pendingTimers = []; if (state.timer) clearInterval(state.timer); if (state.explosionTimer) clearTimeout(state.explosionTimer); state.timer = null; state.explosionTimer = null; }
+      function t() { return STRINGS[state.lang]; }
+      function color(i) { return playerColors[i % playerColors.length]; }
+      function alivePlayers() { return state.players.filter(p => p.alive); }
+      function updateModeButtons() { document.querySelectorAll('.bp-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.m === state.mode)); }
 
-  let players;        // [{name, lives, alive}]
-  let current;        // index of holder
-  let bombTimer;      // setTimeout for explosion
-  let nextExplodeAt;  // ms timestamp
-  let running = false;
-  let count = 3;
-  let pendingTimers = [];
-  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
-  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; }
-
-  function applyLang(){
-    const s = STRINGS[lang];
-    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
-    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
-    $('passBtn').textContent = s.pass;
-    $('setupTitle').textContent = s.setupTitle;
-    $('setupStart').textContent = s.start;
-    $('hint').textContent = s.hint;
-    $('endRestart').textContent = s.newRound;
-    rebuildSetupNames();
-  }
-
-  function rebuildSetupNames(){
-    const area = $('namesArea'); area.innerHTML = '';
-    const s = STRINGS[lang];
-    for (let i = 0; i < count; i++){
-      const row = document.createElement('div');
-      row.className = 'bp-setup-row';
-      const dot = document.createElement('div');
-      dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${playerColor(i)};box-shadow:0 0 8px ${playerColor(i)};flex-shrink:0;`;
-      const inp = document.createElement('input');
-      inp.type = 'text'; inp.maxLength = 12;
-      inp.placeholder = `${s.defaultName} ${i+1}`;
-      inp.value = `${s.defaultName} ${i+1}`;
-      inp.dataset.i = i;
-      row.appendChild(dot); row.appendChild(inp);
-      area.appendChild(row);
-    }
-  }
-
-  function playerColor(i){
-    return ['#22c55e','#ef4444','#1e88ff','#ffb627'][i % 4];
-  }
-
-  function startSetup(){
-    running = false;
-    if (bombTimer){ clearTimeout(bombTimer); bombTimer = null; }
-    clearPending();
-    $('boom').classList.remove('show');
-    $('setupOverlay').style.display = 'flex';
-    $('endOverlay').classList.remove('show');
-    rebuildSetupNames();
-  }
-
-  function startGame(){
-    const s = STRINGS[lang];
-    const inputs = $('namesArea').querySelectorAll('input');
-    players = Array.from(inputs).map((inp, i) => ({
-      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
-      lives: 3, alive: true, color: playerColor(i),
-    }));
-    current = 0;
-    $('setupOverlay').style.display = 'none';
-    running = true;
-    renderPlayers();
-    nextRound();
-  }
-
-  function renderPlayers(){
-    const root = $('players'); root.innerHTML = '';
-    players.forEach((p, i) => {
-      const row = document.createElement('div');
-      row.className = 'bp-player' + (i === current && p.alive ? ' active' : '') + (!p.alive ? ' dead' : '');
-      const dot = document.createElement('div');
-      dot.className = 'bp-player-dot'; dot.style.background = p.color; dot.style.boxShadow = `0 0 8px ${p.color}`;
-      const name = document.createElement('div');
-      name.className = 'bp-player-name'; name.textContent = p.name;
-      const lives = document.createElement('div');
-      lives.className = 'bp-lives';
-      for (let l = 0; l < 3; l++){
-        const lf = document.createElement('div');
-        lf.className = 'bp-life' + (l >= p.lives ? ' gone' : '');
-        lives.appendChild(lf);
+      function applyLang() {
+        const s = t();
+        document.documentElement.lang = state.lang; document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title; $('subtitle').textContent = s.subtitle; $('resetBtn').textContent = s.reset; $('passBtn').textContent = s.pass; $('setupTitle').textContent = s.setupTitle;
+        $('setupSub').textContent = s.setupSub; $('setupStart').textContent = s.setupStart; $('hint').textContent = s.hint; $('endTitle').textContent = s.end; $('endRestart').textContent = s.newRound; $('endClose').textContent = s.close;
+        $('pitchTitle').textContent = s.pitchTitle; $('pitchText').textContent = s.pitchText; $('economyTitle').textContent = s.economyTitle; $('economyText').textContent = s.economyText; $('econLabel').textContent = s.econLabel; $('econSub').textContent = s.econSub;
+        $('lblRound').textContent = s.round; $('lblFuse').textContent = s.fuse; $('lblLives').textContent = s.lives; $('lblPressure').textContent = s.pressure; $('lblValue').textContent = s.value; $('lblRank').textContent = s.rank; $('lblReward').textContent = s.reward; $('lblNet').textContent = s.net; $('lblInvestor').textContent = s.investor;
+        $('modePill').textContent = s.modePill(state.mode); $('langBtn').textContent = state.lang === 'ar' ? 'EN' : 'AR';
+        rebuildSetupNames(); renderPlayers(); updateHud();
       }
-      row.appendChild(dot); row.appendChild(name); row.appendChild(lives);
-      root.appendChild(row);
-    });
-    $('currentName').textContent = players[current] ? players[current].name : '—';
-    $('currentName').style.color = players[current] ? players[current].color : '#fdba74';
-  }
 
-  function nextRound(){
-    if (!running) return;
-    // Random fuse 6-22 seconds
-    const ms = 6000 + Math.random() * 16000;
-    nextExplodeAt = performance.now() + ms;
-    if (bombTimer) clearTimeout(bombTimer);
-    bombTimer = setTimeout(explode, ms);
-  }
+      function rebuildSetupNames() {
+        const area = $('namesArea'); area.innerHTML = ''; const s = t();
+        for (let i = 0; i < state.count; i++) {
+          const row = document.createElement('div'); row.className = 'bp-row';
+          const dot = document.createElement('div'); dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${color(i)};box-shadow:0 0 8px ${color(i)};flex:none`;
+          const inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 14; inp.placeholder = `${s.defaultName} ${i + 1}`; inp.value = `${s.defaultName} ${i + 1}`;
+          row.appendChild(dot); row.appendChild(inp); area.appendChild(row);
+        }
+      }
 
-  function pass(){
-    if (!running) return;
-    if (!players[current].alive) return; // safety
-    // Move to next alive player
-    let next = current;
-    for (let i = 0; i < players.length; i++){
-      next = (next + 1) % players.length;
-      if (players[next].alive){ current = next; break; }
-    }
-    renderPlayers();
-  }
+      function renderPlayers() {
+        const root = $('players'); root.innerHTML = '';
+        state.players.forEach((p, i) => {
+          const row = document.createElement('div'); row.className = 'bp-player' + (p.alive && i === state.current && state.running ? ' active' : '') + (!p.alive ? ' dead' : '');
+          const dot = document.createElement('div'); dot.className = 'bp-dot'; dot.style.background = p.color;
+          const name = document.createElement('div'); name.className = 'bp-name'; name.textContent = p.name;
+          const lives = document.createElement('div'); lives.className = 'bp-lives';
+          for (let l = 0; l < 3; l++) { const lf = document.createElement('div'); lf.className = 'bp-life' + (l >= p.lives ? ' gone' : ''); lives.appendChild(lf); }
+          row.appendChild(dot); row.appendChild(name); row.appendChild(lives); root.appendChild(row);
+        });
+        const cur = state.players[state.current];
+        $('currentName').textContent = cur ? cur.name : '—';
+        $('currentName').style.color = cur ? cur.color : '#fdba74';
+        $('subTurn').textContent = cur ? (state.lang === 'ar' ? `دور ${cur.name}` : `${cur.name}'s turn`) : '—';
+      }
 
-  function explode(){
-    if (!running) return;
-    const holder = players[current];
-    holder.lives--;
-    $('boom').classList.add('show');
-    if (typeof VexGame !== 'undefined') VexGame.toast(holder.name + (lang==='ar'?' فقد حياة!':' lost a life!'), 'danger');
-    later(() => $('boom').classList.remove('show'), 800);
-    if (holder.lives <= 0){
-      holder.alive = false;
-      // Check survivors
-      const alive = players.filter(p => p.alive);
-      if (alive.length === 1){
+      function computeEconomy() {
+        const cfg = MODE[state.mode];
+        const survivors = alivePlayers().length;
+        const survivalFactor = survivors / Math.max(2, state.count);
+        const passSpeed = Math.max(0.55, Math.min(1.25, 1.25 - (state.passCount / Math.max(1, state.round * 2)) * 0.18));
+        const reward = Math.max(0, (survivors * 0.75 + state.passCount * 0.18 + (state.current + 1) * 0.05) * cfg.rewardMul * passSpeed);
+        const net = reward * (survivors > 1 ? 1 : 1.35);
+        const pressure = Math.min(100, Math.round(((1 - survivalFactor) * 45) + (state.passCount * 3) + (state.mode === 'rage' ? 18 : state.mode === 'safe' ? 0 : 8)));
+        const investor = net >= 5 || state.passCount >= 10 ? t().investorHot : net >= 3 ? t().investorGood : net >= 1.5 ? t().investorOk : t().investorWeak;
+        return { reward, net, pressure, investor, survivalFactor, passSpeed };
+      }
+
+      function updateHud() {
+        const e = computeEconomy();
+        $('roundValue').textContent = String(state.round);
+        $('fuseValue').textContent = Math.max(0, Math.ceil((state.fuseEndsAt - performance.now()) / 1000)) + 's';
+        $('aliveValue').textContent = String(alivePlayers().length);
+        $('pressureValue').textContent = `${e.pressure}%`;
+        $('valueValue').textContent = `${e.reward.toFixed(2)} VEX`;
+        $('rankValue').textContent = alivePlayers().length === 1 ? alivePlayers()[0].name : (state.lang === 'ar' ? 'تنافسي' : 'Competitive');
+        $('rewardValue').textContent = e.reward.toFixed(2);
+        $('netValue').textContent = e.net.toFixed(2);
+        $('investorValue').textContent = e.investor;
+        $('modePill').textContent = t().modePill(state.mode);
+        $('fusePill').textContent = (state.lang === 'ar' ? 'فتيل ' : 'Fuse ') + Math.max(0, Math.ceil((state.fuseEndsAt - performance.now()) / 1000)) + 's';
+        $('passBtn').disabled = !state.running || !state.players[state.current]?.alive;
+        $('passBtn').textContent = state.lang === 'ar' ? 'مرّر' : 'PASS';
+        $('passBtn').style.boxShadow = state.mode === 'rage'
+          ? 'inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(0,0,0,.4), 0 5px 0 #4a1505, 0 8px 22px -3px rgba(249,115,22,.78)'
+          : 'inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(0,0,0,.4), 0 5px 0 #4a1505, 0 8px 22px -3px rgba(249,115,22,.65)';
+      }
+
+      function setFuse() {
+        const cfg = MODE[state.mode];
+        state.fuseMs = Math.floor(cfg.baseFuse[0] + Math.random() * (cfg.baseFuse[1] - cfg.baseFuse[0]));
+        state.fuseEndsAt = performance.now() + state.fuseMs;
+        if (state.explosionTimer) clearTimeout(state.explosionTimer);
+        state.explosionTimer = setTimeout(explode, state.fuseMs);
+        if (state.timer) clearInterval(state.timer);
+        state.timer = setInterval(updateHud, 200);
+        updateHud();
+      }
+
+      function startSetup() {
+        clearPending();
+        state.running = false; state.submitted = false; state.round = 1; state.passCount = 0; state.current = 0; state.players = [];
+        $('boom').classList.remove('show'); $('endOverlay').classList.add('bp-hidden'); $('setupOverlay').classList.remove('bp-hidden');
+        renderPlayers(); rebuildSetupNames(); updateModeButtons(); updateHud();
+      }
+
+      function startGame() {
+        const inputs = $('namesArea').querySelectorAll('input');
+        state.players = Array.from(inputs).map((inp, i) => ({ name: inp.value.trim() || `${t().defaultName} ${i + 1}`, lives: 3, alive: true, color: color(i) }));
+        state.current = 0; state.running = true; state.passCount = 0; state.round = 1;
+        $('setupOverlay').classList.add('bp-hidden'); $('endOverlay').classList.add('bp-hidden');
+        renderPlayers(); setFuse();
+      }
+
+      function nextAliveFrom(idx) {
+        let n = idx;
+        for (let i = 0; i < state.players.length; i++) { n = (n + 1) % state.players.length; if (state.players[n].alive) return n; }
+        return idx;
+      }
+
+      function pass() {
+        if (!state.running) return;
+        const p = state.players[state.current]; if (!p?.alive) return;
+        state.passCount += 1;
+        state.current = nextAliveFrom(state.current);
+        state.round = Math.max(1, Math.floor(state.passCount / Math.max(1, state.players.length)) + 1);
         renderPlayers();
-        return endGame(alive[0]);
+        setFuse();
+        if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast((state.lang === 'ar' ? 'تم التمرير' : 'Passed') + ' ' + state.players[state.current].name, 'success');
       }
-    }
-    // Move bomb to next alive player after a brief beat
-    later(() => {
-      if (!running) return;
-      // start from next alive
-      let next = current;
-      for (let i = 0; i < players.length; i++){
-        next = (next + 1) % players.length;
-        if (players[next].alive){ current = next; break; }
+
+      function explode() {
+        if (!state.running) return;
+        const holder = state.players[state.current];
+        holder.lives -= 1;
+        $('boom').classList.add('show');
+        later(() => $('boom').classList.remove('show'), 700);
+
+        if (holder.lives <= 0) holder.alive = false;
+        if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(holder.name + (state.lang === 'ar' ? ' فقد حياة!' : ' lost a life!'), 'danger');
+
+        renderPlayers();
+        const alive = alivePlayers();
+        if (alive.length === 1) { return endGame(alive[0]); }
+
+        state.current = nextAliveFrom(state.current);
+        state.round += 1;
+        renderPlayers();
+        setFuse();
       }
-      renderPlayers();
-      nextRound();
-    }, 1100);
-  }
 
-  function endGame(winner){
-    running = false;
-    if (bombTimer){ clearTimeout(bombTimer); bombTimer = null; }
-    const s = STRINGS[lang];
-    $('endTitle').textContent = s.winner(winner.name);
-    $('endSub').textContent = s.endSub;
-    later(() => $('endOverlay').classList.add('show'), 700);
-    if (typeof VexGame !== 'undefined'){
-      VexGame.confetti(900);
-      VexGame.endSession({ score: winner.lives, result: 'win', metadata: { winner: winner.name } });
-    }
-  }
+      function endGame(winner) {
+        state.running = false; if (state.explosionTimer) clearTimeout(state.explosionTimer); if (state.timer) clearInterval(state.timer);
+        const e = computeEconomy();
+        $('endTitle').textContent = t().winner(winner.name);
+        $('endSub').textContent = `${winner.name} · ${alivePlayers().length} ${t().alive}`;
+        $('econLabel').textContent = t().econLabel;
+        $('econSub').textContent = t().econSub;
+        $('finalVex').textContent = `${e.net.toFixed(2)} VEX`;
+        $('endOverlay').classList.remove('bp-hidden');
+        later(() => { $('endOverlay').classList.add('show'); }, 250);
+        if (typeof VexGame !== 'undefined') {
+          if (VexGame.confetti) VexGame.confetti(900);
+          if (!state.submitted) {
+            state.submitted = true;
+            VexGame.endSession({
+              score: Math.max(1, alivePlayers().length),
+              result: 'win',
+              metadata: {
+                mode: state.mode,
+                playerCount: state.players.length,
+                survivors: alivePlayers().length,
+                passCount: state.passCount,
+                winner: winner.name,
+                fuseMs: state.fuseMs,
+                sessionSeconds: Math.max(1, Math.round((Date.now() - state.startedAt) / 1000)),
+                riskProfile: MODE[state.mode].risk,
+                expectedVex: Number(e.net.toFixed(2)),
+                rewardVex: Number(e.reward.toFixed(2)),
+                investorAppeal: e.investor,
+                multiplayer: true,
+                game: 'bomb-pass',
+                strategy: 'hot-seat',
+              }
+            });
+          }
+        }
+      }
 
-  // Setup events
-  document.querySelectorAll('.bp-count-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      count = parseInt(b.dataset.c, 10);
-      document.querySelectorAll('.bp-count-btn').forEach(x => x.classList.toggle('active', x===b));
-      rebuildSetupNames();
-    });
-  });
-  $('setupStart').addEventListener('click', startGame);
-  $('passBtn').addEventListener('click', pass);
-  $('resetBtn').addEventListener('click', startSetup);
-  $('endRestart').addEventListener('click', startSetup);
+      document.querySelectorAll('.bp-count-btn').forEach(btn => btn.addEventListener('click', () => {
+        state.count = parseInt(btn.dataset.c, 10);
+        document.querySelectorAll('.bp-count-btn').forEach(x => x.classList.toggle('active', x === btn));
+        rebuildSetupNames();
+      }));
+      document.querySelectorAll('.bp-mode-btn').forEach(btn => btn.addEventListener('click', () => {
+        state.mode = btn.dataset.m;
+        updateModeButtons(); updateHud();
+      }));
+      $('setupStart').addEventListener('click', startGame);
+      $('passBtn').addEventListener('click', pass);
+      $('resetBtn').addEventListener('click', startSetup);
+      $('endRestart').addEventListener('click', startSetup);
+      $('endClose').addEventListener('click', () => { $('endOverlay').classList.remove('show'); startSetup(); });
+      $('langBtn').addEventListener('click', () => { state.lang = state.lang === 'ar' ? 'en' : 'ar'; if (typeof VexGame !== 'undefined' && VexGame.setLang) VexGame.setLang(state.lang); applyLang(); });
 
-  if (typeof VexGame !== 'undefined'){
-    VexGame.boot({
-      slug: 'bomb-pass',
-      onReady: function(player){
-        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
-        applyLang();
-      },
-    });
-  }
-  applyLang();
-  startSetup();
-})();
-</script>
+      if (typeof VexGame !== 'undefined') {
+        VexGame.boot({
+          slug: 'bomb-pass',
+          onReady: function (player) { if (player && player.language) { state.lang = player.language === 'en' ? 'en' : 'ar'; if (VexGame.setLang) VexGame.setLang(state.lang); } applyLang(); }
+        });
+      }
+
+      applyLang();
+      updateModeButtons();
+      startSetup();
+    })();
+  </script>
 </body>
+
 </html>

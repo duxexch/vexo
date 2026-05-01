@@ -1,555 +1,1254 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>VEX Dice Battle</title>
-<link rel="stylesheet" href="/games/_shared/vex-game.css">
-<style>
-  :root{
-    --db-gold:#ffb627;
-    --db-gold-dark:#7c5300;
-    --db-cyan:#22d3ee;
-    --db-green:#22c55e;
-    --db-red:#ef4444;
-    --db-bg:#060b14;
-    --db-panel:#0f172a;
-  }
-  *{box-sizing:border-box}
-  body.vex-game{background:radial-gradient(circle at top, #111a33 0%, #060b14 45%, #02040a 100%); color:#fff}
-  .db-shell{max-width:980px;margin:0 auto;padding:14px}
-  .db-hero{
-    background:linear-gradient(180deg, rgba(20,26,52,.86), rgba(7,11,20,.92));
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:22px;
-    box-shadow:0 24px 60px rgba(0,0,0,.45);
-    overflow:hidden;
-  }
-  .db-topbar{
-    display:flex;align-items:center;justify-content:space-between;gap:12px;
-    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);
-    background:linear-gradient(90deg, rgba(255,182,39,.12), transparent 35%, rgba(34,211,238,.08));
-  }
-  .db-title-wrap{display:flex;align-items:center;gap:12px;min-width:0}
-  .db-logo{
-    width:46px;height:46px;border-radius:16px;display:grid;place-items:center;flex-shrink:0;
-    background:linear-gradient(135deg, #ffd166, #ffb627 55%, #8a5a00);
-    color:#1a0c00;box-shadow:0 0 24px rgba(255,182,39,.35), inset 0 1px 0 rgba(255,255,255,.45)
-  }
-  .db-title{min-width:0}
-  .db-title h1{margin:0;font-size:1.15rem;letter-spacing:.02em}
-  .db-title p{margin:3px 0 0;color:#cbd5e1;font-size:.84rem}
-  .db-toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-  .db-pill{
-    border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:8px 12px;font-size:.82rem;
-    background:rgba(255,255,255,.05);color:#e2e8f0
-  }
-  .db-btn{
-    min-height:44px;padding:11px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.15);
-    background:linear-gradient(180deg, #1c2442, #0b1020);color:#fff;font-weight:700;cursor:pointer;
-    box-shadow:0 8px 18px rgba(0,0,0,.2);transition:transform .08s ease, filter .2s ease, background .2s ease
-  }
-  .db-btn:active{transform:translateY(1px)}
-  .db-btn-primary{background:linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%); color:#1a0c00}
-  .db-btn-ghost{background:rgba(255,255,255,.04)}
-  .db-content{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;padding:14px}
-  .db-card{
-    background:linear-gradient(180deg, rgba(15,23,42,.92), rgba(9,13,24,.96));
-    border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px;box-shadow: inset 0 1px 0 rgba(255,255,255,.04)
-  }
-  .db-arena{
-    position:relative;overflow:hidden;min-height:540px;
-    background:
-      radial-gradient(circle at 20% 0%, rgba(255,182,39,.16), transparent 30%),
-      radial-gradient(circle at 80% 15%, rgba(34,211,238,.10), transparent 24%),
-      linear-gradient(180deg, #071319 0%, #03070d 100%);
-  }
-  .db-arena::before{
-    content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
-    background-image:
-      radial-gradient(circle at 18% 30%, rgba(255,255,255,.06) 1px, transparent 2px),
-      radial-gradient(circle at 72% 70%, rgba(255,255,255,.04) 1px, transparent 2px);
-    background-size:24px 24px, 32px 32px;
-  }
-  .db-setup-overlay{
-    position:absolute;inset:0;z-index:20;padding:18px;display:flex;align-items:center;justify-content:center
-  }
-  .db-setup-panel{
-    width:min(100%, 520px);background:rgba(7,11,20,.96);border:1px solid rgba(255,255,255,.10);
-    border-radius:24px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.55)
-  }
-  .db-setup-title{font-size:1.35rem;font-weight:800;text-align:center;margin-bottom:10px;color:#fde68a}
-  .db-setup-sub{font-size:.9rem;color:#cbd5e1;text-align:center;line-height:1.5;margin-bottom:14px}
-  .db-seg{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:rgba(255,255,255,.05);padding:6px;border-radius:18px
-  }
-  .db-seg button{border:0;border-radius:14px;min-height:46px;background:transparent;color:#cbd5e1;font-weight:800;cursor:pointer}
-  .db-seg button.active{background:linear-gradient(180deg,#ffd166,#ffb627);color:#1a0c00}
-  .db-inputs{display:grid;gap:8px;margin-top:14px}
-  .db-player-row{display:grid;grid-template-columns:14px 1fr 92px;gap:8px;align-items:center}
-  .db-dot{width:12px;height:12px;border-radius:50%;box-shadow:0 0 10px currentColor}
-  .db-input{
-    width:100%;min-height:44px;padding:12px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);
-    background:linear-gradient(180deg, #1a1f3a, #0a0e1c);color:#fff;outline:none
-  }
-  .db-mini{
-    min-height:44px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
-    color:#e2e8f0;display:grid;place-items:center;font-size:.82rem
-  }
-  .db-stage{position:relative;z-index:1;display:grid;gap:12px}
-  .db-turn{
-    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap
-  }
-  .db-turn-left{min-width:0}
-  .db-turn-name{font-size:1.15rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .db-turn-meta{font-size:.82rem;color:#94a3b8}
-  .db-scoreboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  .db-score-item{
-    border-radius:18px;padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)
-  }
-  .db-score-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
-  .db-score-name{font-size:.84rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .db-score-val{font-size:1.3rem;font-weight:900;line-height:1}
-  .db-score-bar{height:8px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
-  .db-score-bar span{display:block;height:100%;border-radius:999px}
-  .db-dice-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px;perspective:800px}
-  .db-die{
-    aspect-ratio:1;background:linear-gradient(145deg, #fff, #e2e8f0 48%, #b9c4d4);
-    border-radius:20px;box-shadow:inset 0 2px 0 rgba(255,255,255,.95), 0 18px 30px rgba(0,0,0,.45);
-    position:relative;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:12px
-  }
-  .db-die::before{
-    content:"";position:absolute;top:8%;left:12%;width:55%;height:28%;border-radius:50%;
-    background:linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,255,255,0));filter:blur(3px)
-  }
-  .db-die.rolling{animation:dbRoll .62s ease-in-out}
-  @keyframes dbRoll{0%{transform:rotate(0) rotateY(0) scale(1)}20%{transform:rotate(-15deg) rotateY(180deg) scale(.93)}40%{transform:rotate(10deg) rotateY(360deg) scale(1.08)}60%{transform:rotate(-8deg) rotateY(540deg) scale(1.04)}80%{transform:rotate(4deg) rotateY(720deg) scale(.98)}100%{transform:rotate(0) rotateY(720deg) scale(1)}}
-  .db-pip{display:grid;place-items:center}
-  .db-pip::after{
-    content:"";width:72%;height:72%;border-radius:50%;
-    background:radial-gradient(circle at 35% 30%, #4b5563, #1f2937 62%, #0a0f1c);
-    transform:scale(0);transition:transform .15s
-  }
-  .db-pip.on::after{transform:scale(1)}
-  .db-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-  .db-roll-btn{
-    min-height:54px;padding:14px 16px;border:0;border-radius:18px;font-size:1.15rem;font-weight:900;letter-spacing:.08em;
-    background:linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%);color:#1a0c00;cursor:pointer;
-    box-shadow:0 8px 22px rgba(255,182,39,.24), inset 0 1px 0 rgba(255,255,255,.5)
-  }
-  .db-roll-btn:disabled{opacity:.45;cursor:not-allowed}
-  .db-secondary{
-    min-height:54px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.10);font-weight:800;cursor:pointer
-  }
-  .db-result{
-    padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);min-height:82px
-  }
-  .db-result-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .db-result-msg{font-weight:900;font-size:1.05rem}
-  .db-result-kpi{font-variant-numeric:tabular-nums;font-size:1.4rem;font-weight:900}
-  .db-result-sub{margin-top:8px;color:#cbd5e1;font-size:.9rem;line-height:1.5}
-  .db-status{
-    display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:.82rem;color:#cbd5e1
-  }
-  .db-badge{
-    border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)
-  }
-  .db-rules{display:grid;gap:10px}
-  .db-rules h2,.db-leader h2{margin:0;font-size:1rem}
-  .db-rule{
-    padding:12px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#cbd5e1;line-height:1.55;font-size:.9rem
-  }
-  .db-leaderboard{display:grid;gap:8px;margin-top:10px}
-  .db-row{
-    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)
-  }
-  .db-rank{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;font-weight:900;background:rgba(255,255,255,.08);flex-shrink:0}
-  .db-row.active{background:linear-gradient(180deg, rgba(255,182,39,.18), rgba(255,182,39,.06));border-color:rgba(255,182,39,.28)}
-  .db-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
-  .db-score-small{font-weight:900;color:#fde68a}
-  .db-footer{padding:0 14px 14px;color:#94a3b8;font-size:.82rem;line-height:1.5}
-  .db-hidden{display:none!important}
-  .db-overlay{
-    position:absolute;inset:0;z-index:30;display:grid;place-items:center;background:rgba(3,7,18,.72);backdrop-filter:blur(10px);padding:16px
-  }
-  .db-overlay-card{
-    width:min(100%, 440px);background:linear-gradient(180deg, #10172a, #070b14);border:1px solid rgba(255,255,255,.10);
-    border-radius:24px;padding:20px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.55)
-  }
-  .db-overlay-icon{
-    width:60px;height:60px;border-radius:18px;margin:0 auto 12px;display:grid;place-items:center;background:linear-gradient(135deg,#ffd166,#ffb627);color:#1a0c00
-  }
-  .db-overlay-title{font-size:1.4rem;font-weight:900;margin:0 0 8px}
-  .db-overlay-sub{color:#cbd5e1;line-height:1.55;margin-bottom:14px}
-  .db-economy{
-    margin-top:12px;padding:12px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);text-align:right
-  }
-  .db-econ-top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
-  .db-econ-main{font-size:1.35rem;font-weight:900}
-  .db-econ-sub{margin-top:6px;color:#cbd5e1;font-size:.85rem;line-height:1.5}
-  @media (max-width: 900px){
-    .db-content{grid-template-columns:1fr}
-    .db-arena{min-height:480px}
-  }
-  @media (max-width: 640px){
-    .db-shell{padding:10px}
-    .db-topbar{padding:12px}
-    .db-content{padding:12px}
-    .db-card{padding:14px}
-    .db-actions{grid-template-columns:1fr}
-    .db-dice-row{gap:10px}
-    .db-title h1{font-size:1rem}
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>VEX Dice Battle</title>
+  <link rel="stylesheet" href="/games/_shared/vex-game.css">
+  <style>
+    :root {
+      --db-gold: #ffb627;
+      --db-gold-dark: #7c5300;
+      --db-cyan: #22d3ee;
+      --db-green: #22c55e;
+      --db-red: #ef4444;
+      --db-bg: #060b14;
+      --db-panel: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body.vex-game {
+      background: radial-gradient(circle at top, #111a33 0%, #060b14 45%, #02040a 100%);
+      color: #fff
+    }
+
+    .db-shell {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 14px
+    }
+
+    .db-hero {
+      background: linear-gradient(180deg, rgba(20, 26, 52, .86), rgba(7, 11, 20, .92));
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 22px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+      overflow: hidden;
+    }
+
+    .db-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      background: linear-gradient(90deg, rgba(255, 182, 39, .12), transparent 35%, rgba(34, 211, 238, .08));
+    }
+
+    .db-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0
+    }
+
+    .db-logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, #ffd166, #ffb627 55%, #8a5a00);
+      color: #1a0c00;
+      box-shadow: 0 0 24px rgba(255, 182, 39, .35), inset 0 1px 0 rgba(255, 255, 255, .45)
+    }
+
+    .db-title {
+      min-width: 0
+    }
+
+    .db-title h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      letter-spacing: .02em
+    }
+
+    .db-title p {
+      margin: 3px 0 0;
+      color: #cbd5e1;
+      font-size: .84rem
+    }
+
+    .db-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end
+    }
+
+    .db-pill {
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: .82rem;
+      background: rgba(255, 255, 255, .05);
+      color: #e2e8f0
+    }
+
+    .db-btn {
+      min-height: 44px;
+      padding: 11px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: linear-gradient(180deg, #1c2442, #0b1020);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .2);
+      transition: transform .08s ease, filter .2s ease, background .2s ease
+    }
+
+    .db-btn:active {
+      transform: translateY(1px)
+    }
+
+    .db-btn-primary {
+      background: linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%);
+      color: #1a0c00
+    }
+
+    .db-btn-ghost {
+      background: rgba(255, 255, 255, .04)
+    }
+
+    .db-content {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 14px;
+      padding: 14px
+    }
+
+    .db-card {
+      background: linear-gradient(180deg, rgba(15, 23, 42, .92), rgba(9, 13, 24, .96));
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04)
+    }
+
+    .db-arena {
+      position: relative;
+      overflow: hidden;
+      min-height: 540px;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255, 182, 39, .16), transparent 30%),
+        radial-gradient(circle at 80% 15%, rgba(34, 211, 238, .10), transparent 24%),
+        linear-gradient(180deg, #071319 0%, #03070d 100%);
+    }
+
+    .db-arena::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .55;
+      background-image:
+        radial-gradient(circle at 18% 30%, rgba(255, 255, 255, .06) 1px, transparent 2px),
+        radial-gradient(circle at 72% 70%, rgba(255, 255, 255, .04) 1px, transparent 2px);
+      background-size: 24px 24px, 32px 32px;
+    }
+
+    .db-setup-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .db-setup-panel {
+      width: min(100%, 520px);
+      background: rgba(7, 11, 20, .96);
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55)
+    }
+
+    .db-setup-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 10px;
+      color: #fde68a
+    }
+
+    .db-setup-sub {
+      font-size: .9rem;
+      color: #cbd5e1;
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 14px
+    }
+
+    .db-seg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      background: rgba(255, 255, 255, .05);
+      padding: 6px;
+      border-radius: 18px
+    }
+
+    .db-seg button {
+      border: 0;
+      border-radius: 14px;
+      min-height: 46px;
+      background: transparent;
+      color: #cbd5e1;
+      font-weight: 800;
+      cursor: pointer
+    }
+
+    .db-seg button.active {
+      background: linear-gradient(180deg, #ffd166, #ffb627);
+      color: #1a0c00
+    }
+
+    .db-inputs {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px
+    }
+
+    .db-player-row {
+      display: grid;
+      grid-template-columns: 14px 1fr 92px;
+      gap: 8px;
+      align-items: center
+    }
+
+    .db-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px currentColor
+    }
+
+    .db-input {
+      width: 100%;
+      min-height: 44px;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+      color: #fff;
+      outline: none
+    }
+
+    .db-mini {
+      min-height: 44px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid rgba(255, 255, 255, .08);
+      color: #e2e8f0;
+      display: grid;
+      place-items: center;
+      font-size: .82rem
+    }
+
+    .db-stage {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 12px
+    }
+
+    .db-turn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap
+    }
+
+    .db-turn-left {
+      min-width: 0
+    }
+
+    .db-turn-name {
+      font-size: 1.15rem;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .db-turn-meta {
+      font-size: .82rem;
+      color: #94a3b8
+    }
+
+    .db-scoreboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px
+    }
+
+    .db-score-item {
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .07)
+    }
+
+    .db-score-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px
+    }
+
+    .db-score-name {
+      font-size: .84rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .db-score-val {
+      font-size: 1.3rem;
+      font-weight: 900;
+      line-height: 1
+    }
+
+    .db-score-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .06);
+      overflow: hidden
+    }
+
+    .db-score-bar span {
+      display: block;
+      height: 100%;
+      border-radius: 999px
+    }
+
+    .db-dice-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 8px;
+      perspective: 800px
+    }
+
+    .db-die {
+      aspect-ratio: 1;
+      background: linear-gradient(145deg, #fff, #e2e8f0 48%, #b9c4d4);
+      border-radius: 20px;
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, .95), 0 18px 30px rgba(0, 0, 0, .45);
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      padding: 12px
+    }
+
+    .db-die::before {
+      content: "";
+      position: absolute;
+      top: 8%;
+      left: 12%;
+      width: 55%;
+      height: 28%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0));
+      filter: blur(3px)
+    }
+
+    .db-die.rolling {
+      animation: dbRoll .62s ease-in-out
+    }
+
+    @keyframes dbRoll {
+      0% {
+        transform: rotate(0) rotateY(0) scale(1)
+      }
+
+      20% {
+        transform: rotate(-15deg) rotateY(180deg) scale(.93)
+      }
+
+      40% {
+        transform: rotate(10deg) rotateY(360deg) scale(1.08)
+      }
+
+      60% {
+        transform: rotate(-8deg) rotateY(540deg) scale(1.04)
+      }
+
+      80% {
+        transform: rotate(4deg) rotateY(720deg) scale(.98)
+      }
+
+      100% {
+        transform: rotate(0) rotateY(720deg) scale(1)
+      }
+    }
+
+    .db-pip {
+      display: grid;
+      place-items: center
+    }
+
+    .db-pip::after {
+      content: "";
+      width: 72%;
+      height: 72%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #4b5563, #1f2937 62%, #0a0f1c);
+      transform: scale(0);
+      transition: transform .15s
+    }
+
+    .db-pip.on::after {
+      transform: scale(1)
+    }
+
+    .db-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px
+    }
+
+    .db-roll-btn {
+      min-height: 54px;
+      padding: 14px 16px;
+      border: 0;
+      border-radius: 18px;
+      font-size: 1.15rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      background: linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%);
+      color: #1a0c00;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(255, 182, 39, .24), inset 0 1px 0 rgba(255, 255, 255, .5)
+    }
+
+    .db-roll-btn:disabled {
+      opacity: .45;
+      cursor: not-allowed
+    }
+
+    .db-secondary {
+      min-height: 54px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .05);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, .10);
+      font-weight: 800;
+      cursor: pointer
+    }
+
+    .db-result {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .07);
+      min-height: 82px
+    }
+
+    .db-result-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap
+    }
+
+    .db-result-msg {
+      font-weight: 900;
+      font-size: 1.05rem
+    }
+
+    .db-result-kpi {
+      font-variant-numeric: tabular-nums;
+      font-size: 1.4rem;
+      font-weight: 900
+    }
+
+    .db-result-sub {
+      margin-top: 8px;
+      color: #cbd5e1;
+      font-size: .9rem;
+      line-height: 1.5
+    }
+
+    .db-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: .82rem;
+      color: #cbd5e1
+    }
+
+    .db-badge {
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid rgba(255, 255, 255, .08)
+    }
+
+    .db-rules {
+      display: grid;
+      gap: 10px
+    }
+
+    .db-rules h2,
+    .db-leader h2 {
+      margin: 0;
+      font-size: 1rem
+    }
+
+    .db-rule {
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .07);
+      color: #cbd5e1;
+      line-height: 1.55;
+      font-size: .9rem
+    }
+
+    .db-leaderboard {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px
+    }
+
+    .db-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .07)
+    }
+
+    .db-rank {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      background: rgba(255, 255, 255, .08);
+      flex-shrink: 0
+    }
+
+    .db-row.active {
+      background: linear-gradient(180deg, rgba(255, 182, 39, .18), rgba(255, 182, 39, .06));
+      border-color: rgba(255, 182, 39, .28)
+    }
+
+    .db-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700
+    }
+
+    .db-score-small {
+      font-weight: 900;
+      color: #fde68a
+    }
+
+    .db-footer {
+      padding: 0 14px 14px;
+      color: #94a3b8;
+      font-size: .82rem;
+      line-height: 1.5
+    }
+
+    .db-hidden {
+      display: none !important
+    }
+
+    .db-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(3, 7, 18, .72);
+      backdrop-filter: blur(10px);
+      padding: 16px
+    }
+
+    .db-overlay-card {
+      width: min(100%, 440px);
+      background: linear-gradient(180deg, #10172a, #070b14);
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 24px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55)
+    }
+
+    .db-overlay-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      margin: 0 auto 12px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #ffd166, #ffb627);
+      color: #1a0c00
+    }
+
+    .db-overlay-title {
+      font-size: 1.4rem;
+      font-weight: 900;
+      margin: 0 0 8px
+    }
+
+    .db-overlay-sub {
+      color: #cbd5e1;
+      line-height: 1.55;
+      margin-bottom: 14px
+    }
+
+    .db-economy {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .08);
+      text-align: right
+    }
+
+    .db-econ-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .db-econ-main {
+      font-size: 1.35rem;
+      font-weight: 900
+    }
+
+    .db-econ-sub {
+      margin-top: 6px;
+      color: #cbd5e1;
+      font-size: .85rem;
+      line-height: 1.5
+    }
+
+    @media (max-width: 900px) {
+      .db-content {
+        grid-template-columns: 1fr
+      }
+
+      .db-arena {
+        min-height: 480px
+      }
+    }
+
+    @media (max-width: 640px) {
+      .db-shell {
+        padding: 10px
+      }
+
+      .db-topbar {
+        padding: 12px
+      }
+
+      .db-content {
+        padding: 12px
+      }
+
+      .db-card {
+        padding: 14px
+      }
+
+      .db-actions {
+        grid-template-columns: 1fr
+      }
+
+      .db-dice-row {
+        gap: 10px
+      }
+
+      .db-title h1 {
+        font-size: 1rem
+      }
+    }
+  </style>
 </head>
+
 <body class="vex-game">
-<div class="db-shell">
-  <div class="db-hero">
-    <div class="db-topbar">
-      <div class="db-title-wrap">
-        <div class="db-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg>
+  <div class="db-shell">
+    <div class="db-hero">
+      <div class="db-topbar">
+        <div class="db-title-wrap">
+          <div class="db-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <circle cx="8" cy="8" r="1" />
+              <circle cx="16" cy="8" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="8" cy="16" r="1" />
+              <circle cx="16" cy="16" r="1" />
+            </svg>
+          </div>
+          <div class="db-title">
+            <h1 id="title">معركة النرد</h1>
+            <p id="subtitle">لعبة جماعية سريعة مع اقتصاد VEX ولوحة متصدرين ذكية</p>
+          </div>
         </div>
-        <div class="db-title">
-          <h1 id="title">معركة النرد</h1>
-          <p id="subtitle">لعبة جماعية سريعة مع اقتصاد VEX ولوحة متصدرين ذكية</p>
+        <div class="db-toolbar">
+          <div class="db-pill" id="modePill">Party mode</div>
+          <div class="db-pill" id="roundPill">الجولة 1 / 5</div>
+          <button class="db-btn db-btn-ghost" id="langBtn">EN</button>
+          <button class="db-btn db-btn-ghost" id="resetBtn">إعادة</button>
         </div>
       </div>
-      <div class="db-toolbar">
-        <div class="db-pill" id="modePill">Party mode</div>
-        <div class="db-pill" id="roundPill">الجولة 1 / 5</div>
-        <button class="db-btn db-btn-ghost" id="langBtn">EN</button>
-        <button class="db-btn db-btn-ghost" id="resetBtn">إعادة</button>
+
+      <div class="db-content">
+        <div class="db-card db-arena">
+          <div class="db-setup-overlay" id="setupOverlay">
+            <div class="db-setup-panel">
+              <div class="db-setup-title" id="setupTitle">إعداد المباراة</div>
+              <div class="db-setup-sub" id="setupSub">اختر عدد اللاعبين واسم كل لاعب ثم ابدأ. وضع "Party" يضيف مضاعفات
+                خاصة ونقطة مكافأة ذكية.</div>
+              <div class="db-seg" id="countRow">
+                <button class="active" data-c="2">2</button>
+                <button data-c="3">3</button>
+                <button data-c="4">4</button>
+              </div>
+              <div class="db-inputs" id="namesArea"></div>
+              <button class="db-btn db-btn-primary" id="setupStart" style="margin-top:14px;width:100%">ابدأ</button>
+            </div>
+          </div>
+
+          <div class="db-stage">
+            <div class="db-turn">
+              <div class="db-turn-left">
+                <div class="db-turn-name" id="currentName">—</div>
+                <div class="db-turn-meta" id="turnMeta">—</div>
+              </div>
+              <div class="db-pill" id="strategyPill">Balanced table</div>
+            </div>
+
+            <div class="db-scoreboard" id="leaderboard"></div>
+
+            <div class="db-dice-row" id="diceRow">
+              <div class="db-die" id="die0"></div>
+              <div class="db-die" id="die1"></div>
+              <div class="db-die" id="die2"></div>
+            </div>
+
+            <div class="db-result">
+              <div class="db-result-top">
+                <div class="db-result-msg" id="rollResult"></div>
+                <div class="db-result-kpi" id="roundScore">0</div>
+              </div>
+              <div class="db-result-sub" id="resultHint">كل لاعب يرمي 3 نرد في دوره. الزوج يعطي +5، الثلاثي +20،
+                والسلسلة تفتح مضاعفات إضافية.</div>
+              <div class="db-status" id="statusLine">
+                <span class="db-badge" id="sessionBadge">Free play</span>
+                <span class="db-badge" id="turnBadge">Ready</span>
+              </div>
+            </div>
+
+            <div class="db-actions">
+              <button class="db-roll-btn" id="rollBtn">ارمِ النرد</button>
+              <button class="db-secondary" id="boostBtn">Boost</button>
+            </div>
+          </div>
+
+          <div class="db-overlay db-hidden" id="endOverlay">
+            <div class="db-overlay-card">
+              <div class="db-overlay-icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+                </svg>
+              </div>
+              <div class="db-overlay-title" id="endTitle">انتهت اللعبة</div>
+              <div class="db-overlay-sub" id="endSub"></div>
+              <button class="db-btn db-btn-primary" id="endRestart" style="width:100%">جولة جديدة</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="db-card db-rules">
+          <div class="db-leader">
+            <h2 id="rulesTitle">لماذا هذه النسخة أفضل؟</h2>
+            <div class="db-rule" id="rulesText">
+              نسخة جديدة تجمع بين السرعة، التنافس الجماعي على نفس الجهاز، ونظام نقاط يربط الفوز بجوائز VEX بشكل متوازن.
+            </div>
+          </div>
+          <div class="db-leader">
+            <h2 id="economyTitle">اقتصاد اللعبة</h2>
+            <div class="db-rule" id="economyText">
+              الجولات الناجحة تُرسل نتيجة للسيرفر، وتُحفظ كمُحاولة مع أفضل رقم شخصي، ثم يتم توزيع المكافأة/الخصم عبر
+              نظام الرصيد الموجود.
+            </div>
+          </div>
+          <div class="db-leader">
+            <h2 id="metaTitle">أفضل لحظات</h2>
+            <div class="db-leaderboard" id="metaBoard"></div>
+          </div>
+        </div>
       </div>
+      <div class="db-footer" id="hint">كل لاعب يرمي 3 نرد في دوره. التطابق ثنائي = +5، الثلاثي = +20. أعلى مجموع بعد 5
+        جولات يفوز.</div>
     </div>
-
-    <div class="db-content">
-      <div class="db-card db-arena">
-        <div class="db-setup-overlay" id="setupOverlay">
-          <div class="db-setup-panel">
-            <div class="db-setup-title" id="setupTitle">إعداد المباراة</div>
-            <div class="db-setup-sub" id="setupSub">اختر عدد اللاعبين واسم كل لاعب ثم ابدأ. وضع "Party" يضيف مضاعفات خاصة ونقطة مكافأة ذكية.</div>
-            <div class="db-seg" id="countRow">
-              <button class="active" data-c="2">2</button>
-              <button data-c="3">3</button>
-              <button data-c="4">4</button>
-            </div>
-            <div class="db-inputs" id="namesArea"></div>
-            <button class="db-btn db-btn-primary" id="setupStart" style="margin-top:14px;width:100%">ابدأ</button>
-          </div>
-        </div>
-
-        <div class="db-stage">
-          <div class="db-turn">
-            <div class="db-turn-left">
-              <div class="db-turn-name" id="currentName">—</div>
-              <div class="db-turn-meta" id="turnMeta">—</div>
-            </div>
-            <div class="db-pill" id="strategyPill">Balanced table</div>
-          </div>
-
-          <div class="db-scoreboard" id="leaderboard"></div>
-
-          <div class="db-dice-row" id="diceRow">
-            <div class="db-die" id="die0"></div>
-            <div class="db-die" id="die1"></div>
-            <div class="db-die" id="die2"></div>
-          </div>
-
-          <div class="db-result">
-            <div class="db-result-top">
-              <div class="db-result-msg" id="rollResult"></div>
-              <div class="db-result-kpi" id="roundScore">0</div>
-            </div>
-            <div class="db-result-sub" id="resultHint">كل لاعب يرمي 3 نرد في دوره. الزوج يعطي +5، الثلاثي +20، والسلسلة تفتح مضاعفات إضافية.</div>
-            <div class="db-status" id="statusLine">
-              <span class="db-badge" id="sessionBadge">Free play</span>
-              <span class="db-badge" id="turnBadge">Ready</span>
-            </div>
-          </div>
-
-          <div class="db-actions">
-            <button class="db-roll-btn" id="rollBtn">ارمِ النرد</button>
-            <button class="db-secondary" id="boostBtn">Boost</button>
-          </div>
-        </div>
-
-        <div class="db-overlay db-hidden" id="endOverlay">
-          <div class="db-overlay-card">
-            <div class="db-overlay-icon">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
-            </div>
-            <div class="db-overlay-title" id="endTitle">انتهت اللعبة</div>
-            <div class="db-overlay-sub" id="endSub"></div>
-            <button class="db-btn db-btn-primary" id="endRestart" style="width:100%">جولة جديدة</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="db-card db-rules">
-        <div class="db-leader">
-          <h2 id="rulesTitle">لماذا هذه النسخة أفضل؟</h2>
-          <div class="db-rule" id="rulesText">
-            نسخة جديدة تجمع بين السرعة، التنافس الجماعي على نفس الجهاز، ونظام نقاط يربط الفوز بجوائز VEX بشكل متوازن.
-          </div>
-        </div>
-        <div class="db-leader">
-          <h2 id="economyTitle">اقتصاد اللعبة</h2>
-          <div class="db-rule" id="economyText">
-            الجولات الناجحة تُرسل نتيجة للسيرفر، وتُحفظ كمُحاولة مع أفضل رقم شخصي، ثم يتم توزيع المكافأة/الخصم عبر نظام الرصيد الموجود.
-          </div>
-        </div>
-        <div class="db-leader">
-          <h2 id="metaTitle">أفضل لحظات</h2>
-          <div class="db-leaderboard" id="metaBoard"></div>
-        </div>
-      </div>
-    </div>
-    <div class="db-footer" id="hint">كل لاعب يرمي 3 نرد في دوره. التطابق ثنائي = +5، الثلاثي = +20. أعلى مجموع بعد 5 جولات يفوز.</div>
   </div>
-</div>
 
-<script src="/games/vex-sdk.js"></script>
-<script src="/games/_shared/vex-game.js"></script>
-<script>
-(function(){
-  'use strict';
-  const STRINGS = {
-    ar: {
-      title: 'معركة النرد',
-      subtitle: 'لعبة جماعية سريعة مع اقتصاد VEX ولوحة متصدرين ذكية',
-      setupTitle: 'إعداد المباراة',
-      setupSub: 'اختر عدد اللاعبين واسم كل لاعب ثم ابدأ. وضع "Party" يضيف مضاعفات خاصة ونقطة مكافأة ذكية.',
-      rulesTitle: 'لماذا هذه النسخة أفضل؟',
-      rulesText: 'نسخة جديدة تجمع بين السرعة، التنافس الجماعي على نفس الجهاز، ونظام نقاط يربط الفوز بجوائز VEX بشكل متوازن.',
-      economyTitle: 'اقتصاد اللعبة',
-      economyText: 'الجولات الناجحة تُرسل نتيجة للسيرفر، وتُحفظ كمُحاولة مع أفضل رقم شخصي، ثم يتم توزيع المكافأة/الخصم عبر نظام الرصيد الموجود.',
-      metaTitle: 'أفضل لحظات',
-      defaultName: 'لاعب',
-      modePill: 'Party mode',
-      strategy: 'لوحة تكتيكية',
-      ready: 'جاهز',
-      rolling: 'يدور…',
-      roll: 'ارمِ النرد',
-      boost: 'Boost',
-      reset: 'إعادة',
-      round: (i,n)=>`الجولة ${i} / ${n}`,
-      winner: (n,s)=>`الفائز: ${n} (${s})`,
-      end: 'انتهت اللعبة',
-      pair: (s)=>`زوج! +5 (المجموع ${s})`,
-      triple: (s)=>`ثلاثي! +20 (المجموع ${s})`,
-      streak: (m)=>`سلسلة قوية! ${m}`,
-      bonus: (n)=>`Bonus +${n}`,
-      sum: (s)=>`المجموع ${s}`,
-      free: 'لعب مجاني',
-      final: 'النتيجة النهائية',
-      sessionReady: 'جاهز للحفظ',
-      jackpot: 'مكافأة VEX',
-      tie: 'تعادل مؤقت',
-      mode2: 'Duo',
-      mode3: 'Trio',
-      mode4: 'Party',
-    },
-    en: {
-      title: 'Dice Battle',
-      subtitle: 'Fast multiplayer hot-seat gameplay with smart VEX rewards',
-      inp.type = 'text'; inp.maxLength = 12;
-      inp.placeholder = `${s.defaultName} ${i+1}`;
-      inp.value = `${s.defaultName} ${i+1}`;
-      inp.dataset.i = i;
-      row.appendChild(dot); row.appendChild(inp);
-      area.appendChild(row);
-    }
-  }
-
-  function playerColor(i){ return ['#22c55e','#ef4444','#1e88ff','#a855f7'][i % 4]; }
-
-  function startSetup(){
-    clearPending();
-    rolling = false;
-    $('setupOverlay').style.display = 'flex';
-    $('endOverlay').classList.remove('show');
-    $('rollResult').textContent = '';
-    $('rollResult').className = 'db-roll-result';
-    [0,1,2].forEach(renderDie);
-  }
-
-  function startGame(){
-    const s = STRINGS[lang];
-    const inputs = $('namesArea').querySelectorAll('input');
-    players = Array.from(inputs).map((inp, i) => ({
-      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
-      score: 0, color: playerColor(i),
-    }));
-    current = 0; round = 1; gameOver = false;
-    $('setupOverlay').style.display = 'none';
-    renderLeaderboard();
-    updateTurn();
-  }
-
-  function updateTurn(){
-    const s = STRINGS[lang];
-    $('currentName').textContent = players[current].name;
-    $('currentName').style.color = players[current].color;
-    $('currentName').style.textShadow = `0 0 12px ${players[current].color}66`;
-    $('roundLbl').textContent = s.round(round, TOTAL_ROUNDS);
-    $('rollBtn').disabled = false;
-    $('rollResult').textContent = '';
-    $('rollResult').className = 'db-roll-result';
-    renderLeaderboard();
-  }
-
-  function renderLeaderboard(){
-    const root = $('leaderboard'); root.innerHTML = '';
-    players.forEach((p, i) => {
-      const row = document.createElement('div');
-      row.className = 'db-row' + (i === current && !gameOver ? ' active' : '');
-      const dot = document.createElement('div');
-      dot.className = 'db-dot'; dot.style.background = p.color; dot.style.boxShadow = `0 0 8px ${p.color}`;
-      const name = document.createElement('div');
-      name.className = 'db-name'; name.textContent = p.name;
-      const sc = document.createElement('div');
-      sc.className = 'db-score'; sc.textContent = p.score;
-      row.appendChild(dot); row.appendChild(name); row.appendChild(sc);
-      root.appendChild(row);
-    });
-  }
-
-  // Pip positions per face value
-  const PIPS = {
-    1: [4],
-    2: [0, 8],
-    3: [0, 4, 8],
-    4: [0, 2, 6, 8],
-    5: [0, 2, 4, 6, 8],
-    6: [0, 2, 3, 5, 6, 8],
-  };
-  function renderDie(idx, value){
-    const el = $('die' + idx);
-    el.innerHTML = '';
-    const v = value || 1;
-    const set = new Set(PIPS[v]);
-    for (let i = 0; i < 9; i++){
-      const p = document.createElement('div');
-      p.className = 'db-pip' + (set.has(i) ? ' on' : '');
-      el.appendChild(p);
-    }
-  }
-
-  function roll(){
-    if (rolling || gameOver) return;
-    rolling = true;
-    $('rollBtn').disabled = true;
-    const s = STRINGS[lang];
-    $('rollResult').textContent = s.rolling;
-    $('rollResult').className = 'db-roll-result';
-    [0,1,2].forEach(idx => {
-      const el = $('die' + idx);
-      el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling');
-      // animate value changes during roll
-      const ticks = 6;
-      let i = 0;
-      const iv = tick(() => {
-        renderDie(idx, 1 + Math.floor(Math.random()*6));
-        i++;
-        if (i >= ticks){
-          clearInterval(iv);
-          pendingIntervals = pendingIntervals.filter(x => x !== iv);
+  <script src="/games/vex-sdk.js"></script>
+  <script src="/games/_shared/vex-game.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const STRINGS = {
+        ar: {
+          title: 'معركة النرد',
+          subtitle: 'لعبة جماعية سريعة مع اقتصاد VEX ولوحة متصدرين ذكية',
+          setupTitle: 'إعداد المباراة',
+          setupSub: 'اختر عدد اللاعبين واسم كل لاعب ثم ابدأ. وضع "Party" يضيف مضاعفات خاصة ونقطة مكافأة ذكية.',
+          rulesTitle: 'لماذا هذه النسخة أفضل؟',
+          rulesText: 'نسخة جديدة تجمع بين السرعة، التنافس الجماعي على نفس الجهاز، ونظام نقاط يربط الفوز بجوائز VEX بشكل متوازن.',
+          economyTitle: 'اقتصاد اللعبة',
+          economyText: 'الجولات الناجحة تُرسل نتيجة للسيرفر، وتُحفظ كمُحاولة مع أفضل رقم شخصي، ثم يتم توزيع المكافأة/الخصم عبر نظام الرصيد الموجود.',
+          metaTitle: 'أفضل لحظات',
+          defaultName: 'لاعب',
+          modePill: 'Party mode',
+          strategy: 'لوحة تكتيكية',
+          ready: 'جاهز',
+          rolling: 'يدور…',
+          roll: 'ارمِ النرد',
+          boost: 'Boost',
+          reset: 'إعادة',
+          round: (i, n) => `الجولة ${i} / ${n}`,
+          winner: (n, s) => `الفائز: ${n} (${s})`,
+          end: 'انتهت اللعبة',
+          pair: (s) => `زوج! +5 (المجموع ${s})`,
+          triple: (s) => `ثلاثي! +20 (المجموع ${s})`,
+          streak: (m) => `سلسلة قوية! ${m}`,
+          bonus: (n) => `Bonus +${n}`,
+          sum: (s) => `المجموع ${s}`,
+          free: 'لعب مجاني',
+          final: 'النتيجة النهائية',
+          sessionReady: 'جاهز للحفظ',
+          jackpot: 'مكافأة VEX',
+          tie: 'تعادل مؤقت',
+          mode2: 'Duo',
+          mode3: 'Trio',
+          mode4: 'Party',
+        },
+        en: {
+          title: 'Dice Battle',
+          subtitle: 'Fast multiplayer hot-seat gameplay with smart VEX rewards',
+          setupTitle: 'Match setup',
+          setupSub: 'Choose player count, enter names, then start. Party mode adds tactical bonuses and better engagement.',
+          rulesTitle: 'Why this version is better?',
+          rulesText: 'A polished version with faster sessions, local multiplayer, and balanced VEX-linked rewards.',
+          economyTitle: 'Game economy',
+          economyText: 'Winning rounds are saved on the server as arcade sessions, then the existing wallet/economy layer settles the payout.',
+          metaTitle: 'Best moments',
+          defaultName: 'Player',
+          modePill: 'Party mode',
+          strategy: 'Tactical board',
+          ready: 'Ready',
+          rolling: 'Rolling…',
+          roll: 'Roll dice',
+          boost: 'Boost',
+          reset: 'Reset',
+          round: (i, n) => `Round ${i} / ${n}`,
+          winner: (n, s) => `Winner: ${n} (${s})`,
+          end: 'Game over',
+          pair: (s) => `Pair! +5 (sum ${s})`,
+          triple: (s) => `Triple! +20 (sum ${s})`,
+          streak: (m) => `Hot streak! ${m}`,
+          bonus: (n) => `Bonus +${n}`,
+          sum: (s) => `Sum ${s}`,
+          free: 'Free play',
+          final: 'Final result',
+          sessionReady: 'Ready to save',
+          jackpot: 'VEX reward',
+          tie: 'Current tie',
+          mode2: 'Duo',
+          mode3: 'Trio',
+          mode4: 'Party',
         }
-      }, 70);
-    });
-    later(() => {
-      const vals = [
-        1 + Math.floor(Math.random()*6),
-        1 + Math.floor(Math.random()*6),
-        1 + Math.floor(Math.random()*6),
-      ];
-      vals.forEach((v, i) => renderDie(i, v));
-      finishRoll(vals);
-    }, 600);
-  }
+      };
 
-  function finishRoll(vals){
-    const sum = vals[0] + vals[1] + vals[2];
-    const counts = {};
-    vals.forEach(v => counts[v] = (counts[v]||0)+1);
-    let bonus = 0, kind = 'sum';
-    if (Object.values(counts).some(c => c === 3)){ bonus = 20; kind = 'triple'; }
-    else if (Object.values(counts).some(c => c === 2)){ bonus = 5; kind = 'pair'; }
-    const total = sum + bonus;
-    players[current].score += total;
-    const s = STRINGS[lang];
-    if (kind === 'triple'){
-      $('rollResult').textContent = s.triple(sum); $('rollResult').className = 'db-roll-result boom';
-      if (typeof VexGame !== 'undefined') VexGame.confetti(700);
-    } else if (kind === 'pair'){
-      $('rollResult').textContent = s.pair(sum); $('rollResult').className = 'db-roll-result bonus';
-    } else {
-      $('rollResult').textContent = s.sum(sum); $('rollResult').className = 'db-roll-result';
-    }
-    if (typeof VexGame !== 'undefined'){
-      VexGame.popScore(document.body, '+' + total, '50%', '40%', kind === 'triple' ? 'gold' : '');
-    }
-    renderLeaderboard();
-    rolling = false;
-    later(nextTurn, 1300);
-  }
+      const TOTAL_ROUNDS = 5;
+      const COLORS = ['#22c55e', '#ef4444', '#1e88ff', '#a855f7', '#f59e0b', '#06b6d4'];
+      const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 
-  function nextTurn(){
-    current = (current + 1) % players.length;
-    if (current === 0){
-      round++;
-      if (round > TOTAL_ROUNDS){ return endGame(); }
-    }
-    updateTurn();
-  }
+      let lang = 'ar';
+      let count = 4;
+      let players = [];
+      let current = 0;
+      let round = 1;
+      let rolling = false;
+      let gameOver = false;
+      let mode = 'party';
+      let roundStats = [];
+      let pendingTimers = [];
+      let pendingIntervals = [];
 
-  function endGame(){
-    gameOver = true;
-    $('rollBtn').disabled = true;
-    const winner = players.reduce((a,b) => b.score > a.score ? b : a, players[0]);
-    const s = STRINGS[lang];
-    $('endTitle').textContent = s.end;
-    $('endSub').textContent = s.endSub(winner.name, winner.score);
-    $('currentName').textContent = winner.name;
-    $('currentName').style.color = winner.color;
-    later(() => $('endOverlay').classList.add('show'), 600);
-    if (typeof VexGame !== 'undefined'){
-      VexGame.confetti(900);
-      VexGame.endSession({
-        score: winner.score, result: 'win',
-        metadata: { winner: winner.name, scores: players.map(p => ({n:p.name,s:p.score})) },
+      const $ = id => document.getElementById(id);
+      function later(fn, ms) { const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
+      function tick(fn, ms) { const id = setInterval(fn, ms); pendingIntervals.push(id); return id; }
+      function clearPending() { pendingTimers.forEach(clearTimeout); pendingTimers = []; pendingIntervals.forEach(clearInterval); pendingIntervals = []; }
+      function playerColor(i) { return COLORS[i % COLORS.length]; }
+      function t(key) { return STRINGS[lang][key]; }
+
+      function applyLang() {
+        const s = STRINGS[lang];
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title;
+        $('subtitle').textContent = s.subtitle;
+        $('modePill').textContent = s.modePill;
+        $('setupTitle').textContent = s.setupTitle;
+        $('setupSub').textContent = s.setupSub;
+        $('rulesTitle').textContent = s.rulesTitle;
+        $('rulesText').textContent = s.rulesText;
+        $('economyTitle').textContent = s.economyTitle;
+        $('economyText').textContent = s.economyText;
+        $('metaTitle').textContent = s.metaTitle;
+        $('hint').textContent = lang === 'ar'
+          ? 'كل لاعب يرمي 3 نرد في دوره. التطابق ثنائي = +5، الثلاثي = +20. أعلى مجموع بعد 5 جولات يفوز.'
+          : 'Each player rolls 3 dice on their turn. Pair = +5, triple = +20. Highest total after 5 rounds wins.';
+        $('resetBtn').textContent = s.reset;
+        $('langBtn').textContent = lang === 'ar' ? 'EN' : 'AR';
+        $('rollBtn').textContent = s.roll;
+        $('boostBtn').textContent = s.boost;
+        $('turnBadge').textContent = s.ready;
+        $('sessionBadge').textContent = s.free;
+        $('strategyPill').textContent = s.strategy;
+        $('endRestart').textContent = lang === 'ar' ? 'جولة جديدة' : 'New game';
+        rebuildSetupNames();
+        renderLeaderboard();
+        renderMetaBoard();
+      }
+
+      function rebuildSetupNames() {
+        const area = $('namesArea');
+        area.innerHTML = '';
+        const s = STRINGS[lang];
+        for (let i = 0; i < count; i++) {
+          const row = document.createElement('div');
+          row.className = 'db-player-row';
+          const dot = document.createElement('div');
+          dot.className = 'db-dot';
+          dot.style.background = playerColor(i);
+          dot.style.color = playerColor(i);
+          const input = document.createElement('input');
+          input.className = 'db-input';
+          input.type = 'text';
+          input.maxLength = 18;
+          input.placeholder = `${s.defaultName} ${i + 1}`;
+          input.value = `${s.defaultName} ${i + 1}`;
+          input.dataset.i = i;
+          const tag = document.createElement('div');
+          tag.className = 'db-mini';
+          tag.textContent = `${lang === 'ar' ? 'م' : '#'}${i + 1}`;
+          row.appendChild(dot);
+          row.appendChild(input);
+          row.appendChild(tag);
+          area.appendChild(row);
+        }
+      }
+
+      function startSetup() {
+        clearPending();
+        players = [];
+        roundStats = [];
+        current = 0;
+        round = 1;
+        gameOver = false;
+        rolling = false;
+        $('setupOverlay').classList.remove('db-hidden');
+        $('endOverlay').classList.add('db-hidden');
+        $('rollResult').textContent = '';
+        $('roundScore').textContent = '0';
+        $('turnBadge').textContent = t('ready');
+        [0, 1, 2].forEach(i => renderDie(i, 1));
+      }
+
+      function startGame() {
+        const inputs = $('namesArea').querySelectorAll('input');
+        players = Array.from(inputs).map((inp, i) => ({
+          name: inp.value.trim() || `${t('defaultName')} ${i + 1}`,
+          score: 0,
+          color: playerColor(i),
+          streak: 0,
+        }));
+        current = 0; round = 1; gameOver = false; rolling = false; roundStats = [];
+        $('setupOverlay').classList.add('db-hidden');
+        updateTurn();
+        renderLeaderboard();
+        renderMetaBoard();
+      }
+
+      function updateTurn() {
+        const p = players[current];
+        $('currentName').textContent = p.name;
+        $('currentName').style.color = p.color;
+        $('turnMeta').textContent = `${lang === 'ar' ? 'دور' : 'Turn'} ${current + 1} · ${players.length} ${lang === 'ar' ? 'لاعبين' : 'players'} · ${p.streak > 0 ? t('streak')(p.streak) : t('ready')}`;
+        $('roundPill').textContent = t('round')(round, TOTAL_ROUNDS);
+        $('rollBtn').disabled = false;
+        $('turnBadge').textContent = t('ready');
+        $('rollResult').textContent = '';
+        $('roundScore').textContent = '0';
+        renderLeaderboard();
+      }
+
+      function renderDie(idx, value) {
+        const el = $('die' + idx);
+        el.innerHTML = '';
+        const v = value || 1;
+        const set = new Set(PIPS[v]);
+        for (let i = 0; i < 9; i++) {
+          const p = document.createElement('div');
+          p.className = 'db-pip' + (set.has(i) ? ' on' : '');
+          el.appendChild(p);
+        }
+      }
+
+      function renderLeaderboard() {
+        const root = $('leaderboard');
+        root.innerHTML = '';
+        const max = Math.max(1, ...players.map(p => p.score));
+        players.forEach((p, i) => {
+          const item = document.createElement('div');
+          item.className = 'db-score-item' + (i === current && !gameOver ? ' active' : '');
+          const top = document.createElement('div');
+          top.className = 'db-score-top';
+          const name = document.createElement('div');
+          name.className = 'db-score-name';
+          name.textContent = p.name;
+          const score = document.createElement('div');
+          score.className = 'db-score-val';
+          score.textContent = p.score;
+          score.style.color = p.color;
+          top.appendChild(name); top.appendChild(score);
+          const bar = document.createElement('div');
+          bar.className = 'db-score-bar';
+          const span = document.createElement('span');
+          span.style.width = `${Math.max(8, (p.score / max) * 100)}%`;
+          span.style.background = `linear-gradient(90deg, ${p.color}, ${p.color}cc)`;
+          bar.appendChild(span);
+          item.appendChild(top);
+          item.appendChild(bar);
+          root.appendChild(item);
+        });
+      }
+
+      function renderMetaBoard() {
+        const root = $('metaBoard');
+        root.innerHTML = '';
+        const items = [
+          [lang === 'ar' ? 'عدد اللاعبين' : 'Players', String(players.length || count)],
+          [lang === 'ar' ? 'الوضع' : 'Mode', mode === 'party' ? t('mode4') : (mode === 'duo' ? t('mode2') : t('mode3'))],
+          [lang === 'ar' ? 'أفضل جولة' : 'Best turn', roundStats.length ? Math.max(...roundStats.map(r => r.total)).toString() : '—'],
+        ];
+        items.forEach(([a, b]) => {
+          const row = document.createElement('div');
+          row.className = 'db-row';
+          const left = document.createElement('div');
+          left.className = 'db-name';
+          left.textContent = a;
+          const right = document.createElement('div');
+          right.className = 'db-score-small';
+          right.textContent = b;
+          row.appendChild(left); row.appendChild(right);
+          root.appendChild(row);
+        });
+      }
+
+      function roll() {
+        if (rolling || gameOver) return;
+        rolling = true;
+        $('rollBtn').disabled = true;
+        $('turnBadge').textContent = t('rolling');
+        $('rollResult').textContent = t('rolling');
+        $('roundScore').textContent = '...';
+        [0, 1, 2].forEach(idx => {
+          const el = $('die' + idx);
+          el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling');
+          let ticksLeft = 6;
+          const iv = tick(() => {
+            renderDie(idx, 1 + Math.floor(Math.random() * 6));
+            ticksLeft--;
+            if (ticksLeft <= 0) {
+              clearInterval(iv);
+              pendingIntervals = pendingIntervals.filter(x => x !== iv);
+            }
+          }, 70);
+        });
+        later(() => {
+          const vals = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+          vals.forEach((v, i) => renderDie(i, v));
+          finishRoll(vals);
+        }, 620);
+      }
+
+      function finishRoll(vals) {
+        const sum = vals.reduce((a, b) => a + b, 0);
+        const counts = {};
+        vals.forEach(v => counts[v] = (counts[v] || 0) + 1);
+        let bonus = 0;
+        let label = 'sum';
+        if (Object.values(counts).some(c => c === 3)) { bonus = 20; label = 'triple'; }
+        else if (Object.values(counts).some(c => c === 2)) { bonus = 5; label = 'pair'; }
+        if (mode === 'party' && round % 2 === 0 && sum >= 14) bonus += 3;
+        if (mode !== 'duo' && vals[0] === vals[1] && vals[1] === vals[2]) bonus += 5;
+
+        const total = sum + bonus;
+        const p = players[current];
+        p.score += total;
+        p.streak = bonus > 0 ? p.streak + 1 : 0;
+        roundStats.push({ player: p.name, sum, bonus, total, round, color: p.color });
+
+        if (label === 'triple') {
+          $('rollResult').textContent = t('triple')(sum);
+          if (typeof VexGame !== 'undefined') VexGame.confetti(850);
+        } else if (label === 'pair') {
+          $('rollResult').textContent = t('pair')(sum);
+        } else {
+          $('rollResult').textContent = t('sum')(sum);
+        }
+        $('roundScore').textContent = `+${total}`;
+        $('roundScore').style.color = total >= 20 ? '#fde68a' : total >= 10 ? '#22c55e' : '#fff';
+        $('turnBadge').textContent = `${t('sessionReady')} · ${p.name}`;
+        renderLeaderboard();
+        renderMetaBoard();
+        rolling = false;
+
+        if (typeof VexGame !== 'undefined') {
+          VexGame.popScore(document.body, '+' + total, '50%', '40%', label === 'triple' ? 'gold' : '');
+        }
+
+        later(nextTurn, 1200);
+      }
+
+      function nextTurn() {
+        current = (current + 1) % players.length;
+        if (current === 0) {
+          round++;
+          if (round > TOTAL_ROUNDS) return endGame();
+        }
+        updateTurn();
+      }
+
+      function endGame() {
+        gameOver = true;
+        $('rollBtn').disabled = true;
+        $('boostBtn').disabled = true;
+        const winner = players.reduce((a, b) => b.score > a.score ? b : a, players[0]);
+        const s = STRINGS[lang];
+        $('endTitle').textContent = s.end;
+        $('endSub').textContent = s.winner(winner.name, winner.score);
+        $('endOverlay').classList.remove('db-hidden');
+
+        if (typeof VexGame !== 'undefined') {
+          VexGame.confetti(1000);
+          VexGame.setBest(winner.score);
+          VexGame.endSession({
+            score: winner.score,
+            result: 'win',
+            metadata: {
+              winner: winner.name,
+              mode,
+              playerCount: players.length,
+              rounds: TOTAL_ROUNDS,
+              scores: players.map(p => ({ name: p.name, score: p.score })),
+              roundStats,
+            },
+          });
+        }
+      }
+
+      function setCount(nextCount) {
+        count = nextCount;
+        mode = count === 2 ? 'duo' : (count === 3 ? 'trio' : 'party');
+        $('modePill').textContent = count === 2 ? STRINGS[lang].mode2 : (count === 3 ? STRINGS[lang].mode3 : STRINGS[lang].mode4);
+        document.querySelectorAll('.db-seg button').forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.c, 10) === count));
+        rebuildSetupNames();
+        renderMetaBoard();
+      }
+
+      document.querySelectorAll('.db-seg button').forEach(btn => {
+        btn.addEventListener('click', () => setCount(parseInt(btn.dataset.c, 10)));
       });
-    }
-  }
-
-  document.querySelectorAll('.db-count-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      count = parseInt(b.dataset.c, 10);
-      document.querySelectorAll('.db-count-btn').forEach(x => x.classList.toggle('active', x===b));
-      rebuildSetupNames();
-    });
-  });
-  $('setupStart').addEventListener('click', startGame);
-  $('rollBtn').addEventListener('click', roll);
-  $('resetBtn').addEventListener('click', startSetup);
-  $('endRestart').addEventListener('click', startSetup);
-
-  if (typeof VexGame !== 'undefined'){
-    VexGame.boot({
-      slug: 'dice-battle',
-      onReady: function(player){
-        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+      $('setupStart').addEventListener('click', startGame);
+      $('rollBtn').addEventListener('click', roll);
+      $('resetBtn').addEventListener('click', startSetup);
+      $('endRestart').addEventListener('click', startSetup);
+      $('langBtn').addEventListener('click', () => {
+        lang = lang === 'ar' ? 'en' : 'ar';
+        if (typeof VexGame !== 'undefined') VexGame.setLang(lang);
         applyLang();
-      },
-    });
-  }
-  applyLang();
-  // initial dice display
-  [0,1,2].forEach(i => renderDie(i, 1));
-  startSetup();
-})();
-</script>
+        renderLeaderboard();
+        renderMetaBoard();
+      });
+      $('boostBtn').addEventListener('click', () => {
+        if (rolling || gameOver || !players.length) return;
+        const p = players[current];
+        p.streak = Math.max(0, p.streak + 1);
+        $('turnBadge').textContent = lang === 'ar' ? 'Boost مفعل' : 'Boost active';
+        $('rollResult').textContent = lang === 'ar' ? 'Boost يرفع فرصة المكافأة في هذه الجولة.' : 'Boost slightly increases reward odds this round.';
+        $('rollResult').style.color = '#22d3ee';
+      });
+
+      if (typeof VexGame !== 'undefined') {
+        VexGame.boot({
+          slug: 'dice-battle',
+          onReady: function (player) {
+            if (player && player.language) {
+              lang = player.language === 'en' ? 'en' : 'ar';
+            }
+            applyLang();
+          }
+        });
+      }
+      applyLang();
+      setCount(4);
+      [0, 1, 2].forEach(i => renderDie(i, 1));
+      startSetup();
+    })();
+  </script>
 </body>
+
 </html>
