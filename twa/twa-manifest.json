@@ -1,5 +1,5 @@
 {
-  "host": "vexo.click",
+  "host": "vixo.click",
   "name": "VEX - Gaming & Trading Platform",
   "launcherName": "VEX",
   "display": "standalone",
@@ -11,9 +11,9 @@
   "backgroundColor": "#0f1419",
   "enableNotifications": true,
   "startUrl": "/?source=twa",
-  "iconUrl": "https://vexo.click/icons/vex-gaming-logo-512x512.png",
-  "maskableIconUrl": "https://vexo.click/icons/vex-gaming-logo-512x512.png",
-  "monochromeIconUrl": "https://vexo.click/icons/vex-gaming-logo-512x512.png",
+  "iconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  "maskableIconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  "monochromeIconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
   "splashScreenFadeOutDuration": 400,
   "isChromeOSOnly": false,
   "shortcuts": [
@@ -23,7 +23,7 @@
       "url": "/play",
       "icons": [
         {
-          "src": "https://vexo.click/icons/vex-online-games-shortcut.png",
+          "src": "https://vixo.click/icons/vex-online-games-shortcut.png",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -35,7 +35,7 @@
       "url": "/wallet",
       "icons": [
         {
-          "src": "https://vexo.click/icons/vex-wallet-shortcut.png",
+          "src": "https://vixo.click/icons/vex-wallet-shortcut.png",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -47,7 +47,7 @@
       "url": "/p2p",
       "icons": [
         {
-          "src": "https://vexo.click/icons/vex-p2p-trading-shortcut.png",
+          "src": "https://vixo.click/icons/vex-p2p-trading-shortcut.png",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -55,7 +55,7 @@
     }
   ],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://vexo.click/manifest.json",
+  "webManifestUrl": "https://vixo.click/manifest.json",
   "fallbackType": "customtabs",
   "features": {
     "locationDelegation": {

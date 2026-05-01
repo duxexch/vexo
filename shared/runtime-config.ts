@@ -1,4 +1,4 @@
-const DEFAULT_CANONICAL_ORIGIN = "https://vexo.click";
+const DEFAULT_CANONICAL_ORIGIN = "https://vixo.click";
 const DEFAULT_DEV_ORIGINS = [
   "http://localhost:3001",
   "http://localhost:3000",

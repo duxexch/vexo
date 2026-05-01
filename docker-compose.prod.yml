@@ -404,9 +404,10 @@ services:
       # HTTP → HTTPS redirect
       - "traefik.http.routers.vex-http.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex-http.entrypoints=web"
-      - "traefik.http.routers.vex-http.middlewares=vex-https-redirect"
-      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.vex-http.middlewares=vex-http-canonical"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.regex=^http://(?:www\\.)?vixo\\.click/(.*)"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.replacement=https://vixo.click/$1"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.permanent=true"
       # Service port
       - "traefik.http.services.vex.loadbalancer.server.port=3001"
       - "traefik.http.services.vex.loadbalancer.server.scheme=http"
@@ -421,6 +422,9 @@ services:
       - "traefik.http.middlewares.vex-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
       - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.X-Robots-Tag=index, follow"
       - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy=same-origin-allow-popups"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.regex=^https://www\\.vixo\\.click/(.*)"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.replacement=https://vixo.click/$1"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.permanent=true"
       # Gzip compression at Traefik level
       - "traefik.http.middlewares.vex-compress.compress=true"
       - "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes=1024"
@@ -433,7 +437,7 @@ services:
       - "traefik.http.middlewares.vex-ratelimit.ratelimit.period=1s"
       - "traefik.http.middlewares.vex-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=1"
       # Chain middlewares (order matters: rate limit first, then headers, then compress)
-      - "traefik.http.routers.vex.middlewares=vex-ratelimit,vex-headers,vex-compress"
+      - "traefik.http.routers.vex.middlewares=vex-www-canonical,vex-ratelimit,vex-headers,vex-compress"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3001/api/health" ]
       interval: 30s

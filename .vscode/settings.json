@@ -37,5 +37,23 @@
         "Anthropic.claude-code": 3,
         "Sixth.sixth-ai": 4
     },
-    "chat.agent.maxRequests": 5000
+    "chat.agent.maxRequests": 5000,
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "--root",
+                "C:\\Users\\cex\\Desktop\\vixo"
+            ]
+        },
+        "puppeteer": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-puppeteer"
+            ]
+        }
+    }
 }

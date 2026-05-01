@@ -20,7 +20,7 @@ export type SharePreview = z.infer<typeof SharePreviewSchema>;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  
+
   try {
     const shareData = SharePreviewSchema.parse({
       type: searchParams.get('type') || 'game',
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       description: searchParams.get('description') || 'Play exciting games on VEX',
       descriptionAr: searchParams.get('descriptionAr') || 'العب ألعاب مثيرة على VEX',
       imageUrl: searchParams.get('imageUrl') || '',
-      url: searchParams.get('url') || 'https://vexo.click',
+      url: searchParams.get('url') || 'https://vixo.click',
       gameKey: searchParams.get('gameKey') || undefined,
       playerName: searchParams.get('playerName') || undefined,
       score: searchParams.get('score') ? parseInt(searchParams.get('score')!) : undefined,
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     });
 
     const imageData = await generateShareImage(shareData);
-    
+
     return new NextResponse(imageData, {
       headers: {
         'Content-Type': 'image/png',

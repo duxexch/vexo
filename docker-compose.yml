@@ -165,16 +165,19 @@ services:
       - "traefik.http.routers.vex.rule=Host(`vixo.click`) ||
         Host(`www.vixo.click`)"
       - "traefik.http.routers.vex.entrypoints=web"
-      - "traefik.http.routers.vex.middlewares=vex-https-redirect"
-      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=t\
-        rue"
+      - "traefik.http.routers.vex.middlewares=vex-http-canonical"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.regex=^http://(?:www\\.)?vixo\\.click/(.*)"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.replacement=https://vixo.click/$1"
+      - "traefik.http.middlewares.vex-http-canonical.redirectregex.permanent=true"
 
       # Security headers
       - "traefik.http.middlewares.vex-security.headers.stsSeconds=63072000"
       - "traefik.http.middlewares.vex-security.headers.stsIncludeSubdomains=true"
       - "traefik.http.middlewares.vex-security.headers.contentTypeNosniff=true"
-      - "traefik.http.routers.vex-secure.middlewares=vex-security"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.regex=^https://www\\.vixo\\.click/(.*)"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.replacement=https://vixo.click/$1"
+      - "traefik.http.middlewares.vex-www-canonical.redirectregex.permanent=true"
+      - "traefik.http.routers.vex-secure.middlewares=vex-www-canonical,vex-security"
     environment:
       NODE_ENV: production
       PORT: 3001

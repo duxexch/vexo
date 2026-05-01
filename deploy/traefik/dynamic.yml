@@ -10,28 +10,36 @@
 http:
   routers:
     vex-http:
-      rule: Host(`vexo.click`) || Host(`www.vexo.click`)
+      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - web
       middlewares:
-        - redirect-to-https
+        - redirect-http-to-canonical
       service: vex-service
 
     vex-https:
-      rule: Host(`vexo.click`) || Host(`www.vexo.click`)
+      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
       middlewares:
+        - redirect-www-to-canonical
         - vex-compress
         - vex-headers
       service: vex-service
 
   middlewares:
-    redirect-to-https:
-      redirectScheme:
-        scheme: https
+    redirect-http-to-canonical:
+      redirectRegex:
+        regex: "^http://(?:www\\.)?vixo\\.click/(.*)"
+        replacement: "https://vixo.click/$1"
+        permanent: true
+
+    redirect-www-to-canonical:
+      redirectRegex:
+        regex: "^https://www\\.vixo\\.click/(.*)"
+        replacement: "https://vixo.click/$1"
         permanent: true
 
     vex-compress:

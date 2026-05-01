@@ -1,0 +1,18 @@
+{
+    "servers": {
+        "filesystem": {
+            "command": "node",
+            "args": [
+                "C:\\Users\\cex\\.mcp\\node_modules\\@modelcontextprotocol\\server-filesystem\\dist\\index.js",
+                "--root",
+                "C:\\Users\\cex\\Desktop\\vixo"
+            ]
+        },
+        "puppeteer": {
+            "command": "node",
+            "args": [
+                "C:\\Users\\cex\\.mcp\\node_modules\\@modelcontextprotocol\\server-puppeteer\\dist\\index.js"
+            ]
+        }
+    }
+}

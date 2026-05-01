@@ -405,7 +405,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Security headers (Helmet-like protection without external dependency)
 app.use((req: Request, res: Response, next: NextFunction) => {
   // Allow same-origin framing for arcade mini-games loaded in iframes.
-  // External embedding is still blocked; only vexo.click can frame itself.
+  // External embedding is still blocked; only vixo.click can frame itself.
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   // Prevent MIME type sniffing
