@@ -55,5 +55,7 @@
                 "@modelcontextprotocol/server-puppeteer"
             ]
         }
-    }
+    },
+    "localAIAssistant.apiLLM.config.model": "http://localhost:11434/api/tags",
+    "localAIAssistant.capabilities.allowFileEdits": true
 }
