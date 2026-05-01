@@ -21,7 +21,7 @@ import {
   Wallet, TrendingUp, ArrowUpCircle, ArrowDownCircle,
   CreditCard, Crown, Clock, Megaphone, Pin, Eye,
   CheckCircle, History, DollarSign, Play, Maximize2, Minimize2,
-  MessageCircle, Send, ChevronDown, ChevronUp
+  MessageCircle, Send, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
 import { VoiceChat as SharedVoiceChat } from '@/components/games/VoiceChat';
 import { ChatViewerCountPill } from '@/components/games/GameChat';
@@ -1520,6 +1520,153 @@ function AnnouncementsBanner() {
   );
 }
 
+interface ArcadeOverview {
+  totalRuns: number;
+  totalPlayers: number;
+  totalVolumeVex: number;
+  avgScore: number;
+  bestScore: number;
+  multiplayerMatches: number;
+  topGameKey: string | null;
+  topGame?: {
+    key: string;
+    titleAr: string;
+    titleEn: string;
+    slug: string;
+    color: string;
+    kind: string;
+    minPlayers: number;
+    maxPlayers: number;
+    scoringDirection: string;
+    iconEmoji: string;
+  } | null;
+  investmentPitch?: {
+    titleAr: string;
+    titleEn: string;
+    descriptionAr: string;
+    descriptionEn: string;
+  };
+}
+
+function ArcadeOverviewCard() {
+  const { language } = useI18n();
+
+  const { data: overview, isLoading } = useQuery<ArcadeOverview>({
+    queryKey: ['/api/arcade/overview'],
+  });
+
+  if (isLoading) {
+    return (
+      <Card className="border bg-gradient-to-br from-primary/10 to-transparent">
+        <CardHeader className="pb-2">
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!overview) return null;
+
+  const title = language === 'ar'
+    ? overview.investmentPitch?.titleAr || 'نظرة عامة على الأركيد'
+    : overview.investmentPitch?.titleEn || 'Arcade Overview';
+  const description = language === 'ar'
+    ? overview.investmentPitch?.descriptionAr || 'مزيج من اللعب السريع والاقتصاد الذكي يرفع التفاعل اليومي.'
+    : overview.investmentPitch?.descriptionEn || 'Fast sessions plus smart economics improve daily engagement.';
+
+  return (
+    <Card className="border bg-gradient-to-br from-primary/10 via-background to-transparent">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              {title}
+            </CardTitle>
+            <CardDescription className="mt-1 max-w-2xl">{description}</CardDescription>
+          </div>
+          {overview.topGame && (
+            <Badge variant="secondary" className="gap-1">
+              <Trophy className="w-3 h-3" />
+              {language === 'ar' ? 'الأكثر جذبًا' : 'Top retention driver'}
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-xl border bg-background/70 p-3">
+            <p className="text-[11px] text-muted-foreground">{language === 'ar' ? 'الجولات' : 'Runs'}</p>
+            <p className="text-xl font-bold tabular-nums">{overview.totalRuns.toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border bg-background/70 p-3">
+            <p className="text-[11px] text-muted-foreground">{language === 'ar' ? 'اللاعبون' : 'Players'}</p>
+            <p className="text-xl font-bold tabular-nums">{overview.totalPlayers.toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border bg-background/70 p-3">
+            <p className="text-[11px] text-muted-foreground">{language === 'ar' ? 'صافي VEX' : 'Net VEX'}</p>
+            <p className="text-xl font-bold tabular-nums">${overview.totalVolumeVex.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border bg-background/70 p-3">
+            <p className="text-[11px] text-muted-foreground">{language === 'ar' ? 'المباريات النشطة' : 'Live matches'}</p>
+            <p className="text-xl font-bold tabular-nums">{overview.multiplayerMatches.toLocaleString()}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-xl border bg-background/50 p-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">
+              {language === 'ar' ? 'أفضل تجربة حالياً' : 'Current best performer'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {overview.topGame
+                ? (language === 'ar' ? overview.topGame.titleAr : overview.topGame.titleEn)
+                : (language === 'ar' ? 'لا توجد بيانات كافية بعد' : 'No enough data yet')}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg bg-primary/10 px-3 py-2">
+              <span className="text-muted-foreground block">{language === 'ar' ? 'متوسط النقاط' : 'Avg score'}</span>
+              <span className="font-semibold tabular-nums">{overview.avgScore.toFixed(0)}</span>
+            </div>
+            <div className="rounded-lg bg-primary/10 px-3 py-2">
+              <span className="text-muted-foreground block">{language === 'ar' ? 'أفضل رقم' : 'Best score'}</span>
+              <span className="font-semibold tabular-nums">{overview.bestScore.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" className="gap-2">
+            <a href="/arcade-play/stack_tower">
+              <Play className="w-4 h-4" />
+              {language === 'ar' ? 'ابدأ الآن' : 'Start now'}
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href="/games">
+              {language === 'ar' ? 'استكشف الألعاب' : 'Explore games'}
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="secondary">
+            <a href={overview.topGame?.slug ? `/arcade-play/${overview.topGame.slug}` : '/arcade-play/stack_tower'}>
+              {language === 'ar' ? 'العب الأكثر رواجًا' : 'Play the hottest title'}
+            </a>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AccountSummaryCard({ user }: { user: User | undefined }) {
   const { t } = useI18n();
 
@@ -1853,6 +2000,7 @@ export default function PlayPage() {
   return (
     <div className="p-4 space-y-6">
       <AnnouncementsBanner />
+      <ArcadeOverviewCard />
 
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-xl font-bold flex items-center gap-2">

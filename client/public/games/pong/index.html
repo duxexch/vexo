@@ -1,425 +1,673 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>VEX Pong</title>
-<link rel="stylesheet" href="/games/_shared/vex-game.css">
-<style>
-  .pg-arena {
-    width: 100%; max-width: 360px; margin: 0 auto;
-    aspect-ratio: 3/4;
-    background:
-      radial-gradient(ellipse 80% 30% at 50% 0%, rgba(34,211,238,0.20), transparent 60%),
-      radial-gradient(ellipse 80% 30% at 50% 100%, rgba(255,182,39,0.18), transparent 60%),
-      linear-gradient(180deg,#062235 0%,#020c14 100%);
-    border: 1px solid rgba(34,211,238,0.35);
-    border-radius: 18px;
-    position: relative; overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.08),
-      inset 0 -2px 0 rgba(0,0,0,0.55),
-      inset 0 0 30px rgba(34,211,238,0.16),
-      0 14px 28px -10px rgba(0,0,0,0.7);
-    touch-action: none;
-  }
-  /* faint stadium grid */
-  .pg-arena::before {
-    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
-    background-image:
-      linear-gradient(rgba(34,211,238,0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34,211,238,0.06) 1px, transparent 1px);
-    background-size: 30px 30px;
-    mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
-  }
-  /* center spotlight beam */
-  .pg-arena::after {
-    content:""; position:absolute; inset:-8% -8%; pointer-events:none; z-index:0;
-    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.05) 50%, transparent 65%);
-    animation: vexBeamSweep 9s ease-in-out infinite;
-    will-change: transform, opacity;
-  }
-  .pg-canvas { position:relative; z-index:1; width:100%; height:100%; display:block; }
-  .pg-mode-row {
-    display: flex; gap: 10px; justify-content: center; margin-bottom: 14px;
-  }
-  .pg-mode-btn {
-    flex: 1; max-width: 140px; padding: 11px;
-    background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px;
-    color: var(--vex-text-dim); font-family: inherit;
-    font-size: 0.92rem; font-weight: 700;
-    cursor: pointer; letter-spacing: 0.04em;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -2px 0 rgba(0,0,0,0.45),
-      0 3px 0 #050912,
-      0 5px 10px rgba(0,0,0,0.4);
-    transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
-  }
-  .pg-mode-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.4), 0 1px 0 #050912; }
-  .pg-mode-btn.active {
-    background: linear-gradient(180deg, #38e6f9 0%, #0891b2 100%);
-    color: #02323b;
-    border-color: rgba(255,255,255,0.18);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 3px 0 #074150,
-      0 6px 16px -2px rgba(34,211,238,0.55);
-  }
-  .pg-score-overlay {
-    position: absolute; left: 0; right: 0; text-align: center;
-    font-family: 'Bebas Neue', sans-serif; font-size: 4.8rem; line-height: 1;
-    color: rgba(34,211,238,0.18); pointer-events: none; user-select: none;
-    text-shadow: 0 0 18px rgba(34,211,238,0.25);
-    z-index: 0;
-  }
-  .pg-score-top { top: 38%; color: rgba(255,182,39,0.18); text-shadow: 0 0 18px rgba(255,182,39,0.25); }
-  .pg-score-bot { bottom: 38%; transform: rotate(180deg); }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>VEX Pong Duel</title>
+  <link rel="stylesheet" href="/games/_shared/vex-game.css">
+  <style>
+    .pd-arena {
+      width: 100%;
+      max-width: 392px;
+      margin: 0 auto;
+      aspect-ratio: 3 / 4;
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      background:
+        radial-gradient(ellipse 80% 30% at 50% 0%, rgba(34, 211, 238, 0.18), transparent 60%),
+        radial-gradient(ellipse 80% 30% at 50% 100%, rgba(255, 182, 39, 0.14), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 50% 50%, rgba(255, 255, 255, 0.05), transparent 70%),
+        linear-gradient(180deg, #062235 0%, #020c14 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.55),
+        inset 0 0 30px rgba(34, 211, 238, 0.14),
+        0 14px 28px -10px rgba(0, 0, 0, 0.7);
+    }
+
+    .pd-arena::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px);
+      background-size: 30px 30px;
+      mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
+    }
+
+    .pd-arena::after {
+      content: "";
+      position: absolute;
+      inset: -8% -8%;
+      pointer-events: none;
+      background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.05) 50%, transparent 65%);
+      animation: vexBeamSweep 9s ease-in-out infinite;
+      will-change: transform, opacity;
+    }
+
+    .pd-canvas {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .pd-mode-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+
+    .pd-mode-btn {
+      flex: 1;
+      max-width: 140px;
+      padding: 11px;
+      background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      color: var(--vex-text-dim);
+      font-family: inherit;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+        0 3px 0 #050912,
+        0 5px 10px rgba(0, 0, 0, 0.4);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
+    }
+
+    .pd-mode-btn:active {
+      transform: translateY(2px);
+    }
+
+    .pd-mode-btn.active {
+      background: linear-gradient(180deg, #38e6f9 0%, #0891b2 100%);
+      color: #02323b;
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+        0 3px 0 #074150,
+        0 6px 16px -2px rgba(34, 211, 238, 0.55);
+    }
+
+    .pd-subrow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .pd-chip {
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
+      text-align: center;
+      min-width: 0;
+    }
+
+    .pd-chip-label {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--vex-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
+    }
+
+    .pd-chip-value {
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.05em;
+      font-size: 1.25rem;
+      line-height: 1;
+      color: #fff;
+    }
+
+    .pd-chip-value.gold {
+      color: var(--vex-gold);
+    }
+
+    .pd-chip-value.cyan {
+      color: #22d3ee;
+    }
+
+    .pd-chip-value.rose {
+      color: #fb7185;
+    }
+
+    .pd-cta-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .pd-help {
+      font-size: 0.74rem;
+      line-height: 1.5;
+      color: var(--vex-text-dim);
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .pd-leaderboard {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pd-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #1a1f3a 0%, #0a0e1c 100%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.40),
+        0 3px 0 #050912,
+        0 4px 8px rgba(0, 0, 0, 0.30);
+    }
+
+    .pd-row .name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .pd-row .value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.35rem;
+      color: var(--vex-gold);
+    }
+
+    .pd-overlay-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      font-size: 0.76rem;
+      color: var(--vex-text);
+    }
+  </style>
 </head>
+
 <body class="vex-game">
-<div class="vex-shell">
-  <div class="vex-header">
-    <div class="vex-title">
-      <div class="vex-title-badge" style="background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -4px #22d3ee;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="4" y1="6" x2="14" y2="6"/><line x1="10" y1="18" x2="20" y2="18"/></svg>
+  <div class="vex-shell">
+    <div class="vex-header">
+      <div class="vex-title">
+        <div class="vex-title-badge"
+          style="background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -4px #22d3ee;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <line x1="4" y1="6" x2="14" y2="6" />
+            <line x1="10" y1="18" x2="20" y2="18" />
+          </svg>
+        </div>
+        <span id="title">مبارزة بونغ</span>
       </div>
-      <span id="title">بونج</span>
+      <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
     </div>
-    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
-  </div>
 
-  <div class="pg-mode-row">
-    <button class="pg-mode-btn active" data-mode="ai" id="modeAi">ضد الذكاء</button>
-    <button class="pg-mode-btn" data-mode="2p" id="mode2p">لاعبان</button>
-  </div>
-
-  <div class="vex-stats">
-    <div class="vex-stat"><div class="vex-stat-label" id="lblP1">لاعب 1</div><div class="vex-stat-value" style="color:#22d3ee" id="p1">0</div></div>
-    <div class="vex-stat"><div class="vex-stat-label" id="lblTo">للفوز</div><div class="vex-stat-value gold">7</div></div>
-    <div class="vex-stat"><div class="vex-stat-label" id="lblP2">لاعب 2</div><div class="vex-stat-value gold" id="p2">0</div></div>
-  </div>
-
-  <div class="pg-arena" id="arena">
-    <div class="pg-score-overlay pg-score-top" id="bigP2">0</div>
-    <div class="pg-score-overlay pg-score-bot" id="bigP1">0</div>
-    <canvas class="pg-canvas" id="cv" width="360" height="480"></canvas>
-  </div>
-
-  <div class="vex-hint" id="hint">اسحب في النصف السفلي لتحريك مضربك. اللاعب الثاني يتحكم بالنصف العلوي.</div>
-</div>
-
-<div class="vex-overlay" id="endOverlay">
-  <div class="vex-overlay-card">
-    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -4px #22d3ee;">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    <div class="pd-mode-row">
+      <button class="pd-mode-btn active" data-mode="ai" id="modeAi">ضد الذكاء</button>
+      <button class="pd-mode-btn" data-mode="2p" id="mode2p">لاعبان</button>
     </div>
-    <div class="vex-overlay-title" id="endTitle">فوز!</div>
-    <div class="vex-overlay-subtitle" id="endSub"></div>
-    <div class="vex-btn-row">
-      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -3px #22d3ee;">جولة جديدة</button>
+
+    <div class="pd-subrow">
+      <div class="pd-chip">
+        <span class="pd-chip-label" id="lblP1">لاعب 1</span>
+        <span class="pd-chip-value cyan" id="p1">0</span>
+      </div>
+      <div class="pd-chip">
+        <span class="pd-chip-label" id="lblTo">للفوز</span>
+        <span class="pd-chip-value gold">7</span>
+      </div>
+      <div class="pd-chip">
+        <span class="pd-chip-label" id="lblP2">لاعب 2</span>
+        <span class="pd-chip-value rose" id="p2">0</span>
+      </div>
+    </div>
+
+    <div class="pd-arena" id="arena">
+      <canvas class="pd-canvas" id="cv" width="360" height="480"></canvas>
+    </div>
+
+    <div class="pd-help" id="hint">اسحب في النصف السفلي لتحريك مضربك. اللاعب الثاني يتحكم بالنصف العلوي في وضع لاعبين.
+    </div>
+
+    <div class="pd-leaderboard" id="leaderboard" hidden></div>
+  </div>
+
+  <div class="vex-overlay" id="endOverlay">
+    <div class="vex-overlay-card">
+      <div class="vex-overlay-icon"
+        style="background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -4px #22d3ee;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+        </svg>
+      </div>
+      <div class="vex-overlay-title" id="endTitle">فوز!</div>
+      <div class="vex-overlay-subtitle" id="endSub"></div>
+      <div class="vex-overlay-stats">
+        <div class="vex-overlay-stat">
+          <div class="vex-overlay-stat-label" id="overlayScoreLabel1">اللاعب 1</div>
+          <div class="vex-overlay-stat-value" id="overlayP1">0</div>
+        </div>
+        <div class="vex-overlay-stat">
+          <div class="vex-overlay-stat-label" id="overlayScoreLabel2">اللاعب 2</div>
+          <div class="vex-overlay-stat-value blue" id="overlayP2">0</div>
+        </div>
+      </div>
+      <div class="vex-btn-row">
+        <button class="vex-btn vex-btn-primary" id="endRestart"
+          style="flex:1;background:linear-gradient(135deg,#22d3ee,#0e7490);box-shadow:0 0 18px -3px #22d3ee;">جولة
+          جديدة</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="/games/vex-sdk.js"></script>
-<script src="/games/_shared/vex-game.js"></script>
-<script>
-(function(){
-  'use strict';
-  const STRINGS = {
-    ar:{ title:'بونج', reset:'إعادة', vsAi:'ضد الذكاء', twoP:'لاعبان',
-      p1:'لاعب 1', p2:'لاعب 2', to:'للفوز', win1:'فاز اللاعب 1!', win2:'فاز اللاعب 2!', winAi:'فاز الذكاء',
-      newRound:'جولة جديدة', endSub:'مباراة رائعة!',
-      hint:'اسحب في النصف السفلي لتحريك مضربك. اللاعب الثاني يتحكم بالنصف العلوي.',
-      hintAi:'اسحب في النصف السفلي لتحريك مضربك. الذكاء يتحكم بالأعلى.', },
-    en:{ title:'Pong', reset:'Reset', vsAi:'vs AI', twoP:'2 players',
-      p1:'Player 1', p2:'Player 2', to:'To win', win1:'Player 1 wins!', win2:'Player 2 wins!', winAi:'AI wins',
-      newRound:'New game', endSub:'Great match!',
-      hint:'Drag in the bottom half to move your paddle. Player 2 controls the top.',
-      hintAi:'Drag in the bottom half. AI controls the top paddle.', },
-  };
-  let lang = 'ar', mode = 'ai';
-  const $ = id => document.getElementById(id);
-  const TARGET = 7;
-  const cv = $('cv'), ctx = cv.getContext('2d');
-  let W = cv.width, H = cv.height;
+  <script src="/games/vex-sdk.js"></script>
+  <script src="/games/_shared/vex-game.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const STRINGS = {
+        ar: {
+          title: 'مبارزة بونغ',
+          reset: 'إعادة',
+          vsAi: 'ضد الذكاء',
+          twoP: 'لاعبان',
+          p1: 'لاعب 1',
+          p2: 'لاعب 2',
+          to: 'للفوز',
+          win1: 'فاز اللاعب 1!',
+          win2: 'فاز اللاعب 2!',
+          winAi: 'فاز الذكاء',
+          newRound: 'جولة جديدة',
+          hint: 'اسحب في النصف السفلي لتحريك مضربك. اللاعب الثاني يتحكم بالنصف العلوي في وضع لاعبين.',
+          hintAi: 'اسحب في النصف السفلي لتحريك مضربك. الذكاء يتحكم بالنصف العلوي.',
+          modeLabel: 'الوضع',
+          scoreLabel: 'النتيجة',
+          speedLabel: 'السرعة',
+          rewardLabel: 'مكافأة الجولة',
+          entryLabel: 'رسوم الدخول',
+          balanceLabel: 'الرصيد',
+          freePlay: 'وضع اللعب المجاني — لا يوجد خصم أو مكافأة',
+          localMode: 'محلي',
+          onlineMode: 'أونلاين',
+        },
+        en: {
+          title: 'Pong Duel',
+          reset: 'Reset',
+          vsAi: 'vs AI',
+          twoP: '2 players',
+          p1: 'Player 1',
+          p2: 'Player 2',
+          to: 'To win',
+          win1: 'Player 1 wins!',
+          win2: 'Player 2 wins!',
+          winAi: 'AI wins',
+          newRound: 'New round',
+          hint: 'Drag in the bottom half to move your paddle. Player 2 controls the top in two-player mode.',
+          hintAi: 'Drag in the bottom half. AI controls the top paddle.',
+          modeLabel: 'Mode',
+          scoreLabel: 'Score',
+          speedLabel: 'Speed',
+          rewardLabel: 'Round payout',
+          entryLabel: 'Entry fee',
+          balanceLabel: 'Balance',
+          freePlay: 'Free play mode — no fee or reward',
+          localMode: 'Local',
+          onlineMode: 'Online',
+        },
+      };
 
-  function fitCanvas(){
-    const dpr = window.devicePixelRatio || 1;
-    const r = cv.getBoundingClientRect();
-    cv.width = Math.round(r.width * dpr);
-    cv.height = Math.round(r.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    W = r.width; H = r.height;
-  }
+      const TARGET = 7;
+      const $ = (id) => document.getElementById(id);
+      const cv = $('cv');
+      const ctx = cv.getContext('2d');
 
-  let p1, p2, ball, scores, gameOver, raf, lastT;
-  let touchTop = null, touchBot = null;
-  // Cached paint assets — rebuilt on resize/reset only, NEVER per-frame.
-  let padGrad1 = null, padGrad2 = null;     // linear gradients in paddle-local coords (0..p.h)
-  let ballGrad = null;                        // radial gradient in ball-local coords centered at (0,0)
-  let ballGradRadius = 0;                     // radius the cached gradient was built for
-  function rebuildPaintAssets(){
-    // paddle gradients use local Y coords (0 → p.h); we translate before fill
-    if (p1){
-      padGrad1 = ctx.createLinearGradient(0, 0, 0, p1.h);
-      padGrad1.addColorStop(0, '#22d3ee'); padGrad1.addColorStop(1, '#0e7490');
-    }
-    if (p2){
-      padGrad2 = ctx.createLinearGradient(0, 0, 0, p2.h);
-      padGrad2.addColorStop(0, '#ffd166'); padGrad2.addColorStop(1, '#7c5300');
-    }
-    if (ball){ rebuildBallGrad(ball.r); }
-  }
-  function rebuildBallGrad(r){
-    ballGradRadius = r;
-    // local coords: highlight at (-0.35r, -0.4r), center at (0,0)
-    ballGrad = ctx.createRadialGradient(-r*0.35, -r*0.4, 1, 0, 0, r);
-    ballGrad.addColorStop(0, '#ffffff');
-    ballGrad.addColorStop(0.55, '#e2e8f0');
-    ballGrad.addColorStop(1, '#64748b');
-  }
+      let lang = 'ar';
+      let mode = 'ai';
+      let W = cv.width;
+      let H = cv.height;
+      let p1;
+      let p2;
+      let ball;
+      let scores;
+      let gameOver = false;
+      let raf = 0;
+      let lastT = 0;
+      let bootedAt = Date.now();
+      let sessionMode = 'online';
+      const trail = [];
+      const trailMax = 5;
 
-  function applyLang(){
-    const s = STRINGS[lang];
-    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
-    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
-    $('modeAi').textContent = s.vsAi; $('mode2p').textContent = s.twoP;
-    $('lblP1').textContent = s.p1; $('lblP2').textContent = mode==='ai' ? 'AI' : s.p2;
-    $('lblTo').textContent = s.to;
-    $('hint').textContent = mode==='ai' ? s.hintAi : s.hint;
-    $('endRestart').textContent = s.newRound;
-  }
-
-  function resetBall(dir){
-    const speed = 220 + Math.random()*40;
-    const angle = (Math.random()*0.6 - 0.3) + (dir > 0 ? Math.PI/2 : -Math.PI/2);
-    ball = {
-      x: W/2, y: H/2,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      r: Math.max(6, Math.min(W,H)*0.022),
-    };
-  }
-
-  function reset(){
-    fitCanvas();
-    const padW = W * 0.28, padH = Math.max(8, H*0.018);
-    p1 = { x: (W-padW)/2, y: H - 22, w: padW, h: padH };
-    p2 = { x: (W-padW)/2, y: 18, w: padW, h: padH };
-    scores = { p1: 0, p2: 0 };
-    gameOver = false;
-    $('p1').textContent = 0; $('p2').textContent = 0;
-    $('bigP1').textContent = 0; $('bigP2').textContent = 0;
-    $('endOverlay').classList.remove('show');
-    resetBall(Math.random() < 0.5 ? 1 : -1);
-    rebuildPaintAssets();
-    if (raf) cancelAnimationFrame(raf);
-    lastT = performance.now();
-    raf = requestAnimationFrame(loop);
-  }
-
-  function loop(now){
-    if (gameOver) return;
-    const dt = Math.min(0.033, (now - lastT) / 1000);
-    lastT = now;
-    update(dt);
-    draw();
-    raf = requestAnimationFrame(loop);
-  }
-
-  function update(dt){
-    // AI control of top paddle (p2)
-    if (mode === 'ai'){
-      const targetX = ball.x - p2.w/2;
-      const dx = targetX - p2.x;
-      const aiSpeed = 320; // px/s
-      const maxStep = aiSpeed * dt;
-      // small reaction lag — only react if ball moving toward p2
-      if (ball.vy < 0){
-        p2.x += Math.max(-maxStep, Math.min(maxStep, dx * 0.18));
-      } else {
-        p2.x += Math.max(-maxStep*0.4, Math.min(maxStep*0.4, ((W-p2.w)/2 - p2.x)*0.06));
+      function applyLang() {
+        const s = STRINGS[lang];
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title;
+        $('resetBtnLabel').textContent = s.reset;
+        $('modeAi').textContent = s.vsAi;
+        $('mode2p').textContent = s.twoP;
+        $('lblP1').textContent = s.p1;
+        $('lblP2').textContent = s.p2;
+        $('lblTo').textContent = s.to;
+        $('hint').textContent = mode === 'ai' ? s.hintAi : s.hint;
+        $('overlayScoreLabel1').textContent = s.p1;
+        $('overlayScoreLabel2').textContent = s.p2;
+        $('endRestart').textContent = s.newRound;
       }
-      p2.x = Math.max(0, Math.min(W - p2.w, p2.x));
-    }
 
-    // Ball
-    ball.x += ball.vx * dt;
-    ball.y += ball.vy * dt;
+      function fitCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = cv.getBoundingClientRect();
+        cv.width = Math.round(rect.width * dpr);
+        cv.height = Math.round(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        W = rect.width;
+        H = rect.height;
+      }
 
-    // Side walls
-    if (ball.x - ball.r < 0){ ball.x = ball.r; ball.vx = Math.abs(ball.vx); }
-    if (ball.x + ball.r > W){ ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx); }
+      function rebuild() {
+        fitCanvas();
+        const padW = Math.max(58, W * 0.28);
+        const padH = Math.max(8, H * 0.018);
+        p1 = { x: (W - padW) / 2, y: H - 22, w: padW, h: padH };
+        p2 = { x: (W - padW) / 2, y: 18, w: padW, h: padH };
+        scores = { p1: 0, p2: 0 };
+        bootedAt = Date.now();
+        resetBall(Math.random() < 0.5 ? 1 : -1);
+        $('p1').textContent = 0;
+        $('p2').textContent = 0;
+        $('endOverlay').classList.remove('show');
+        gameOver = false;
+        trail.length = 0;
+        if (raf) cancelAnimationFrame(raf);
+        lastT = performance.now();
+        raf = requestAnimationFrame(loop);
+      }
 
-    // Paddle p1 (bottom)
-    if (ball.vy > 0 && ball.y + ball.r >= p1.y && ball.y - ball.r <= p1.y + p1.h){
-      if (ball.x >= p1.x - ball.r && ball.x <= p1.x + p1.w + ball.r){
-        ball.y = p1.y - ball.r;
-        ball.vy = -Math.abs(ball.vy) * 1.04;
-        // angle by hit position
-        const center = p1.x + p1.w/2;
-        const off = (ball.x - center) / (p1.w/2);
-        ball.vx += off * 120;
-        // cap speed
+      function resetBall(dir) {
+        const speed = 220 + Math.random() * 40;
+        const angle = (Math.random() * 0.6 - 0.3) + (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        ball = {
+          x: W / 2,
+          y: H / 2,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: Math.max(6, Math.min(W, H) * 0.022),
+        };
+      }
+
+      function update(dt) {
+        if (mode === 'ai') {
+          const targetX = ball.x - p2.w / 2;
+          const dx = targetX - p2.x;
+          const aiSpeed = 320;
+          const maxStep = aiSpeed * dt;
+          const reaction = ball.vy < 0 ? 0.18 : 0.06;
+          p2.x += Math.max(-maxStep, Math.min(maxStep, dx * reaction));
+          p2.x = Math.max(0, Math.min(W - p2.w, p2.x));
+        }
+
+        ball.x += ball.vx * dt;
+        ball.y += ball.vy * dt;
+
+        if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); }
+        if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx); }
+
+        if (ball.y - ball.r < 0 && ball.x >= p2.x - 10 && ball.x <= p2.x + p2.w + 10) {
+          score('p1');
+          return;
+        }
+        if (ball.y + ball.r > H && ball.x >= p1.x - 10 && ball.x <= p1.x + p1.w + 10) {
+          score('p2');
+          return;
+        }
+
+        if (ball.vy < 0 && ball.y - ball.r <= p2.y + p2.h && ball.y + ball.r >= p2.y) {
+          if (ball.x >= p2.x - ball.r && ball.x <= p2.x + p2.w + ball.r) {
+            ball.y = p2.y + p2.h + ball.r;
+            ball.vy = Math.abs(ball.vy) * 1.04;
+            const off = (ball.x - (p2.x + p2.w / 2)) / (p2.w / 2);
+            ball.vx += off * 120;
+            capBall();
+          }
+        }
+
+        if (ball.vy > 0 && ball.y + ball.r >= p1.y && ball.y - ball.r <= p1.y + p1.h) {
+          if (ball.x >= p1.x - ball.r && ball.x <= p1.x + p1.w + ball.r) {
+            ball.y = p1.y - ball.r;
+            ball.vy = -Math.abs(ball.vy) * 1.04;
+            const off = (ball.x - (p1.x + p1.w / 2)) / (p1.w / 2);
+            ball.vx += off * 120;
+            capBall();
+          }
+        }
+      }
+
+      function capBall() {
         const sp = Math.hypot(ball.vx, ball.vy);
-        if (sp > 600){ ball.vx *= 600/sp; ball.vy *= 600/sp; }
+        if (sp > 620) {
+          ball.vx *= 620 / sp;
+          ball.vy *= 620 / sp;
+        }
       }
-    }
-    // Paddle p2 (top)
-    if (ball.vy < 0 && ball.y - ball.r <= p2.y + p2.h && ball.y + ball.r >= p2.y){
-      if (ball.x >= p2.x - ball.r && ball.x <= p2.x + p2.w + ball.r){
-        ball.y = p2.y + p2.h + ball.r;
-        ball.vy = Math.abs(ball.vy) * 1.04;
-        const center = p2.x + p2.w/2;
-        const off = (ball.x - center) / (p2.w/2);
-        ball.vx += off * 120;
-        const sp = Math.hypot(ball.vx, ball.vy);
-        if (sp > 600){ ball.vx *= 600/sp; ball.vy *= 600/sp; }
+
+      function score(who) {
+        scores[who] += 1;
+        $('p1').textContent = scores.p1;
+        $('p2').textContent = scores.p2;
+        if (scores[who] >= TARGET) {
+          end(who);
+          return;
+        }
+        resetBall(who === 'p1' ? -1 : 1);
       }
-    }
 
-    // Scoring
-    if (ball.y + ball.r < 0){ score('p1'); }
-    else if (ball.y - ball.r > H){ score('p2'); }
-  }
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
 
-  function score(who){
-    scores[who]++;
-    $('p1').textContent = scores.p1; $('p2').textContent = scores.p2;
-    $('bigP1').textContent = scores.p1; $('bigP2').textContent = scores.p2;
-    if (scores[who] >= TARGET){ end(who); return; }
-    resetBall(who === 'p1' ? -1 : 1);
-  }
+        ctx.strokeStyle = 'rgba(34,211,238,0.30)';
+        ctx.setLineDash([8, 10]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, H / 2);
+        ctx.lineTo(W, H / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-  // Trail for ball motion blur (cheap — opacity-only fades stored positions)
-  const TRAIL = [];
-  const TRAIL_MAX = 5;
+        ctx.strokeStyle = 'rgba(34,211,238,0.18)';
+        ctx.beginPath();
+        ctx.arc(W / 2, H / 2, Math.min(W, H) * 0.10, 0, Math.PI * 2);
+        ctx.stroke();
 
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    // mid line — twin-track look
-    ctx.strokeStyle = 'rgba(34,211,238,0.30)';
-    ctx.setLineDash([8, 10]); ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
-    ctx.setLineDash([]);
-    // center circle
-    ctx.strokeStyle = 'rgba(34,211,238,0.18)';
-    ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.10, 0, Math.PI*2); ctx.stroke();
-    // paddles — 3D bevel via cached gradient + rim
-    drawPad(p1, '#22d3ee', '#0e7490', padGrad1);
-    drawPad(p2, '#ffd166', '#7c5300', padGrad2);
-    // ball trail (back to front)
-    for (let i = 0; i < TRAIL.length; i++){
-      const t = TRAIL[i];
-      const a = (i + 1) / (TRAIL.length + 1) * 0.35;
-      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(t.x, t.y, ball.r * (0.65 + i*0.06), 0, Math.PI*2); ctx.fill();
-    }
-    // ball — sphere via cached radial gradient (translate, then draw at origin)
-    if (ball.r !== ballGradRadius) rebuildBallGrad(ball.r);
-    ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 12;
-    ctx.save();
-    ctx.translate(ball.x, ball.y);
-    ctx.fillStyle = ballGrad;
-    ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-    ctx.shadowBlur = 0;
-    // record position for next frame's trail
-    TRAIL.push({x: ball.x, y: ball.y});
-    if (TRAIL.length > TRAIL_MAX) TRAIL.shift();
-  }
+        drawPaddle(p2, '#ffd166', '#7c5300');
+        drawPaddle(p1, '#22d3ee', '#0e7490');
 
-  function drawPad(p, lightColor, darkColor, cachedGrad){
-    // soft glow base
-    ctx.shadowColor = lightColor; ctx.shadowBlur = 16;
-    // body — cached vertical gradient (translate to paddle origin first)
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.fillStyle = cachedGrad;
-    if (ctx.roundRect){
-      ctx.beginPath(); ctx.roundRect(0, 0, p.w, p.h, p.h/2); ctx.fill();
-    } else {
-      ctx.fillRect(0, 0, p.w, p.h);
-    }
-    ctx.shadowBlur = 0;
-    // rim highlight (top)
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    if (ctx.roundRect){
-      ctx.beginPath(); ctx.roundRect(4, 1, p.w - 8, Math.max(1.5, p.h*0.25), p.h*0.15); ctx.fill();
-    }
-    ctx.restore();
-  }
+        for (let i = 0; i < trail.length; i++) {
+          const t = trail[i];
+          const a = ((i + 1) / (trail.length + 1)) * 0.35;
+          ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, ball.r * (0.65 + i * 0.06), 0, Math.PI * 2);
+          ctx.fill();
+        }
 
-  function end(winner){
-    gameOver = true;
-    if (raf) cancelAnimationFrame(raf);
-    const s = STRINGS[lang];
-    let title;
-    if (winner === 'p1') title = s.win1;
-    else title = mode === 'ai' ? s.winAi : s.win2;
-    $('endTitle').textContent = title;
-    $('endSub').textContent = `${scores.p1} — ${scores.p2}`;
-    setTimeout(() => $('endOverlay').classList.add('show'), 400);
-    if (typeof VexGame !== 'undefined'){
-      if (winner === 'p1') VexGame.confetti(700);
-      VexGame.endSession({
-        score: scores.p1,
-        result: winner === 'p1' ? 'win' : 'loss',
-        metadata: { mode, p1: scores.p1, p2: scores.p2, winner },
+        ctx.shadowColor = '#7dd3fc';
+        ctx.shadowBlur = 12;
+        ctx.save();
+        ctx.translate(ball.x, ball.y);
+        const grad = ctx.createRadialGradient(-ball.r * 0.35, -ball.r * 0.4, 1, 0, 0, ball.r);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.55, '#e2e8f0');
+        grad.addColorStop(1, '#64748b');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.shadowBlur = 0;
+
+        trail.push({ x: ball.x, y: ball.y });
+        if (trail.length > trailMax) trail.shift();
+      }
+
+      function drawPaddle(p, lightColor, darkColor) {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + p.w / 2, p.y + p.h / 2 + p.h * 1.5, p.w * 0.46, p.h * 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const grad = ctx.createLinearGradient(0, 0, 0, p.h);
+        grad.addColorStop(0, lightColor);
+        grad.addColorStop(1, darkColor);
+        ctx.shadowColor = lightColor;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = grad;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(0, 0, p.w, p.h, p.h / 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(0, 0, p.w, p.h);
+        }
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(4, 1, p.w - 8, Math.max(1.5, p.h * 0.25), p.h * 0.15);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function loop(now) {
+        if (gameOver) return;
+        const dt = Math.min(0.033, (now - lastT) / 1000);
+        lastT = now;
+        update(dt);
+        draw();
+        raf = requestAnimationFrame(loop);
+      }
+
+      function end(winner) {
+        gameOver = true;
+        if (raf) cancelAnimationFrame(raf);
+        const s = STRINGS[lang];
+        const title = winner === 'p1' ? s.win1 : (mode === 'ai' ? s.winAi : s.win2);
+        $('endTitle').textContent = title;
+        $('endSub').textContent = `${scores.p1} — ${scores.p2}`;
+        $('overlayP1').textContent = scores.p1;
+        $('overlayP2').textContent = scores.p2;
+        setTimeout(() => $('endOverlay').classList.add('show'), 400);
+
+        if (typeof VexGame !== 'undefined') {
+          if (winner === 'p1') VexGame.confetti(700);
+          const score = Math.max(scores.p1, scores.p2);
+          VexGame.endSession({
+            score,
+            result: winner === 'p1' ? 'win' : 'loss',
+            metadata: {
+              mode,
+              sessionMode,
+              p1: scores.p1,
+              p2: scores.p2,
+              winner,
+              durationMs: Date.now() - bootedAt,
+            },
+          });
+        }
+      }
+
+      function movePaddle(p, x, y) {
+        p.x = Math.max(0, Math.min(W - p.w, x - p.w / 2));
+        if (p === p1) {
+          p.y = Math.max(H / 2 + p.h, Math.min(H - p.h * 2, H - 22));
+        } else {
+          p.y = Math.max(18, Math.min(H / 2 - p.h * 2, 18));
+        }
+      }
+
+      function handlePointer(ev) {
+        const rect = cv.getBoundingClientRect();
+        const pts = ev.touches ? Array.from(ev.touches) : [ev];
+        pts.forEach((t) => {
+          const x = t.clientX - rect.left;
+          const y = t.clientY - rect.top;
+          if (y > H / 2) movePaddle(p1, x, y);
+          else if (mode === '2p') movePaddle(p2, x, y);
+        });
+      }
+
+      cv.addEventListener('touchstart', (e) => { e.preventDefault(); handlePointer(e); }, { passive: false });
+      cv.addEventListener('touchmove', (e) => { e.preventDefault(); handlePointer(e); }, { passive: false });
+      cv.addEventListener('mousemove', (e) => { if (e.buttons) handlePointer(e); });
+      cv.addEventListener('mousedown', handlePointer);
+
+      document.querySelectorAll('.pd-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          mode = btn.dataset.mode === '2p' ? '2p' : 'ai';
+          document.querySelectorAll('.pd-mode-btn').forEach((x) => x.classList.toggle('active', x === btn));
+          applyLang();
+          rebuild();
+        });
       });
-    }
-  }
 
-  // Touch / pointer controls — drag in bottom half = p1, top half = p2 (only if 2p mode)
-  function onPointer(ev){
-    const rect = cv.getBoundingClientRect();
-    const touches = ev.touches ? Array.from(ev.touches) : [ev];
-    const updates = { top: null, bot: null };
-    touches.forEach(t => {
-      const x = (t.clientX - rect.left);
-      const y = (t.clientY - rect.top);
-      if (y < H/2){ updates.top = x; } else { updates.bot = x; }
-    });
-    if (updates.bot !== null){ p1.x = Math.max(0, Math.min(W - p1.w, updates.bot - p1.w/2)); }
-    if (mode === '2p' && updates.top !== null){ p2.x = Math.max(0, Math.min(W - p2.w, updates.top - p2.w/2)); }
-  }
-  cv.addEventListener('touchstart', (e) => { e.preventDefault(); onPointer(e); }, {passive:false});
-  cv.addEventListener('touchmove', (e) => { e.preventDefault(); onPointer(e); }, {passive:false});
-  cv.addEventListener('mousemove', (e) => { onPointer(e); });
-  cv.addEventListener('mousedown', (e) => { onPointer(e); });
+      $('resetBtn').addEventListener('click', rebuild);
+      $('endRestart').addEventListener('click', rebuild);
+      window.addEventListener('resize', rebuild);
 
-  // Mode switch
-  document.querySelectorAll('.pg-mode-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      mode = b.dataset.mode;
-      document.querySelectorAll('.pg-mode-btn').forEach(x => x.classList.toggle('active', x===b));
+      if (typeof VexGame !== 'undefined') {
+        VexGame.boot({
+          slug: 'pong',
+          onReady: function (player) {
+            if (player && player.language) {
+              lang = player.language === 'en' ? 'en' : 'ar';
+              VexGame.setLang(lang);
+            }
+            sessionMode = player && player.id ? 'online' : 'local';
+            applyLang();
+          },
+        });
+      }
+
       applyLang();
-      reset();
-    });
-  });
-
-  $('resetBtn').addEventListener('click', reset);
-  $('endRestart').addEventListener('click', reset);
-  window.addEventListener('resize', () => { fitCanvas(); reset(); });
-
-  if (typeof VexGame !== 'undefined'){
-    VexGame.boot({
-      slug: 'pong',
-      onReady: function(player){
-        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
-        applyLang();
-      },
-    });
-  }
-  applyLang();
-  reset();
-})();
-</script>
+      rebuild();
+    })();
+  </script>
 </body>
+
 </html>

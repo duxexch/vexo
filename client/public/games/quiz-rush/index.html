@@ -1,560 +1,1166 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b14">
-<title>VEX Quiz Rush</title>
-<link rel="stylesheet" href="/games/_shared/vex-game.css">
-<style>
-  .qr-arena {
-    width: 100%; max-width: 380px; margin: 0 auto;
-    aspect-ratio: 3/4;
-    background:
-      radial-gradient(ellipse 80% 60% at 50% 50%, rgba(30,136,255,0.18), transparent 70%),
-      linear-gradient(180deg,#0a1a30 0%,#040810 100%);
-    border: 1px solid rgba(30,136,255,0.40);
-    border-radius: 18px;
-    position: relative; overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.10),
-      inset 0 -2px 0 rgba(0,0,0,0.55),
-      0 14px 28px -10px rgba(0,0,0,0.7);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 4px;
-    padding: 4px;
-  }
-  .qr-buzzer {
-    position: relative; cursor: pointer;
-    display: grid; place-items: center;
-    border-radius: 16px;
-    user-select: none;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.10);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.30),
-      inset 0 -3px 0 rgba(0,0,0,0.40),
-      0 5px 0 rgba(0,0,0,0.55),
-      0 8px 18px -3px rgba(0,0,0,0.45);
-    transition: transform 0.10s ease, box-shadow 0.10s ease, filter 0.18s ease;
-  }
-  /* Glossy dome highlight on each buzzer */
-  .qr-buzzer::before {
-    content:""; position:absolute; left:0; right:0; top:0; height:48%;
-    background: linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.05) 60%, transparent 100%);
-    pointer-events: none;
-    border-radius: 16px 16px 0 0;
-  }
-  /* Inner ring on each buzzer */
-  .qr-buzzer::after {
-    content:""; position:absolute; inset: 8px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.20);
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.30);
-    pointer-events: none;
-  }
-  .qr-buzzer .qr-buzzer-content {
-    text-align: center; padding: 10px; position: relative; z-index: 1;
-  }
-  .qr-buzzer .qr-name {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
-    letter-spacing: 0.12em; opacity: 0.95;
-    text-shadow: 0 2px 0 rgba(0,0,0,0.45);
-  }
-  .qr-buzzer .qr-score {
-    font-family: 'Bebas Neue', sans-serif; font-size: 2.6rem; line-height: 1;
-    margin-top: 4px;
-    text-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 14px currentColor;
-  }
-  .qr-buzzer:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), inset 0 -1px 0 rgba(0,0,0,0.35), 0 1px 0 rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4); }
-  .qr-buzzer.active { transform: translateY(-2px) scale(1.02); }
-  .qr-buzzer.active::before { opacity: 0.55; }
-  .qr-buzzer.locked { opacity: 0.40; transform: translateY(2px); }
-  /* Compositor-only flashes: pulse a pre-positioned overlay via opacity + a tiny scale on the buzzer.
-     We keep ::before tinted with a green/red overlay (set via .correct / .wrong) and animate its opacity. */
-  .qr-buzzer.correct::before {
-    background: radial-gradient(60% 80% at 50% 30%, rgba(34,197,94,0.85), rgba(34,197,94,0.0) 75%);
-    opacity: 0;
-    animation: qrPulseGood 0.6s ease;
-  }
-  .qr-buzzer.wrong::before {
-    background: radial-gradient(60% 80% at 50% 30%, rgba(239,68,68,0.85), rgba(239,68,68,0.0) 75%);
-    opacity: 0;
-    animation: qrPulseBad 0.6s ease;
-  }
-  .qr-buzzer.correct, .qr-buzzer.wrong { animation: qrBuzzerPop 0.6s ease; }
-  @keyframes qrPulseGood { 0%,100%{ opacity: 0; } 30%,70%{ opacity: 1; } }
-  @keyframes qrPulseBad  { 0%,100%{ opacity: 0; } 30%,70%{ opacity: 1; } }
-  @keyframes qrBuzzerPop { 0%,100%{ transform: translateY(0) scale(1);} 30%,70%{ transform: translateY(-3px) scale(1.04);} }
-  .qr-buzzer[data-i="0"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #4ade80 0%, #22c55e 30%, #14532d 70%, #052010 100%); color: #f0fdf4; }
-  .qr-buzzer[data-i="1"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #fca5a5 0%, #ef4444 30%, #7f1d1d 70%, #2a0606 100%); color: #fee2e2; }
-  .qr-buzzer[data-i="2"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #fde68a 0%, #ffb627 30%, #7c5300 70%, #2a1c00 100%); color: #fffbeb; }
-  .qr-buzzer[data-i="3"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #d8b4fe 0%, #a855f7 30%, #581c87 70%, #1d0a3a 100%); color: #faf5ff; }
-  .qr-question-overlay {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    width: 84%; max-width: 290px;
-    background: linear-gradient(180deg, rgba(15,25,50,0.97) 0%, rgba(7,11,20,0.97) 100%);
-    backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(30,136,255,0.55);
-    border-radius: 16px; padding: 16px;
-    z-index: 5; text-align: center;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.12),
-      inset 0 -2px 0 rgba(0,0,0,0.40),
-      0 0 36px rgba(30,136,255,0.40),
-      0 14px 28px -8px rgba(0,0,0,0.7);
-    transition: opacity 0.2s ease;
-  }
-  .qr-q-text {
-    font-size: 1.08rem; font-weight: 700; line-height: 1.4; color: var(--vex-text);
-    margin-bottom: 14px;
-    text-shadow: 0 1px 0 rgba(0,0,0,0.40);
-  }
-  .qr-q-num {
-    display: inline-block;
-    padding: 4px 12px; border-radius: 999px;
-    background: linear-gradient(180deg, #4a9eff, #1e88ff);
-    color: #fff;
-    font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
-    letter-spacing: 0.18em; margin-bottom: 10px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 2px 0 #0a3a78, 0 4px 8px rgba(30,136,255,0.50);
-  }
-  .qr-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .qr-answer {
-    padding: 12px 8px;
-    background: linear-gradient(180deg, #2a3550 0%, #131b30 100%);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    color: var(--vex-text); font-family: inherit; font-weight: 700;
-    font-size: 0.92rem; cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.15),
-      inset 0 -2px 0 rgba(0,0,0,0.40),
-      0 3px 0 #050912;
-    transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.18s;
-  }
-  .qr-answer:hover { background: linear-gradient(180deg, #3a4870, #1a2540); }
-  .qr-answer:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
-  .qr-answer.correct {
-    background: linear-gradient(180deg, #34d57c, #14532d);
-    color: #f0fdf4; border-color: #22c55e;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 3px 0 #052010, 0 0 14px rgba(34,197,94,0.55);
-  }
-  .qr-answer.wrong {
-    background: linear-gradient(180deg, #f87171, #7f1d1d);
-    color: #fee2e2; border-color: #ef4444;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 3px 0 #4a0a0a, 0 0 14px rgba(239,68,68,0.55);
-  }
-  .qr-buzz-state {
-    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-    font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
-    color: rgba(255,255,255,0.55); letter-spacing: 0.18em;
-    text-align: center; pointer-events: none;
-    text-shadow: 0 1px 0 rgba(0,0,0,0.5);
-  }
-  .qr-setup-overlay {
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(8,12,28,0.97), rgba(4,6,14,0.97));
-    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
-    align-items: stretch; justify-content: center; border-radius: 18px;
-  }
-  .qr-setup-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #93c5fd;
-    text-align: center; letter-spacing: 0.12em;
-    text-shadow: 0 0 14px rgba(30,136,255,0.55), 0 3px 0 rgba(0,0,0,0.5);
-  }
-  .qr-count-row { display: flex; gap: 8px; justify-content: center; }
-  .qr-count-btn {
-    width: 46px; height: 46px; border-radius: 12px;
-    background: linear-gradient(180deg, #1a2540, #0a1224);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: var(--vex-text);
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.15),
-      inset 0 -2px 0 rgba(0,0,0,0.40),
-      0 3px 0 #050912;
-    transition: transform 0.08s ease, box-shadow 0.08s ease;
-  }
-  .qr-count-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
-  .qr-count-btn.active {
-    background: linear-gradient(180deg, #4a9eff, #1e88ff);
-    color: #fff; border-color: rgba(255,255,255,0.25);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 3px 0 #0a3a78, 0 5px 12px -2px rgba(30,136,255,0.55);
-  }
-  .qr-setup-row { display: flex; gap: 8px; align-items: center; }
-  .qr-setup-row input {
-    flex: 1; padding: 11px;
-    background: linear-gradient(180deg, #1a2540, #0a1224);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 10px;
-    color: var(--vex-text); font-family: inherit; font-size: 0.92rem;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
-  }
-  .qr-setup-start {
-    margin-top: 12px; padding: 15px;
-    background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a3a78 100%);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,0.20);
-    border-radius: 14px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
-    cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      inset 0 -2px 0 rgba(0,0,0,0.30),
-      0 5px 0 #082a52,
-      0 8px 22px -4px rgba(30,136,255,0.55);
-    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
-    transition: transform 0.08s ease, box-shadow 0.08s ease;
-  }
-  .qr-setup-start:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 0 #082a52; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>VEX Quiz Rush</title>
+  <link rel="stylesheet" href="/games/_shared/vex-game.css">
+  <style>
+    :root {
+      --qr-primary: #1e88ff;
+      --qr-primary-deep: #0a3a78;
+      --qr-accent: #8b5cf6;
+      --qr-good: #22c55e;
+      --qr-bad: #ef4444;
+      --qr-panel: rgba(8, 12, 28, 0.96);
+    }
+
+    .qr-stage {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .qr-hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(30, 136, 255, 0.14), rgba(255, 255, 255, 0.04));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    }
+
+    .qr-hero-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .qr-hero-title h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.08em;
+      font-size: 1.8rem;
+      line-height: 1;
+      margin: 0;
+      color: #fff;
+    }
+
+    .qr-hero-title p {
+      margin: 4px 0 0;
+      color: var(--vex-text-dim);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .qr-mode-pill {
+      min-width: 82px;
+      text-align: center;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22));
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      color: var(--vex-text);
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.12em;
+      font-size: 0.95rem;
+    }
+
+    .qr-board {
+      position: relative;
+      overflow: hidden;
+      min-height: 420px;
+      border-radius: 18px;
+      background:
+        radial-gradient(ellipse 90% 80% at 50% 20%, rgba(139, 92, 246, 0.16), transparent 70%),
+        radial-gradient(ellipse 80% 70% at 50% 50%, rgba(30, 136, 255, 0.15), transparent 70%),
+        linear-gradient(180deg, #0b1326 0%, #050812 100%);
+      border: 1px solid rgba(30, 136, 255, 0.35);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.55),
+        0 16px 34px -14px rgba(0, 0, 0, 0.85);
+      flex: 1;
+    }
+
+    .qr-grid {
+      position: absolute;
+      inset: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .qr-buzzer {
+      position: relative;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.24),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.45),
+        0 8px 20px -6px rgba(0, 0, 0, 0.60);
+      user-select: none;
+      overflow: hidden;
+      transition: transform 0.12s ease, filter 0.16s ease, opacity 0.16s ease;
+    }
+
+    .qr-buzzer::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06) 36%, transparent 55%);
+      pointer-events: none;
+    }
+
+    .qr-buzzer::after {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.24);
+      pointer-events: none;
+    }
+
+    .qr-buzzer[data-i="0"] {
+      background: radial-gradient(circle at 50% 25%, #4ade80 0%, #16a34a 34%, #14532d 70%, #052010 100%);
+      color: #ecfdf5;
+    }
+
+    .qr-buzzer[data-i="1"] {
+      background: radial-gradient(circle at 50% 25%, #fca5a5 0%, #ef4444 34%, #7f1d1d 70%, #2a0606 100%);
+      color: #fef2f2;
+    }
+
+    .qr-buzzer[data-i="2"] {
+      background: radial-gradient(circle at 50% 25%, #fde68a 0%, #ffb627 34%, #7c5300 70%, #2a1c00 100%);
+      color: #fffbeb;
+    }
+
+    .qr-buzzer[data-i="3"] {
+      background: radial-gradient(circle at 50% 25%, #d8b4fe 0%, #a855f7 34%, #581c87 70%, #1d0a3a 100%);
+      color: #faf5ff;
+    }
+
+    .qr-buzzer-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 12px 8px;
+      width: 100%;
+    }
+
+    .qr-buzzer-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.08rem;
+      letter-spacing: 0.12em;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .qr-buzzer-score {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.5rem;
+      line-height: 1;
+      margin-top: 6px;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 16px currentColor;
+    }
+
+    .qr-buzzer.active {
+      transform: translateY(-3px) scale(1.02);
+      filter: brightness(1.1);
+    }
+
+    .qr-buzzer.locked {
+      opacity: 0.42;
+      transform: translateY(2px) scale(0.985);
+      filter: grayscale(0.4);
+    }
+
+    .qr-buzzer.correct::before {
+      background: radial-gradient(circle at 50% 32%, rgba(34, 197, 94, 0.90), rgba(34, 197, 94, 0.0) 70%);
+      animation: qrFlashGood 0.58s ease;
+    }
+
+    .qr-buzzer.wrong::before {
+      background: radial-gradient(circle at 50% 32%, rgba(239, 68, 68, 0.90), rgba(239, 68, 68, 0.0) 70%);
+      animation: qrFlashBad 0.58s ease;
+    }
+
+    .qr-buzzer.correct,
+    .qr-buzzer.wrong {
+      animation: qrPop 0.58s ease;
+    }
+
+    @keyframes qrFlashGood {
+
+      0%,
+      100% {
+        opacity: 0
+      }
+
+      20%,
+      75% {
+        opacity: 1
+      }
+    }
+
+    @keyframes qrFlashBad {
+
+      0%,
+      100% {
+        opacity: 0
+      }
+
+      20%,
+      75% {
+        opacity: 1
+      }
+    }
+
+    @keyframes qrPop {
+
+      0%,
+      100% {
+        transform: translateY(0) scale(1)
+      }
+
+      24%,
+      72% {
+        transform: translateY(-4px) scale(1.04)
+      }
+    }
+
+    .qr-question {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(3, 6, 18, 0.34);
+      backdrop-filter: blur(4px);
+    }
+
+    .qr-question-card {
+      width: 100%;
+      max-width: 340px;
+      border-radius: 18px;
+      border: 1px solid rgba(30, 136, 255, 0.45);
+      background: linear-gradient(180deg, rgba(10, 17, 36, 0.98), rgba(6, 10, 18, 0.98));
+      box-shadow:
+        0 0 36px rgba(30, 136, 255, 0.28),
+        0 18px 30px -12px rgba(0, 0, 0, 0.85);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .qr-question-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .qr-question-num {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #4a9eff, #1e88ff);
+      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.14em;
+      font-size: 0.95rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 10px rgba(30, 136, 255, 0.30);
+    }
+
+    .qr-question-hint {
+      font-size: 0.72rem;
+      color: var(--vex-text-muted);
+      text-align: end;
+    }
+
+    .qr-question-text {
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1.45;
+      color: var(--vex-text);
+      margin-bottom: 14px;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    .qr-answers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .qr-answer {
+      min-height: 52px;
+      padding: 12px 10px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #2a3550, #131b30);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--vex-text);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.40),
+        0 3px 0 #050912;
+      transition: transform 0.08s ease, background 0.16s ease, opacity 0.16s ease;
+    }
+
+    .qr-answer:hover {
+      background: linear-gradient(180deg, #3a4870, #1a2540);
+    }
+
+    .qr-answer:active {
+      transform: translateY(2px);
+    }
+
+    .qr-answer:disabled {
+      cursor: not-allowed;
+      opacity: 0.54;
+    }
+
+    .qr-answer.correct {
+      background: linear-gradient(180deg, #34d57c, #14532d);
+      color: #f0fdf4;
+      border-color: #22c55e;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), 0 3px 0 #052010, 0 0 14px rgba(34, 197, 94, 0.48);
+    }
+
+    .qr-answer.wrong {
+      background: linear-gradient(180deg, #f87171, #7f1d1d);
+      color: #fee2e2;
+      border-color: #ef4444;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36), 0 3px 0 #4a0a0a, 0 0 14px rgba(239, 68, 68, 0.48);
+    }
+
+    .qr-status {
+      min-height: 26px;
+      margin-top: 12px;
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.12em;
+      color: rgba(255, 255, 255, 0.58);
+      text-align: center;
+      font-size: 1rem;
+    }
+
+    .qr-status.good {
+      color: #86efac;
+    }
+
+    .qr-status.bad {
+      color: #fca5a5;
+    }
+
+    .qr-setup {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: linear-gradient(180deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 14, 0.98));
+    }
+
+    .qr-setup-card {
+      width: 100%;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.20));
+      box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.82);
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .qr-setup-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.7rem;
+      letter-spacing: 0.12em;
+      text-align: center;
+      color: #93c5fd;
+      text-shadow: 0 0 14px rgba(30, 136, 255, 0.40);
+    }
+
+    .qr-setup-subtitle {
+      text-align: center;
+      color: var(--vex-text-dim);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .qr-count-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .qr-count-btn {
+      min-height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #1a2540, #0a1224);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--vex-text);
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.45rem;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.40),
+        0 3px 0 #050912;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.16s ease;
+    }
+
+    .qr-count-btn.active {
+      background: linear-gradient(180deg, #4a9eff, #1e88ff);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.22);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.42),
+        0 3px 0 #0a3a78,
+        0 5px 14px -2px rgba(30, 136, 255, 0.55);
+    }
+
+    .qr-count-btn:active {
+      transform: translateY(2px);
+    }
+
+    .qr-name-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .qr-name-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .qr-name-row input {
+      flex: 1;
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #1a2540, #0a1224);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      color: var(--vex-text);
+      font-family: inherit;
+      font-size: 0.92rem;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.42);
+    }
+
+    .qr-start-btn {
+      min-height: 48px;
+      margin-top: 6px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a3a78 100%);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.20);
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.45rem;
+      letter-spacing: 0.18em;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.40),
+        0 5px 0 #082a52,
+        0 10px 22px -6px rgba(30, 136, 255, 0.55);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+    }
+
+    .qr-start-btn:active {
+      transform: translateY(4px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 1px 0 #082a52;
+    }
+
+    .qr-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 2px;
+      flex-wrap: wrap;
+    }
+
+    .qr-hint {
+      flex: 1;
+      min-width: 180px;
+      font-size: 0.74rem;
+      color: var(--vex-text-muted);
+      line-height: 1.45;
+    }
+
+    .qr-mini-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .qr-badge {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.14));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--vex-text);
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.10em;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .qr-badge.good {
+      color: #86efac;
+    }
+
+    .qr-badge.warn {
+      color: #fbbf24;
+    }
+
+    .qr-badge.purple {
+      color: #c084fc;
+    }
+
+    @media (max-width: 420px) {
+      .qr-board {
+        min-height: 390px;
+      }
+
+      .qr-buzzer-score {
+        font-size: 2.15rem;
+      }
+
+      .qr-question-card {
+        padding: 14px;
+      }
+
+      .qr-answers {
+        gap: 7px;
+      }
+
+      .qr-answer {
+        min-height: 50px;
+        padding: 11px 8px;
+      }
+    }
+  </style>
 </head>
+
 <body class="vex-game">
-<div class="vex-shell">
-  <div class="vex-header">
-    <div class="vex-title">
-      <div class="vex-title-badge primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <div class="vex-shell">
+    <div class="qr-stage">
+      <div class="qr-hero">
+        <div class="qr-hero-title">
+          <div class="vex-title-badge violet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <div style="min-width:0;">
+            <h1 id="title">سباق الأسئلة</h1>
+            <p id="subtitle">أول لاعب يضغط الزر يجاوب. السرعة + الذكاء = الفائز.</p>
+          </div>
+        </div>
+        <div class="qr-mode-pill" id="modePill">2-4</div>
       </div>
-      <span id="title">سباق الأسئلة</span>
-    </div>
-    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
-  </div>
 
-  <div class="qr-arena" id="arena">
-    <!-- 4 buzzers in a 2x2 grid -->
-    <!-- Question overlay floats above -->
-    <div class="qr-question-overlay" id="qOverlay" style="display:none;">
-      <div class="qr-q-num" id="qNum">سؤال 1 / 10</div>
-      <div class="qr-q-text" id="qText">—</div>
-      <div class="qr-answers" id="qAnswers"></div>
-      <div class="qr-buzz-state" id="buzzState"></div>
-    </div>
+      <div class="qr-board vex-3d-card">
+        <div class="qr-grid" id="arena"></div>
 
-    <div class="qr-setup-overlay" id="setupOverlay">
-      <div class="qr-setup-title" id="setupTitle">إعداد اللاعبين</div>
-      <div class="qr-count-row" id="countRow">
-        <button class="qr-count-btn" data-c="2">2</button>
-        <button class="qr-count-btn" data-c="3">3</button>
-        <button class="qr-count-btn active" data-c="4">4</button>
+        <div class="qr-question" id="qOverlay" aria-hidden="true">
+          <div class="qr-question-card">
+            <div class="qr-question-top">
+              <div class="qr-question-num" id="qNum">سؤال 1 / 10</div>
+              <div class="qr-question-hint" id="buzzState">اضغط زرك للإجابة</div>
+            </div>
+            <div class="qr-question-text" id="qText">—</div>
+            <div class="qr-answers" id="qAnswers"></div>
+            <div class="qr-status" id="qStatus"></div>
+          </div>
+        </div>
+
+        <div class="qr-setup" id="setupOverlay">
+          <div class="qr-setup-card">
+            <div class="qr-setup-title" id="setupTitle">إعداد اللاعبين</div>
+            <div class="qr-setup-subtitle" id="setupSubtitle">اختر عدد اللاعبين وأدخل أسماءهم. 10 أسئلة سريعة، وكل إجابة
+              صحيحة +10 وخطأ −5.</div>
+            <div class="qr-count-row" id="countRow">
+              <button class="qr-count-btn" data-c="2">2</button>
+              <button class="qr-count-btn" data-c="3">3</button>
+              <button class="qr-count-btn active" data-c="4">4</button>
+              <button class="qr-count-btn" data-c="8">8</button>
+            </div>
+            <div id="namesArea"></div>
+            <button class="qr-start-btn" id="setupStart">ابدأ</button>
+          </div>
+        </div>
       </div>
-      <div id="namesArea"></div>
-      <button class="qr-setup-start" id="setupStart">ابدأ</button>
+
+      <div class="qr-bottom">
+        <div class="qr-hint" id="hint">السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5. عند الخطأ يمكن لخصمك أن
+          يخطف السؤال.</div>
+        <div class="qr-mini-badges">
+          <div class="qr-badge good" id="badgeCorrect">+10</div>
+          <div class="qr-badge warn" id="badgeWrong">−5</div>
+          <div class="qr-badge purple" id="badgeRounds">10 Questions</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="vex-hint" id="hint">السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5.</div>
-</div>
-
-<div class="vex-overlay" id="endOverlay">
-  <div class="vex-overlay-card">
-    <div class="vex-overlay-icon primary">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
-    </div>
-    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
-    <div class="vex-overlay-subtitle" id="endSub"></div>
-    <div class="vex-btn-row">
-      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+  <div class="vex-overlay" id="endOverlay">
+    <div class="vex-overlay-card">
+      <div class="vex-overlay-icon violet">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+        </svg>
+      </div>
+      <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+      <div class="vex-overlay-subtitle" id="endSub"></div>
+      <div class="vex-overlay-stats" id="endStats"></div>
+      <div class="vex-btn-row">
+        <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+        <button class="vex-btn" id="endClose" style="flex:1">إغلاق</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="/games/vex-sdk.js"></script>
-<script src="/games/_shared/vex-game.js"></script>
-<script>
-(function(){
-  'use strict';
-  const STRINGS = {
-    ar:{ title:'سباق الأسئلة', reset:'إعادة', setupTitle:'إعداد اللاعبين',
-      defaultName:'لاعب', start:'ابدأ',
-      qNum:(i,n)=>`سؤال ${i} / ${n}`,
-      buzz:'اضغط زرّك للإجابة!', answering:(n)=>`${n} يجيب…`,
-      end:'انتهت اللعبة!', endSub:(n)=>`الفائز: ${n}`,
-      newRound:'جولة جديدة',
-      hint:'السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5.', },
-    en:{ title:'Quiz Rush', reset:'Reset', setupTitle:'Setup players',
-      defaultName:'Player', start:'Start',
-      qNum:(i,n)=>`Question ${i} / ${n}`,
-      buzz:'Tap your buzzer to answer!', answering:(n)=>`${n} is answering…`,
-      end:'Game over!', endSub:(n)=>`Winner: ${n}`,
-      newRound:'New game',
-      hint:'When a question appears, first to buzz answers. Correct +10, wrong −5.', },
-  };
-  // Bilingual question bank
-  const QUESTIONS = [
-    { ar:{q:'كم عدد قارات العالم؟',a:['7','5','6','8'],c:0}, en:{q:'How many continents are there?',a:['7','5','6','8'],c:0} },
-    { ar:{q:'عاصمة فرنسا؟',a:['برلين','مدريد','باريس','روما'],c:2}, en:{q:'Capital of France?',a:['Berlin','Madrid','Paris','Rome'],c:2} },
-    { ar:{q:'كم لاعب في فريق كرة القدم؟',a:['9','11','10','12'],c:1}, en:{q:'Players in a football team?',a:['9','11','10','12'],c:1} },
-    { ar:{q:'أكبر كوكب؟',a:['الأرض','زحل','المشتري','نبتون'],c:2}, en:{q:'Largest planet?',a:['Earth','Saturn','Jupiter','Neptune'],c:2} },
-    { ar:{q:'مخترع المصباح الكهربائي؟',a:['أديسون','نيوتن','تسلا','أينشتاين'],c:0}, en:{q:'Who invented the lightbulb?',a:['Edison','Newton','Tesla','Einstein'],c:0} },
-    { ar:{q:'5 + 7 × 2 = ؟',a:['19','24','14','17'],c:0}, en:{q:'5 + 7 × 2 = ?',a:['19','24','14','17'],c:0} },
-    { ar:{q:'لون السماء وقت الغروب؟',a:['أزرق','أخضر','برتقالي','أبيض'],c:2}, en:{q:'Sky color at sunset?',a:['Blue','Green','Orange','White'],c:2} },
-    { ar:{q:'أطول نهر بالعالم؟',a:['الأمازون','النيل','اليانغتسي','الميسيسيبي'],c:1}, en:{q:'Longest river in the world?',a:['Amazon','Nile','Yangtze','Mississippi'],c:1} },
-    { ar:{q:'كم لون في قوس قزح؟',a:['5','6','7','8'],c:2}, en:{q:'Colors in a rainbow?',a:['5','6','7','8'],c:2} },
-    { ar:{q:'كم درجة في الزاوية القائمة؟',a:['45','60','90','180'],c:2}, en:{q:'Degrees in a right angle?',a:['45','60','90','180'],c:2} },
-    { ar:{q:'عاصمة اليابان؟',a:['طوكيو','أوساكا','كيوتو','سيول'],c:0}, en:{q:'Capital of Japan?',a:['Tokyo','Osaka','Kyoto','Seoul'],c:0} },
-    { ar:{q:'كم عدد أشهر السنة؟',a:['10','11','12','13'],c:2}, en:{q:'Months in a year?',a:['10','11','12','13'],c:2} },
-  ];
-  const ROUND_LEN = 10;
-  let lang = 'ar', count = 4;
-  const $ = id => document.getElementById(id);
-  let players;        // [{name, score, color}]
-  let qIndex;         // 0..ROUND_LEN-1
-  let pool;           // shuffled question indices
-  let buzzerLocked;   // set of player indices that already buzzed wrong this q
-  let answeringPlayer = null; // index when someone is answering
-  let buzzWindowActive = false;
-  let pendingTimers = [];
-  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
-  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; }
+  <script src="/games/vex-sdk.js"></script>
+  <script src="/games/_shared/vex-game.js"></script>
+  <script>
+    (function () {
+      'use strict';
 
-  function applyLang(){
-    const s = STRINGS[lang];
-    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
-    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
-    $('setupTitle').textContent = s.setupTitle;
-    $('setupStart').textContent = s.start;
-    $('hint').textContent = s.hint;
-    $('endRestart').textContent = s.newRound;
-    rebuildSetupNames();
-  }
+      const STRINGS = {
+        ar: {
+          title: 'سباق الأسئلة',
+          subtitle: 'أول لاعب يضغط الزر يجاوب. السرعة + الذكاء = الفائز.',
+          setupTitle: 'إعداد اللاعبين',
+          setupSubtitle: 'اختر عدد اللاعبين وأدخل أسماءهم. 10 أسئلة سريعة، وكل إجابة صحيحة +10 وخطأ −5.',
+          start: 'ابدأ',
+          reset: 'إعادة',
+          defaultName: 'لاعب',
+          question: (i, n) => `سؤال ${i} / ${n}`,
+          buzz: 'اضغط زرك للإجابة',
+          waiting: 'بانتظار أول ضغطة…',
+          answering: (name) => `${name} يجيب الآن…`,
+          correct: (name) => `+10 ${name}`,
+          wrong: (name) => `−5 ${name}`,
+          end: 'انتهت اللعبة!',
+          winner: (name) => `الفائز: ${name}`,
+          hint: 'السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5. عند الخطأ يمكن لخصمك أن يخطف السؤال.',
+          gameOver: 'جولة جديدة',
+          close: 'إغلاق',
+          players: 'لاعبين',
+          rounds: '10 أسئلة',
+          questionSet: 'مجموعة الأسئلة',
+        },
+        en: {
+          title: 'Quiz Rush',
+          subtitle: 'Buzz first, answer smart. Speed + knowledge wins.',
+          setupTitle: 'Setup Players',
+          setupSubtitle: 'Choose the player count and names. 10 fast questions, each correct answer gives +10 and a wrong one gives −5.',
+          start: 'Start',
+          reset: 'Reset',
+          defaultName: 'Player',
+          question: (i, n) => `Question ${i} / ${n}`,
+          buzz: 'Tap your buzzer to answer',
+          waiting: 'Waiting for the first buzz…',
+          answering: (name) => `${name} is answering…`,
+          correct: (name) => `+10 ${name}`,
+          wrong: (name) => `−5 ${name}`,
+          end: 'Game over!',
+          winner: (name) => `Winner: ${name}`,
+          hint: 'When a question appears, the first buzz gets the turn. Correct +10, wrong −5. On a miss, an opponent can steal the question.',
+          gameOver: 'Play again',
+          close: 'Close',
+          players: 'Players',
+          rounds: '10 Questions',
+          questionSet: 'Question bank',
+        }
+      };
 
-  function rebuildSetupNames(){
-    const area = $('namesArea'); area.innerHTML = '';
-    const s = STRINGS[lang];
-    for (let i = 0; i < count; i++){
-      const row = document.createElement('div');
-      row.className = 'qr-setup-row';
-      const dot = document.createElement('div');
-      dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${playerColor(i)};box-shadow:0 0 8px ${playerColor(i)};flex-shrink:0;`;
-      const inp = document.createElement('input');
-      inp.type = 'text'; inp.maxLength = 12;
-      inp.placeholder = `${s.defaultName} ${i+1}`;
-      inp.value = `${s.defaultName} ${i+1}`;
-      inp.dataset.i = i;
-      row.appendChild(dot); row.appendChild(inp);
-      area.appendChild(row);
-    }
-  }
+      const QUESTIONS = [
+        { ar: { q: 'كم عدد قارات العالم؟', a: ['7', '5', '6', '8'], c: 0 }, en: { q: 'How many continents are there?', a: ['7', '5', '6', '8'], c: 0 } },
+        { ar: { q: 'عاصمة فرنسا؟', a: ['برلين', 'مدريد', 'باريس', 'روما'], c: 2 }, en: { q: 'Capital of France?', a: ['Berlin', 'Madrid', 'Paris', 'Rome'], c: 2 } },
+        { ar: { q: 'كم لاعب في فريق كرة القدم؟', a: ['9', '11', '10', '12'], c: 1 }, en: { q: 'Players in a football team?', a: ['9', '11', '10', '12'], c: 1 } },
+        { ar: { q: 'أكبر كوكب؟', a: ['الأرض', 'زحل', 'المشتري', 'نبتون'], c: 2 }, en: { q: 'Largest planet?', a: ['Earth', 'Saturn', 'Jupiter', 'Neptune'], c: 2 } },
+        { ar: { q: 'مخترع المصباح الكهربائي؟', a: ['أديسون', 'نيوتن', 'تسلا', 'أينشتاين'], c: 0 }, en: { q: 'Who invented the lightbulb?', a: ['Edison', 'Newton', 'Tesla', 'Einstein'], c: 0 } },
+        { ar: { q: '5 + 7 × 2 = ؟', a: ['19', '24', '14', '17'], c: 0 }, en: { q: '5 + 7 × 2 = ?', a: ['19', '24', '14', '17'], c: 0 } },
+        { ar: { q: 'لون السماء وقت الغروب؟', a: ['أزرق', 'أخضر', 'برتقالي', 'أبيض'], c: 2 }, en: { q: 'Sky color at sunset?', a: ['Blue', 'Green', 'Orange', 'White'], c: 2 } },
+        { ar: { q: 'أطول نهر بالعالم؟', a: ['الأمازون', 'النيل', 'اليانغتسي', 'الميسيسيبي'], c: 1 }, en: { q: 'Longest river in the world?', a: ['Amazon', 'Nile', 'Yangtze', 'Mississippi'], c: 1 } },
+        { ar: { q: 'كم لون في قوس قزح؟', a: ['5', '6', '7', '8'], c: 2 }, en: { q: 'Colors in a rainbow?', a: ['5', '6', '7', '8'], c: 2 } },
+        { ar: { q: 'كم درجة في الزاوية القائمة؟', a: ['45', '60', '90', '180'], c: 2 }, en: { q: 'Degrees in a right angle?', a: ['45', '60', '90', '180'], c: 2 } },
+        { ar: { q: 'عاصمة اليابان؟', a: ['طوكيو', 'أوساكا', 'كيوتو', 'سيول'], c: 0 }, en: { q: 'Capital of Japan?', a: ['Tokyo', 'Osaka', 'Kyoto', 'Seoul'], c: 0 } },
+        { ar: { q: 'كم عدد أشهر السنة؟', a: ['10', '11', '12', '13'], c: 2 }, en: { q: 'Months in a year?', a: ['10', '11', '12', '13'], c: 2 } },
+        { ar: { q: 'ما رمز الماء الكيميائي؟', a: ['CO2', 'H2O', 'NaCl', 'O2'], c: 1 }, en: { q: 'What is the chemical symbol for water?', a: ['CO2', 'H2O', 'NaCl', 'O2'], c: 1 } },
+        { ar: { q: 'أي كوكب مشهور بحلقاته؟', a: ['المريخ', 'الزهرة', 'زحل', 'عطارد'], c: 2 }, en: { q: 'Which planet is known for its rings?', a: ['Mars', 'Venus', 'Saturn', 'Mercury'], c: 2 } },
+        { ar: { q: 'كم عدد أيام الأسبوع؟', a: ['5', '6', '7', '8'], c: 2 }, en: { q: 'How many days are in a week?', a: ['5', '6', '7', '8'], c: 2 } },
+      ];
 
-  function playerColor(i){ return ['#22c55e','#ef4444','#ffb627','#a855f7'][i % 4]; }
+      const MAX_ROUNDS = 10;
+      const MAX_PLAYERS = 8;
+      const SCORE_CORRECT = 10;
+      const SCORE_WRONG = 5;
 
-  function startSetup(){
-    clearPending();
-    buzzWindowActive = false;
-    answeringPlayer = null;
-    $('setupOverlay').style.display = 'flex';
-    $('qOverlay').style.display = 'none';
-    $('endOverlay').classList.remove('show');
-    // remove existing buzzers
-    $('arena').querySelectorAll('.qr-buzzer').forEach(n => n.remove());
-  }
+      let lang = 'ar';
+      let playerCount = 4;
+      let players = [];
+      let questionPool = [];
+      let roundIndex = 0;
+      let activeBuzzer = null;
+      let buzzLocked = false;
+      let currentQuestion = null;
+      let currentAnswerButtons = [];
+      let pendingTimers = [];
+      let gameStartedAt = Date.now();
+      let resultSubmitted = false;
 
-  function startGame(){
-    const s = STRINGS[lang];
-    const inputs = $('namesArea').querySelectorAll('input');
-    players = Array.from(inputs).map((inp, i) => ({
-      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
-      score: 0, color: playerColor(i),
-    }));
-    qIndex = 0;
-    pool = shuffle(QUESTIONS.map((_, i) => i)).slice(0, ROUND_LEN);
-    $('setupOverlay').style.display = 'none';
-    renderBuzzers();
-    nextQuestion();
-  }
+      const $ = (id) => document.getElementById(id);
+      const arena = $('arena');
 
-  function shuffle(a){
-    a = a.slice();
-    for (let i = a.length-1; i > 0; i--){
-      const j = Math.floor(Math.random()*(i+1));
-      [a[i],a[j]] = [a[j],a[i]];
-    }
-    return a;
-  }
-
-  function renderBuzzers(){
-    // Insert 4 buzzers (or 2-3 with empty slots)
-    const arena = $('arena');
-    arena.querySelectorAll('.qr-buzzer').forEach(n => n.remove());
-    for (let i = 0; i < 4; i++){
-      const el = document.createElement('div');
-      el.className = 'qr-buzzer';
-      el.dataset.i = i;
-      if (i < players.length){
-        const p = players[i];
-        el.innerHTML = `<div class="qr-buzzer-content">
-          <div class="qr-name">${escapeHtml(p.name)}</div>
-          <div class="qr-score">${p.score}</div>
-        </div>`;
-        el.addEventListener('click', () => buzz(i));
-      } else {
-        el.style.opacity = '0.15'; el.style.pointerEvents = 'none';
-        el.innerHTML = '';
+      function playerColor(i) {
+        return ['#22c55e', '#ef4444', '#ffb627', '#a855f7', '#22d3ee', '#f97316', '#10b981', '#e879f9'][i % MAX_PLAYERS];
       }
-      // Order: 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
-      // Top players appear rotated for player facing them
-      // For 4-player setup, rotate top buzzers 180deg
-      if (i === 0 || i === 1){
-        el.style.transform = 'rotate(180deg)';
+
+      function t() {
+        return STRINGS[lang];
       }
-      arena.appendChild(el);
-    }
-  }
 
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-  function refreshScores(){
-    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
-      const i = parseInt(el.dataset.i, 10);
-      if (i < players.length){
-        const sc = el.querySelector('.qr-score');
-        if (sc) sc.textContent = players[i].score;
+      function later(fn, ms) {
+        const id = setTimeout(() => {
+          pendingTimers = pendingTimers.filter((x) => x !== id);
+          fn();
+        }, ms);
+        pendingTimers.push(id);
+        return id;
       }
-    });
+
+      function clearPending() {
+        pendingTimers.forEach(clearTimeout);
+        pendingTimers = [];
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (c) => ({
+          '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c]));
   }
 
-  function nextQuestion(){
-    if (qIndex >= ROUND_LEN){ return endGame(); }
-    buzzerLocked = new Set();
-    answeringPlayer = null;
-    buzzWindowActive = true;
-    const qData = QUESTIONS[pool[qIndex]];
-    const q = qData[lang];
-    const s = STRINGS[lang];
-    $('qNum').textContent = s.qNum(qIndex+1, ROUND_LEN);
-    $('qText').textContent = q.q;
-    const ansArea = $('qAnswers'); ansArea.innerHTML = '';
-    q.a.forEach((a, ai) => {
-      const b = document.createElement('button');
-      b.className = 'qr-answer'; b.textContent = a; b.dataset.ai = ai;
-      b.disabled = true; // disabled until someone buzzes
-      b.style.opacity = '0.5';
-      b.addEventListener('click', () => answer(ai));
-      ansArea.appendChild(b);
-    });
-    $('buzzState').textContent = s.buzz;
-    $('qOverlay').style.display = 'block';
-    $('qOverlay').style.opacity = '1';
-  }
+  function shuffle(arr) {
+            const out = arr.slice();
+            for (let i = out.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+          }
 
-  function buzz(i){
-    if (!buzzWindowActive) return;
-    if (buzzerLocked.has(i)) return;
-    if (answeringPlayer !== null) return;
-    answeringPlayer = i;
-    const s = STRINGS[lang];
-    $('buzzState').textContent = s.answering(players[i].name);
-    // Lock all buzzers, enable answers
-    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
-      const idx = parseInt(el.dataset.i, 10);
-      if (idx === i) el.classList.add('active');
-      else el.classList.add('locked');
-    });
-    $('qAnswers').querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-  }
+  function applyLanguage() {
+            const s = t();
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+            $('title').textContent = s.title;
+            $('subtitle').textContent = s.subtitle;
+            $('setupTitle').textContent = s.setupTitle;
+            $('setupSubtitle').textContent = s.setupSubtitle;
+            $('setupStart').textContent = s.start;
+            $('hint').textContent = s.hint;
+            $('badgeWrong').textContent = `−${SCORE_WRONG}`;
+            $('badgeCorrect').textContent = `+${SCORE_CORRECT}`;
+            $('badgeRounds').textContent = s.rounds;
+            $('endTitle').textContent = s.end;
+            $('endRestart').textContent = s.gameOver;
+            $('endClose').textContent = s.close;
+            updateModePill();
+            rebuildSetupNames();
+          }
 
-  function answer(ai){
-    if (answeringPlayer === null) return;
-    const qData = QUESTIONS[pool[qIndex]];
-    const q = qData[lang];
-    const buttons = $('qAnswers').querySelectorAll('button');
-    buttons.forEach(b => b.disabled = true);
-    const player = players[answeringPlayer];
-    const buzzerEl = $('arena').querySelector(`.qr-buzzer[data-i="${answeringPlayer}"]`);
-    if (ai === q.c){
-      player.score += 10;
-      buttons[ai].classList.add('correct');
-      if (buzzerEl) buzzerEl.classList.add('correct');
-      if (typeof VexGame !== 'undefined') VexGame.toast('+10  ' + player.name, 'success');
-      refreshScores();
-      // advance after pause
-      later(() => {
-        $('qOverlay').style.opacity = '0';
-        later(() => { qIndex++; nextQuestion(); resetBuzzersUI(); }, 250);
-      }, 1100);
-    } else {
-      player.score = Math.max(0, player.score - 5);
-      buttons[ai].classList.add('wrong');
-      buttons[q.c].classList.add('correct');
-      if (buzzerEl) buzzerEl.classList.add('wrong');
-      if (typeof VexGame !== 'undefined') VexGame.toast('−5  ' + player.name, 'danger');
-      refreshScores();
-      buzzerLocked.add(answeringPlayer);
-      answeringPlayer = null;
-      // If all alive players have buzzed wrong, move on
-      if (buzzerLocked.size >= players.length){
-        later(() => {
-          $('qOverlay').style.opacity = '0';
-          later(() => { qIndex++; nextQuestion(); resetBuzzersUI(); }, 250);
-        }, 1100);
-      } else {
-        // Re-open for remaining players after brief pause
-        later(() => {
-          buttons.forEach(b => { b.classList.remove('correct','wrong'); b.disabled = true; b.style.opacity = '0.5'; });
-          if (buzzerEl) buzzerEl.classList.remove('wrong');
-          $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
-            const idx = parseInt(el.dataset.i, 10);
-            el.classList.remove('active');
-            if (buzzerLocked.has(idx)) el.classList.add('locked');
-            else el.classList.remove('locked');
+  function updateModePill() {
+            $('modePill').textContent = `${playerCount}${t().players ? '' : ''}`;
+            $('modePill').title = `${playerCount} ${t().players}`;
+          }
+
+  function rebuildSetupNames() {
+            const area = $('namesArea');
+            area.innerHTML = '';
+            const s = t();
+            for (let i = 0; i < playerCount; i++) {
+              const row = document.createElement('div');
+              row.className = 'qr-name-row';
+              const dot = document.createElement('div');
+              dot.className = 'qr-name-dot';
+              dot.style.color = playerColor(i);
+              dot.style.background = playerColor(i);
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.maxLength = 18;
+              input.placeholder = `${s.defaultName} ${i + 1}`;
+              input.value = `${s.defaultName} ${i + 1}`;
+              row.appendChild(dot);
+              row.appendChild(input);
+              area.appendChild(row);
+            }
+          }
+
+  function startSetup() {
+            clearPending();
+            resultSubmitted = false;
+            roundIndex = 0;
+            activeBuzzer = null;
+            buzzLocked = false;
+            currentQuestion = null;
+            currentAnswerButtons = [];
+            $('setupOverlay').style.display = 'flex';
+            $('qOverlay').style.display = 'none';
+            $('qStatus').textContent = '';
+            $('qAnswers').innerHTML = '';
+            arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
+          }
+
+  function initPlayers() {
+            const s = t();
+            const inputs = $('namesArea').querySelectorAll('input');
+            players = Array.from(inputs).map((input, i) => ({
+              name: input.value.trim() || `${s.defaultName} ${i + 1}`,
+              score: 0,
+              color: playerColor(i),
+              correct: 0,
+              wrong: 0,
+              buzzes: 0,
+            }));
+          }
+
+  function renderBuzzers() {
+            arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
+            for (let i = 0; i < MAX_PLAYERS; i++) {
+              const el = document.createElement('div');
+              el.className = 'qr-buzzer';
+              el.dataset.i = i;
+              if (i < players.length) {
+                const p = players[i];
+                el.innerHTML = `
+          <div class="qr-buzzer-content">
+            <div class="qr-buzzer-name">${escapeHtml(p.name)}</div>
+            <div class="qr-buzzer-score">${p.score}</div>
+          </div>
+        `;
+                el.addEventListener('click', () => buzz(i));
+              } else {
+                el.style.opacity = '0.10';
+                el.style.pointerEvents = 'none';
+              }
+              arena.appendChild(el);
+            }
+          }
+
+  function refreshScores() {
+            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+              const idx = parseInt(el.dataset.i, 10);
+              if (!Number.isFinite(idx) || idx >= players.length) return;
+              const scoreEl = el.querySelector('.qr-buzzer-score');
+              if (scoreEl) scoreEl.textContent = players[idx].score;
+            });
+          }
+
+  function resetBuzzersUI() {
+            arena.querySelectorAll('.qr-buzzer').forEach((el) => el.classList.remove('active', 'locked', 'correct', 'wrong'));
+          }
+
+  function startGame() {
+            initPlayers();
+            questionPool = shuffle(Array.from({ length: QUESTIONS.length }, (_, i) => i)).slice(0, MAX_ROUNDS);
+            roundIndex = 0;
+            activeBuzzer = null;
+            buzzLocked = false;
+            resultSubmitted = false;
+            gameStartedAt = Date.now();
+            $('setupOverlay').style.display = 'none';
+            renderBuzzers();
+            nextQuestion();
+          }
+
+  function nextQuestion() {
+            if (roundIndex >= MAX_ROUNDS) {
+              endGame();
+              return;
+            }
+
+            buzzLocked = false;
+            activeBuzzer = null;
+            currentQuestion = QUESTIONS[questionPool[roundIndex]];
+            const q = currentQuestion[lang];
+            const s = t();
+
+            $('qNum').textContent = s.question(roundIndex + 1, MAX_ROUNDS);
+            $('qText').textContent = q.q;
+            $('buzzState').textContent = s.waiting;
+            $('qStatus').textContent = '';
+            $('qStatus').className = 'qr-status';
+
+            const answerArea = $('qAnswers');
+            answerArea.innerHTML = '';
+            currentAnswerButtons = q.a.map((answer, ai) => {
+              const btn = document.createElement('button');
+              btn.className = 'qr-answer';
+              btn.textContent = answer;
+              btn.disabled = true;
+              btn.addEventListener('click', () => answerQuestion(ai));
+              answerArea.appendChild(btn);
+              return btn;
+            });
+
+            $('qOverlay').style.display = 'flex';
+            $('qOverlay').setAttribute('aria-hidden', 'false');
+          }
+
+  function buzz(index) {
+            if (currentQuestion === null || buzzLocked || activeBuzzer !== null) return;
+            activeBuzzer = index;
+            players[index].buzzes += 1;
+            $('buzzState').textContent = t().answering(players[index].name);
+            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+              const idx = parseInt(el.dataset.i, 10);
+              el.classList.toggle('active', idx === index);
+              if (idx !== index && idx < players.length) el.classList.add('locked');
+            });
+            currentAnswerButtons.forEach((btn) => {
+              btn.disabled = false;
+              btn.style.opacity = '1';
+            });
+          }
+
+  function unlockForSteal() {
+            currentAnswerButtons.forEach((btn) => {
+              btn.disabled = true;
+              btn.style.opacity = '0.56';
+              btn.classList.remove('correct', 'wrong');
+            });
+            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+              const idx = parseInt(el.dataset.i, 10);
+              el.classList.remove('active', 'wrong');
+              if (idx < players.length && players[idx].wrong > 0 && idx !== activeBuzzer) {
+                el.classList.add('locked');
+              } else if (idx < players.length) {
+                el.classList.remove('locked');
+              }
+            });
+            activeBuzzer = null;
+            $('buzzState').textContent = t().buzz;
+          }
+
+  function answerQuestion(answerIndex) {
+            if (activeBuzzer === null || currentQuestion === null) return;
+
+            const q = currentQuestion[lang];
+            const player = players[activeBuzzer];
+            const buzzerEl = arena.querySelector(`.qr-buzzer[data-i="${activeBuzzer}"]`);
+
+            currentAnswerButtons.forEach((btn) => btn.disabled = true);
+
+            if (answerIndex === q.c) {
+              player.score += SCORE_CORRECT;
+              player.correct += 1;
+              $('qStatus').textContent = t().correct(player.name);
+              $('qStatus').className = 'qr-status good';
+              currentAnswerButtons[answerIndex].classList.add('correct');
+              if (buzzerEl) buzzerEl.classList.add('correct');
+              refreshScores();
+              if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`+10 ${player.name}`, 'success');
+              later(() => {
+                $('qOverlay').style.display = 'none';
+                roundIndex += 1;
+                resetBuzzersUI();
+                nextQuestion();
+              }, 1000);
+              return;
+            }
+
+            player.score = Math.max(0, player.score - SCORE_WRONG);
+            player.wrong += 1;
+            $('qStatus').textContent = t().wrong(player.name);
+            $('qStatus').className = 'qr-status bad';
+            currentAnswerButtons[answerIndex].classList.add('wrong');
+            currentAnswerButtons[q.c].classList.add('correct');
+            if (buzzerEl) buzzerEl.classList.add('wrong');
+            refreshScores();
+            if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`−5 ${player.name}`, 'error');
+
+            const triedPlayer = activeBuzzer;
+            activeBuzzer = null;
+
+            const remainingPlayers = players.length - (players.filter((p, idx) => idx !== triedPlayer && p.wrongThisRound).length);
+            void remainingPlayers;
+
+            buzzLocked = true;
+            later(() => {
+              currentAnswerButtons.forEach((btn) => {
+                btn.classList.remove('wrong', 'correct');
+                btn.disabled = true;
+                btn.style.opacity = '0.56';
+              });
+              if (buzzerEl) buzzerEl.classList.remove('wrong');
+              if (activeBuzzer === null) unlockForSteal();
+              const stillAvailable = players.some((_, idx) => idx !== triedPlayer);
+              if (!stillAvailable) {
+                roundIndex += 1;
+                $('qOverlay').style.display = 'none';
+                resetBuzzersUI();
+                nextQuestion();
+                return;
+              }
+              buzzLocked = false;
+            }, 900);
+          }
+
+  function buildStatsRows() {
+            const totalCorrect = players.reduce((sum, p) => sum + p.correct, 0);
+            const totalWrong = players.reduce((sum, p) => sum + p.wrong, 0);
+            const bestScore = Math.max(...players.map((p) => p.score));
+            const topPlayers = players.filter((p) => p.score === bestScore).map((p) => p.name).join('، ');
+            const stats = [
+              { label: t().players, value: String(players.length) },
+              { label: t().questionSet, value: String(MAX_ROUNDS) },
+              { label: t().buzz, value: String(totalCorrect + totalWrong) },
+              { label: t().winner('—'), value: topPlayers || '—' },
+            ];
+
+            const container = $('endStats');
+            container.innerHTML = '';
+            stats.forEach((item) => {
+              const cell = document.createElement('div');
+              cell.className = 'vex-overlay-stat';
+              cell.innerHTML = `<div class="vex-overlay-stat-label">${escapeHtml(item.label)}</div><div class="vex-overlay-stat-value">${escapeHtml(item.value)}</div>`;
+              container.appendChild(cell);
+            });
+          }
+
+  function submitSession(winner) {
+            if (resultSubmitted) return;
+            resultSubmitted = true;
+            if (typeof VexGame === 'undefined' || !VexGame.endSession) return;
+
+            const durationMs = Math.max(0, Date.now() - gameStartedAt);
+            const payload = {
+              score: winner.score,
+              result: 'win',
+              metadata: {
+                mode: 'multiplayer',
+                game: 'quiz_rush',
+                winner: winner.name,
+                players: players.map((p) => ({
+                  name: p.name,
+                  score: p.score,
+                  correct: p.correct,
+                  wrong: p.wrong,
+                  buzzes: p.buzzes,
+                })),
+                durationMs,
+                rounds: MAX_ROUNDS,
+              },
+            };
+            VexGame.endSession(payload);
+          }
+
+  function endGame() {
+            clearPending();
+            $('qOverlay').style.display = 'none';
+            $('qOverlay').setAttribute('aria-hidden', 'true');
+            resetBuzzersUI();
+
+            const sorted = players.slice().sort((a, b) => b.score - a.score);
+            const topScore = sorted[0].score;
+            const winners = sorted.filter((p) => p.score === topScore);
+            const winner = winners[0];
+
+            $('endTitle').textContent = t().end;
+            $('endSub').textContent = winners.length > 1 ? `${winners.map((p) => p.name).join('، ')} (${topScore})` : t().winner(winner.name) + ` (${topScore})`;
+            buildStatsRows();
+            later(() => $('endOverlay').classList.add('show'), 380);
+
+            if (typeof VexGame !== 'undefined') {
+              if (VexGame.confetti) VexGame.confetti(1000);
+              submitSession(winner);
+            }
+          }
+
+  function closeResult() {
+            $('endOverlay').classList.remove('show');
+          }
+
+  document.querySelectorAll('.qr-count-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              playerCount = parseInt(btn.dataset.c, 10);
+              document.querySelectorAll('.qr-count-btn').forEach((el) => el.classList.toggle('active', el === btn));
+              updateModePill();
+              rebuildSetupNames();
+            });
           });
-          const s = STRINGS[lang]; $('buzzState').textContent = s.buzz;
-        }, 900);
-      }
-    }
-  }
 
-  function resetBuzzersUI(){
-    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
-      el.classList.remove('active','locked','correct','wrong');
-    });
-  }
+        $('setupStart').addEventListener('click', startGame);
+        $('endRestart').addEventListener('click', () => {
+          closeResult();
+          startSetup();
+        });
+        $('endClose').addEventListener('click', () => {
+          closeResult();
+          startSetup();
+        });
 
-  function endGame(){
-    buzzWindowActive = false;
-    $('qOverlay').style.display = 'none';
-    const winner = players.reduce((a,b) => b.score > a.score ? b : a, players[0]);
-    const s = STRINGS[lang];
-    $('endTitle').textContent = s.end;
-    $('endSub').textContent = s.endSub(winner.name) + ` (${winner.score})`;
-    later(() => $('endOverlay').classList.add('show'), 600);
-    if (typeof VexGame !== 'undefined'){
-      VexGame.confetti(900);
-      VexGame.endSession({
-        score: winner.score, result: 'win',
-        metadata: { winner: winner.name, scores: players.map(p => ({n:p.name,s:p.score})) },
-      });
-    }
-  }
+        if (typeof VexGame !== 'undefined' && VexGame.boot) {
+          VexGame.boot({
+            slug: 'quiz-rush',
+            onReady: function (player) {
+              if (player && player.language) {
+                lang = player.language === 'en' ? 'en' : 'ar';
+                if (VexGame.setLang) VexGame.setLang(lang);
+              }
+              applyLanguage();
+            }
+          });
+        } else {
+          applyLanguage();
+        }
 
-  document.querySelectorAll('.qr-count-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      count = parseInt(b.dataset.c, 10);
-      document.querySelectorAll('.qr-count-btn').forEach(x => x.classList.toggle('active', x===b));
-      rebuildSetupNames();
-    });
-  });
-  $('setupStart').addEventListener('click', startGame);
-  $('resetBtn').addEventListener('click', startSetup);
-  $('endRestart').addEventListener('click', startSetup);
-
-  if (typeof VexGame !== 'undefined'){
-    VexGame.boot({
-      slug: 'quiz-rush',
-      onReady: function(player){
-        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
-        applyLang();
-      },
-    });
-  }
-  applyLang();
-  startSetup();
-})();
-</script>
+        applyLanguage();
+        startSetup();
+      }) ();
+  </script>
 </body>
+
 </html>

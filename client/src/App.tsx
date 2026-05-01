@@ -29,6 +29,7 @@ const SeoCategoryHubPage = lazy(() => import("@/pages/seo/category-hub"));
 const SeoPlayerProfilePage = lazy(() => import("@/pages/seo/player-profile-public"));
 const SeoMatchRecapPage = lazy(() => import("@/pages/seo/match-recap"));
 const SeoLeaderboardGamePage = lazy(() => import("@/pages/seo/leaderboard-game"));
+const ArcadePlayPage = lazy(() => import("@/pages/arcade-play"));
 const TermsPage = lazy(() => import("@/pages/terms"));
 const PrivacyPage = lazy(() => import("@/pages/privacy"));
 const AuthCallbackPage = lazy(() => import("@/pages/auth-callback"));
@@ -205,6 +206,7 @@ function Router() {
     const isSeoPublicRoute =
         /^\/game\/[A-Za-z0-9_-]+$/.test(location)
         || /^\/games\/[A-Za-z0-9_-]+$/.test(location)
+        || /^\/arcade-play\/[A-Za-z0-9_-]+$/.test(location)
         || /^\/player\/[A-Za-z0-9_.-]+$/.test(location)
         || /^\/match\/[A-Fa-f0-9-]{8,}$/.test(location)
         || /^\/leaderboard\/[A-Za-z0-9_-]+$/.test(location);
@@ -219,6 +221,7 @@ function Router() {
                         <Switch>
                             <Route path="/game/:slug" component={SeoGameLandingPage} />
                             <Route path="/games/:category" component={SeoCategoryHubPage} />
+                            <Route path="/arcade-play/:gameKey" component={ArcadePlayPage} />
                             <Route path="/player/:username" component={SeoPlayerProfilePage} />
                             <Route path="/match/:id" component={SeoMatchRecapPage} />
                             <Route path="/leaderboard/:game" component={SeoLeaderboardGamePage} />

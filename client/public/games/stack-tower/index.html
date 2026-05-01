@@ -9,11 +9,61 @@
   <title>VEX Stack Tower</title>
   <link rel="stylesheet" href="/games/_shared/vex-game.css">
   <style>
+    .st-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      --st-accent: #ffb627;
+      --st-accent-soft: rgba(255, 182, 39, 0.12);
+      --st-danger: #fb7185;
+      --st-success: #34d399;
+    }
+
+    .st-topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: stretch;
+      justify-content: space-between;
+    }
+
+    .st-mode-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .st-pill {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+      min-height: 38px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .st-pill:active {
+      transform: scale(0.98);
+    }
+
+    .st-pill.active {
+      background: linear-gradient(135deg, rgba(255, 182, 39, 0.22), rgba(255, 182, 39, 0.10));
+      border-color: rgba(255, 182, 39, 0.45);
+      color: #fff;
+      box-shadow: 0 0 0 1px rgba(255, 182, 39, 0.12), 0 8px 22px -14px rgba(255, 182, 39, 0.8);
+    }
+
     .st-arena {
       width: 100%;
       max-width: 360px;
       margin: 0 auto;
       aspect-ratio: 3/4;
+      isolation: isolate;
       background:
         radial-gradient(ellipse 80% 40% at 50% 100%, rgba(255, 182, 39, 0.18), transparent 70%),
         linear-gradient(180deg, #0a1530 0%, #040814 100%);
@@ -30,7 +80,6 @@
       cursor: pointer;
     }
 
-    /* stadium floor — fades toward bottom (horizon) */
     .st-arena::before {
       content: "";
       position: absolute;
@@ -47,7 +96,6 @@
       will-change: background-position;
     }
 
-    /* horizon glow line */
     .st-arena::after {
       content: "";
       position: absolute;
@@ -76,7 +124,7 @@
       left: 0;
       right: 0;
       text-align: center;
-      color: rgba(255, 255, 255, 0.65);
+      color: rgba(255, 255, 255, 0.72);
       font-size: 0.85rem;
       font-weight: 700;
       letter-spacing: 0.15em;
@@ -108,11 +156,70 @@
         0 6px 16px -2px rgba(255, 182, 39, 0.55);
       transform: perspective(200px) rotateX(8deg);
     }
+
+    .st-trend {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .st-trend-card,
+    .st-insight-card {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+      padding: 10px 12px;
+    }
+
+    .st-trend-label,
+    .st-insight-label {
+      color: rgba(255, 255, 255, 0.56);
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .st-trend-value,
+    .st-insight-value {
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .st-insight-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .st-mode-caption {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .st-ghost {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid rgba(255, 182, 39, 0.14);
+      background: linear-gradient(180deg, rgba(255, 182, 39, 0.10), rgba(255, 182, 39, 0.05));
+      border-radius: 14px;
+      padding: 10px 12px;
+      min-width: 180px;
+    }
+
+    .st-ghost strong {
+      color: #ffd166;
+    }
   </style>
 </head>
 
 <body class="vex-game">
-  <div class="vex-shell">
+  <div class="vex-shell st-shell">
     <div class="vex-header">
       <div class="vex-title">
         <div class="vex-title-badge gold">
@@ -128,6 +235,21 @@
       <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
     </div>
 
+    <div class="st-topbar">
+      <div class="st-mode-group" role="tablist" aria-label="risk modes">
+        <button class="st-pill" id="modeSafe" type="button">آمن</button>
+        <button class="st-pill active" id="modeBalanced" type="button">متوازن</button>
+        <button class="st-pill" id="modeAggressive" type="button">هجومي</button>
+      </div>
+      <div class="st-ghost" aria-live="polite">
+        <div>
+          <div class="st-trend-label" id="lblGhost">أفضل سلسلة</div>
+          <strong id="ghostValue">0</strong>
+        </div>
+        <div class="st-mode-caption" id="modeCaption">مخاطرة أعلى = عائد أعلى</div>
+      </div>
+    </div>
+
     <div class="vex-stats">
       <div class="vex-stat">
         <div class="vex-stat-label" id="lblScore">الارتفاع</div>
@@ -140,6 +262,32 @@
       <div class="vex-stat">
         <div class="vex-stat-label" id="lblPerfect">دقيق</div>
         <div class="vex-stat-value emerald" id="perfect">0</div>
+      </div>
+    </div>
+
+    <div class="st-trend">
+      <div class="st-trend-card">
+        <div class="st-trend-label" id="lblSpeed">السرعة</div>
+        <div class="st-trend-value" id="speedValue">1.0x</div>
+      </div>
+      <div class="st-trend-card">
+        <div class="st-trend-label" id="lblBonus">عائد متوقع</div>
+        <div class="st-trend-value" id="bonusValue">1.00 VEX</div>
+      </div>
+      <div class="st-trend-card">
+        <div class="st-trend-label" id="lblStreak">سلسلة</div>
+        <div class="st-trend-value" id="streakValue">0</div>
+      </div>
+    </div>
+
+    <div class="st-insight-grid">
+      <div class="st-insight-card">
+        <div class="st-insight-label" id="lblModeRisk">مستوى المخاطرة</div>
+        <div class="st-insight-value" id="modeRiskValue">متوازن</div>
+      </div>
+      <div class="st-insight-card">
+        <div class="st-insight-label" id="lblInvestorScore">جاذبية الاستثمار</div>
+        <div class="st-insight-value" id="investorScoreValue">جيدة</div>
       </div>
     </div>
 
@@ -189,17 +337,62 @@
           title: 'برج المكعبات', reset: 'إعادة', score: 'الارتفاع', best: 'الأفضل', perfect: 'دقيق',
           tap: 'اضغط للإسقاط', end: 'سقط البرج!', endSub: 'حاول الوصول لأعلى.',
           newRound: 'جولة جديدة', hint: 'اضغط في الوقت المناسب لمحاذاة المكعب. الانحراف يقلّص الكتلة.',
+          speed: 'السرعة', bonus: 'عائد متوقع', streak: 'سلسلة', ghost: 'أفضل سلسلة',
+          modeCaption: 'مخاطرة أعلى = عائد أعلى',
+          safe: 'آمن', balanced: 'متوازن', aggressive: 'هجومي',
+          safeDesc: 'بطيء وأسهل، مناسب لبناء سلسلة ثابتة.',
+          balancedDesc: 'توازن جيد بين الأمان والمكافأة.',
+          aggressiveDesc: 'أسرع وأكثر مخاطرة، لكنه يرفع العائد.',
+          rewardBasis: 'النتيجة تستخدم لقياس العائد والسمعة',
+          riskLabel: 'مستوى المخاطرة',
+          investorLabel: 'جاذبية الاستثمار',
+          riskSafe: 'منخفض',
+          riskBalanced: 'متوسط',
+          riskAggressive: 'مرتفع',
+          investorHot: 'جاذبة جدًا',
+          investorGood: 'جيدة',
+          investorOk: 'مقبولة',
+          investorWeak: 'ضعيفة',
+          liveCompetition: 'نافس على المتصدرين',
+          socialProof: 'أدرج اسمك في لوحة برج المكعبات',
         },
         en: {
           title: 'Stack Tower', reset: 'Reset', score: 'Height', best: 'Best', perfect: 'Perfect',
           tap: 'Tap to drop', end: 'Tower fell!', endSub: 'Try to climb higher.',
           newRound: 'New tower', hint: 'Tap at the right moment. Misalignment shrinks the block.',
+          speed: 'Speed', bonus: 'Expected value', streak: 'Streak', ghost: 'Best streak',
+          modeCaption: 'Higher risk = higher reward',
+          safe: 'Safe', balanced: 'Balanced', aggressive: 'Aggressive',
+          safeDesc: 'Slower and easier — ideal for stable runs.',
+          balancedDesc: 'A solid balance between safety and reward.',
+          aggressiveDesc: 'Faster and riskier, but more lucrative.',
+          rewardBasis: 'Score contributes to reward and reputation',
+          riskLabel: 'Risk profile',
+          investorLabel: 'Investor appeal',
+          riskSafe: 'Low',
+          riskBalanced: 'Medium',
+          riskAggressive: 'High',
+          investorHot: 'Very strong',
+          investorGood: 'Good',
+          investorOk: 'Fair',
+          investorWeak: 'Weak',
+          liveCompetition: 'Compete on the leaderboard',
+          socialProof: 'Put your name on the Stack Tower board',
         },
       };
+
       let lang = 'ar';
+      let mode = 'balanced';
+      const MODE_CONFIG = {
+        safe: { speedMul: 0.82, rewardMul: 0.92, descKey: 'safeDesc' },
+        balanced: { speedMul: 1, rewardMul: 1, descKey: 'balancedDesc' },
+        aggressive: { speedMul: 1.18, rewardMul: 1.18, descKey: 'aggressiveDesc' },
+      };
+
       const $ = id => document.getElementById(id);
       const cv = $('cv'), ctx = cv.getContext('2d');
       let W = cv.width, H = cv.height;
+
       function fitCanvas() {
         const dpr = window.devicePixelRatio || 1;
         const rect = cv.getBoundingClientRect();
@@ -210,24 +403,24 @@
       }
 
       const BLOCK_H = 28;
-      let stack;       // array of {x, w, color}
-      let cur;         // moving block { x, w, dir, speed, color, y }
-      let cameraOffset; // how much we've shifted up
-      let score, best, perfectStreak;
+      let stack;
+      let cur;
+      let cameraOffset;
+      let score, best, perfectStreak, ghostBest;
       let alive, raf;
-      // Cached paint assets — rebuilt only on resize / new color, NEVER per-frame.
-      let bgGrad = null;            // background vertical gradient
-      const blockGradCache = new Map(); // key: color → CanvasGradient (relative coords)
+      let bgGrad = null;
+      const blockGradCache = new Map();
+
       function rebuildBgGrad() {
         bgGrad = ctx.createLinearGradient(0, 0, 0, H);
         bgGrad.addColorStop(0, 'rgba(255,182,39,0.06)');
         bgGrad.addColorStop(1, 'rgba(7,11,20,0)');
       }
+
       function getBlockGrad(color, sideColor) {
         const key = color + '|' + sideColor;
         let g = blockGradCache.get(key);
         if (g) return g;
-        // Relative coords (0 → blockH); we'll translate the canvas to (x,y) before fill.
         const blockH = BLOCK_H - 2;
         g = ctx.createLinearGradient(0, 0, 0, blockH);
         g.addColorStop(0, color);
@@ -238,24 +431,87 @@
 
       function applyLang() {
         const s = STRINGS[lang];
-        document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-        $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
-        $('lblScore').textContent = s.score; $('lblBest').textContent = s.best; $('lblPerfect').textContent = s.perfect;
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title;
+        $('resetBtnLabel').textContent = s.reset;
+        $('lblScore').textContent = s.score;
+        $('lblBest').textContent = s.best;
+        $('lblPerfect').textContent = s.perfect;
+        $('lblSpeed').textContent = s.speed;
+        $('lblBonus').textContent = s.bonus;
+        $('lblStreak').textContent = s.streak;
+        $('lblGhost').textContent = s.ghost;
+        $('modeCaption').textContent = s.modeCaption;
         $('hint').textContent = s.hint;
         $('tapHint').textContent = s.tap;
-        $('endTitle').textContent = s.end; $('endSub').textContent = s.endSub;
+        $('endTitle').textContent = s.end;
+        $('endSub').textContent = s.endSub;
         $('endRestart').textContent = s.newRound;
-        $('lblFinalScore').textContent = s.score; $('lblFinalBest').textContent = s.best;
+        $('lblFinalScore').textContent = s.score;
+        $('lblFinalBest').textContent = s.best;
+        $('modeSafe').textContent = s.safe;
+        $('modeBalanced').textContent = s.balanced;
+        $('modeAggressive').textContent = s.aggressive;
+        $('lblModeRisk').textContent = s.riskLabel;
+        $('lblInvestorScore').textContent = s.investorLabel;
       }
 
       function colorForLevel(i) {
         const hue = (180 + i * 18) % 360;
         return `hsl(${hue}, 70%, 55%)`;
       }
-      // darker shade of an HSL color for the 3D side-face
+
       function shadeForLevel(i) {
         const hue = (180 + i * 18) % 360;
         return `hsl(${hue}, 65%, 30%)`;
+      }
+
+      function getRewardPreview() {
+        const cfg = MODE_CONFIG[mode];
+        const base = Math.max(0, score + perfectStreak * 0.5 + ghostBest * 0.08);
+        return Math.max(0.25, base * 0.28 * cfg.rewardMul);
+      }
+
+      function getSessionResult() {
+        if (score >= 20 || perfectStreak >= 6) return "win";
+        if (score >= 8) return "draw";
+        return "loss";
+      }
+
+      function getRiskLabel() {
+        const s = STRINGS[lang];
+        if (mode === 'safe') return s.riskSafe;
+        if (mode === 'balanced') return s.riskBalanced;
+        return s.riskAggressive;
+      }
+
+      function getInvestorLabel() {
+        if (score >= 18 || perfectStreak >= 6) return STRINGS[lang].investorHot;
+        if (score >= 10) return STRINGS[lang].investorGood;
+        if (score >= 5) return STRINGS[lang].investorOk;
+        return STRINGS[lang].investorWeak;
+      }
+
+      function updateTrendUI() {
+        $('speedValue').textContent = `${MODE_CONFIG[mode].speedMul.toFixed(2)}x`;
+        $('bonusValue').textContent = `${getRewardPreview().toFixed(2)} VEX`;
+        $('streakValue').textContent = String(perfectStreak);
+        $('liveScore').textContent = String(score);
+        $('score').textContent = String(score);
+        $('best').textContent = String(best);
+        $('perfect').textContent = String(perfectStreak);
+        $('ghostValue').textContent = String(ghostBest);
+        $('modeRiskValue').textContent = getRiskLabel();
+        $('investorScoreValue').textContent = getInvestorLabel();
+      }
+
+      function setMode(nextMode) {
+        mode = nextMode;
+        ['modeSafe', 'modeBalanced', 'modeAggressive'].forEach((id) => $(id).classList.remove('active'));
+        const map = { safe: 'modeSafe', balanced: 'modeBalanced', aggressive: 'modeAggressive' };
+        $(map[mode]).classList.add('active');
+        updateTrendUI();
       }
 
       function reset() {
@@ -264,20 +520,22 @@
         const baseW = W * 0.5;
         stack = [{ x: (W - baseW) / 2, w: baseW, color: '#1e3a8a' }];
         cameraOffset = 0;
-        score = 0; perfectStreak = 0;
-        best = parseInt(localStorage.getItem('vex.best.stack-tower') || '0', 10);
-        $('score').textContent = '0'; $('liveScore').textContent = '0';
-        $('best').textContent = best; $('perfect').textContent = '0';
+        score = 0;
+        perfectStreak = 0;
+        ghostBest = parseInt(localStorage.getItem('vex.best.stack-tower-streak') || '0', 10) || 0;
+        best = parseInt(localStorage.getItem('vex.best.stack-tower') || '0', 10) || 0;
         $('endOverlay').classList.remove('show');
         alive = true;
         spawnBlock();
+        updateTrendUI();
         if (raf) cancelAnimationFrame(raf);
         raf = requestAnimationFrame(loop);
       }
 
       function spawnBlock() {
         const last = stack[stack.length - 1];
-        const speed = 2.2 + Math.min(2, score * 0.05);
+        const cfg = MODE_CONFIG[mode];
+        const speed = (2.2 + Math.min(2, score * 0.05)) * cfg.speedMul;
         cur = {
           x: 0,
           w: last.w,
@@ -286,6 +544,7 @@
           color: colorForLevel(score + 1),
           y: H - (stack.length + 1) * BLOCK_H + cameraOffset,
         };
+        updateTrendUI();
       }
 
       function drop() {
@@ -296,32 +555,28 @@
         const overlap = right - left;
         if (overlap <= 0) return die();
 
-        // Perfect alignment bonus (within 6px)
         const aligned = Math.abs(cur.x - last.x) < 6;
         let newW = aligned ? last.w : overlap;
         let newX = aligned ? last.x : left;
+
         if (aligned) {
           perfectStreak++;
-          $('perfect').textContent = perfectStreak;
+          ghostBest = Math.max(ghostBest, perfectStreak);
+          localStorage.setItem('vex.best.stack-tower-streak', String(ghostBest));
           if (typeof VexGame !== 'undefined') {
             const r = cv.getBoundingClientRect();
             VexGame.popScore(document.body, '+2', r.left + r.width / 2 + 'px', r.top + 100 + 'px', '');
           }
         } else {
           perfectStreak = 0;
-          $('perfect').textContent = '0';
         }
 
         stack.push({ x: newX, w: newW, color: cur.color });
         score++;
-        $('score').textContent = score; $('liveScore').textContent = score;
-
-        // Camera shift up if tower exceeds half height
         const towerHeight = stack.length * BLOCK_H;
-        const desiredOffset = Math.max(0, towerHeight - H * 0.55);
-        cameraOffset = desiredOffset;
-
+        cameraOffset = Math.max(0, towerHeight - H * 0.55);
         spawnBlock();
+        updateTrendUI();
       }
 
       function loop() {
@@ -341,15 +596,15 @@
 
       function draw() {
         ctx.clearRect(0, 0, W, H);
-        // BG glow — cached gradient (rebuilt only on resize)
-        ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
-        // stack
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, W, H);
+
         stack.forEach((b, i) => {
           const y = H - (i + 1) * BLOCK_H + cameraOffset;
           if (y > H + BLOCK_H || y < -BLOCK_H) return;
           drawBlock(b.x, y, b.w, b.color, false, i);
         });
-        // moving block
+
         if (cur && alive) drawBlock(cur.x, cur.y, cur.w, cur.color, true, stack.length);
       }
 
@@ -358,7 +613,7 @@
         const sideColor = shadeForLevel(idx);
         const depth = 5;
         const blockH = BLOCK_H - 2;
-        // 3D side faces (right-bottom isometric offset)
+
         ctx.fillStyle = sideColor;
         ctx.beginPath();
         ctx.moveTo(x + w, y);
@@ -369,9 +624,12 @@
         ctx.lineTo(x + w, y + blockH);
         ctx.closePath();
         ctx.fill();
-        // optional glow on moving block
-        if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 14; }
-        // front face — cached vertical gradient (relative coords; translate before fill)
+
+        if (glow) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 14;
+        }
+
         const grad = getBlockGrad(color, sideColor);
         ctx.save();
         ctx.translate(x, y);
@@ -379,13 +637,10 @@
         ctx.fillRect(0, 0, w, blockH);
         ctx.restore();
         ctx.shadowBlur = 0;
-        // glossy top highlight
         ctx.fillStyle = 'rgba(255,255,255,0.32)';
         ctx.fillRect(x, y, w, 3);
-        // soft bottom shadow line
         ctx.fillStyle = 'rgba(0,0,0,0.30)';
         ctx.fillRect(x, y + blockH - 3, w, 2);
-        // crisp top edge
         ctx.fillStyle = 'rgba(255,255,255,0.55)';
         ctx.fillRect(x, y, w, 1);
       }
@@ -393,42 +648,81 @@
       function die() {
         alive = false;
         if (raf) cancelAnimationFrame(raf);
-        if (score > best) { best = score; localStorage.setItem('vex.best.stack-tower', best); }
-        $('best').textContent = best; $('finalScore').textContent = score; $('finalBest').textContent = best;
-        setTimeout(() => $('endOverlay').classList.add('show'), 500);
+        if (score > best) {
+          best = score;
+          localStorage.setItem('vex.best.stack-tower', String(best));
+        }
+        if (perfectStreak > ghostBest) {
+          ghostBest = perfectStreak;
+          localStorage.setItem('vex.best.stack-tower-streak', String(ghostBest));
+        }
+
+        $('best').textContent = String(best);
+        $('ghostValue').textContent = String(ghostBest);
+        $('finalScore').textContent = String(score);
+        $('finalBest').textContent = String(best);
+        $('endOverlay').classList.add('show');
+
         if (typeof VexGame !== 'undefined') {
           VexGame.confetti(perfectStreak >= 3 ? 700 : 300);
+          const cfg = MODE_CONFIG[mode];
+          const expectedValue = getRewardPreview();
+          const result = getSessionResult();
           VexGame.endSession({
             score,
-            result: 'loss',
+            result,
             metadata: {
+              mode,
               perfectStreak,
               best,
+              ghostBest,
               towerHeight: stack.length,
-              mode: 'solo',
               game: 'stack-tower',
-              investmentPlay: true
+              investmentPlay: true,
+              riskProfile: mode,
+              speedMultiplier: cfg.speedMul,
+              rewardMultiplier: cfg.rewardMul,
+              estimatedVex: Number(expectedValue.toFixed(2)),
+              sessionQuality: score >= 10 ? 'strong' : 'early',
+              towerMomentum: score >= 20 ? 'bullish' : score >= 8 ? 'steady' : 'volatile',
+              leaderboardAppeal: score >= 12 ? 'high' : score >= 6 ? 'medium' : 'low',
+              sponsorSignal: score >= 15 || perfectStreak >= 6,
+              gameplayStyle: mode,
+              competitiveRankHint: score >= 20 ? 'elite' : score >= 10 ? 'prospect' : 'rookie',
             }
           });
         }
       }
 
       $('arena').addEventListener('click', drop);
-      window.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') drop(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') drop();
+        if (e.key === '1') setMode('safe');
+        if (e.key === '2') setMode('balanced');
+        if (e.key === '3') setMode('aggressive');
+      });
       $('resetBtn').addEventListener('click', reset);
       $('endRestart').addEventListener('click', reset);
-      window.addEventListener('resize', () => { fitCanvas(); });
+      window.addEventListener('resize', () => { fitCanvas(); rebuildBgGrad(); });
+
+      $('modeSafe').addEventListener('click', () => setMode('safe'));
+      $('modeBalanced').addEventListener('click', () => setMode('balanced'));
+      $('modeAggressive').addEventListener('click', () => setMode('aggressive'));
 
       if (typeof VexGame !== 'undefined') {
         VexGame.boot({
           slug: 'stack-tower',
           onReady: function (player) {
-            if (player && player.language) { lang = player.language === 'en' ? 'en' : 'ar'; }
+            if (player && player.language) {
+              lang = player.language === 'en' ? 'en' : 'ar';
+            }
             applyLang();
           },
         });
       }
+
       applyLang();
+      setMode('balanced');
       reset();
     })();
   </script>

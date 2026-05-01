@@ -9,7 +9,7 @@ import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { arcadeSessions, users } from "@shared/schema";
+import { arcadeSessions, users, gameMatches } from "@shared/schema";
 import { ARCADE_GAME_KEYS, getArcadeGame } from "@shared/arcade-games";
 import { authMiddleware } from "./middleware";
 import { logger } from "../lib/logger";
@@ -19,6 +19,16 @@ import {
     ARCADE_ENTRY_COST_VEX,
     type PlayerArcadeState,
 } from "../lib/sam9-arcade-economy";
+
+interface ArcadeOverviewRow {
+    totalRuns: number;
+    totalPlayers: number;
+    totalVolumeVex: number;
+    avgScore: number;
+    bestScore: number;
+    multiplayerMatches: number;
+    topGameKey: string | null;
+}
 
 const submitSchema = z.object({
     gameKey: z.enum(ARCADE_GAME_KEYS as [string, ...string[]]),
@@ -414,5 +424,67 @@ export function registerArcadeSessionsRoutes(app: Express): void {
             ok: true,
             games: ARCADE_GAME_KEYS.map((key) => getArcadeGame(key)).filter(Boolean),
         });
+    });
+
+    /**
+     * GET /api/arcade/overview
+     * Public overview for the arcade hub: engagement, finance, and multiplayer signals.
+     */
+    app.get("/api/arcade/overview", async (_req: Request, res: Response) => {
+        try {
+            const [stats] = await db
+                .select({
+                    totalRuns: sql<number>`COUNT(*)::int`,
+                    totalPlayers: sql<number>`COUNT(DISTINCT ${arcadeSessions.userId})::int`,
+                    totalVolumeVex: sql<number>`COALESCE(SUM(COALESCE((${arcadeSessions.metadata}->>'rewardVex')::numeric, 0)), 0)::float`,
+                    avgScore: sql<number>`COALESCE(AVG(${arcadeSessions.score}), 0)::float`,
+                    bestScore: sql<number>`COALESCE(MAX(${arcadeSessions.score}), 0)::int`,
+                })
+                .from(arcadeSessions);
+
+            const [topGame] = await db
+                .select({
+                    gameKey: arcadeSessions.gameKey,
+                    runs: sql<number>`COUNT(*)::int`,
+                })
+                .from(arcadeSessions)
+                .groupBy(arcadeSessions.gameKey)
+                .orderBy(sql`COUNT(*) DESC`, desc(arcadeSessions.gameKey))
+                .limit(1);
+
+            const multiplayerMatchesResult = await db.execute(sql`
+                SELECT COUNT(*)::int AS count
+                FROM game_matches
+                WHERE status IN ('pending', 'in_progress')
+            `);
+            const multiplayerMatchesRow = Array.isArray(multiplayerMatchesResult.rows)
+                ? multiplayerMatchesResult.rows[0]
+                : undefined;
+
+            const payload: ArcadeOverviewRow = {
+                totalRuns: Number(stats?.totalRuns ?? 0),
+                totalPlayers: Number(stats?.totalPlayers ?? 0),
+                totalVolumeVex: Number(stats?.totalVolumeVex ?? 0),
+                avgScore: Number(stats?.avgScore ?? 0),
+                bestScore: Number(stats?.bestScore ?? 0),
+                multiplayerMatches: Number((multiplayerMatchesRow as { count?: number } | undefined)?.count ?? 0),
+                topGameKey: topGame?.gameKey ?? null,
+            };
+
+            res.json({
+                ok: true,
+                ...payload,
+                topGame: payload.topGameKey ? getArcadeGame(payload.topGameKey) ?? null : null,
+                investmentPitch: {
+                    titleAr: "الأركيد كمنتج نمو",
+                    titleEn: "Arcade as a growth product",
+                    descriptionAr: "تحسين التجربة القصيرة + اللعب الجماعي + اقتصاد الرصيد يزيد العودة اليومية ويخلق مسار تسييل طبيعي.",
+                    descriptionEn: "A polished short-session loop plus multiplayer and wallet economics improves retention and creates a natural monetization path.",
+                },
+            });
+        } catch (err) {
+            logger.error?.(`[arcade-sessions] overview failed: ${(err as Error).message}`);
+            res.status(500).json({ error: "internal_error" });
+        }
     });
 }
