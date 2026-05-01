@@ -1154,11 +1154,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     <div
       className={cn(
         "flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] md:pb-0",
-        embedded
-          ? "pb-0"
-          : mobileShowMessages
-          ? "pb-0 md:pb-0"
-          : "pb-[max(calc(4.5rem_+_env(safe-area-inset-bottom)),var(--keyboard-inset-bottom,0px))]"
+        "pb-0"
       )}
     >
       {/* =================== Conversation List =================== */}
@@ -1281,13 +1277,13 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
               </div>
               <p className="font-display tracking-wider text-xl text-foreground">
                 {chatListFilter === "unread" ? t("chat.noUnread") :
-                 chatListFilter === "online" ? t("chat.noOnline") :
-                 conversations.length === 0 ? t("chat.noConvosTitle") : t("chat.noConversations")}
+                  chatListFilter === "online" ? t("chat.noOnline") :
+                    conversations.length === 0 ? t("chat.noConvosTitle") : t("chat.noConversations")}
               </p>
               <p className="text-xs text-muted-foreground/80 mt-1.5 max-w-[220px] mx-auto leading-relaxed">
                 {chatListFilter === "unread" ? t("chat.noUnreadDesc") :
-                 chatListFilter === "online" ? t("chat.noOnlineDesc") :
-                 t("chat.noConvosDesc")}
+                  chatListFilter === "online" ? t("chat.noOnlineDesc") :
+                    t("chat.noConvosDesc")}
               </p>
               {conversations.length === 0 && chatListFilter === "all" && (
                 <Button
@@ -1316,8 +1312,8 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       activeConversation === conv.otherUserId
                         ? "bg-gradient-to-r from-brand-blue/15 to-brand-blue-dark/10 border-brand-blue/40 shadow-[0_4px_14px_-4px_rgba(30,136,255,0.45)]"
                         : conv.unreadCount > 0
-                        ? "bg-gradient-to-r from-brand-blue/8 to-transparent border-brand-blue/20 hover:border-brand-blue/40 hover:bg-brand-blue/10"
-                        : "hover:bg-white/[0.05] hover:border-white/10"
+                          ? "bg-gradient-to-r from-brand-blue/8 to-transparent border-brand-blue/20 hover:border-brand-blue/40 hover:bg-brand-blue/10"
+                          : "hover:bg-white/[0.05] hover:border-white/10"
                     )}
                     data-testid={`chat-conversation-${conv.otherUserId}`}
                   >
@@ -1802,9 +1798,8 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                 from flickering on fast networks.
               */}
               <div
-                className={`pointer-events-none sticky top-0 z-20 -mb-9 flex h-9 items-center justify-center transition-opacity duration-200 ${
-                  loadingMore ? "opacity-100" : "opacity-0"
-                }`}
+                className={`pointer-events-none sticky top-0 z-20 -mb-9 flex h-9 items-center justify-center transition-opacity duration-200 ${loadingMore ? "opacity-100" : "opacity-0"
+                  }`}
                 aria-hidden={!loadingMore}
                 role="status"
                 aria-live="polite"

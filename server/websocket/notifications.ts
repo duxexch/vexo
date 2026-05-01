@@ -188,7 +188,15 @@ export async function sendNotification(userId: string, notification: {
     });
   }
 
-  if (!hasOnlineSocket) {
+  // Critical notifications must still wake backgrounded / killed devices
+  // even when the user happens to have another active device online.
+  // Otherwise a desktop tab would suppress the mobile push, which breaks
+  // incoming call alerts on phones and PWA background delivery.
+  const shouldForcePush =
+    notification.priority === "urgent"
+    || (notification.type === "system" && typeof notification.metadata === "string" && notification.metadata.includes("\"event\":\"private_call_invite\""));
+
+  if (!hasOnlineSocket || shouldForcePush) {
     sendWebPushToUser(userId, created).catch((error) => {
       logger.error("[WS Notification] Failed web push delivery", {
         userId,

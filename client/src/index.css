@@ -543,12 +543,18 @@ svg {
   --font-display: 'Bebas Neue', 'Poppins', sans-serif;
 
   /* VEX brand identity tokens */
-  --brand-blue: 213 100% 56%;       /* #1e88ff */
-  --brand-blue-dark: 211 89% 33%;   /* #0a4d9c */
-  --brand-gold: 41 100% 57%;        /* #ffb627 */
-  --brand-gold-dark: 32 100% 50%;   /* #ff8a00 */
-  --surface-1: 220 13% 8%;          /* #0f1419 — main app dark surface */
-  --surface-2: 220 13% 11%;         /* card surface on dark */
+  --brand-blue: 213 100% 56%;
+  /* #1e88ff */
+  --brand-blue-dark: 211 89% 33%;
+  /* #0a4d9c */
+  --brand-gold: 41 100% 57%;
+  /* #ffb627 */
+  --brand-gold-dark: 32 100% 50%;
+  /* #ff8a00 */
+  --surface-1: 220 13% 8%;
+  /* #0f1419 — main app dark surface */
+  --surface-2: 220 13% 11%;
+  /* card surface on dark */
   --radius: 0.5rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.03);
   --shadow-xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.05);
@@ -594,11 +600,13 @@ svg {
     --game-board-max-h: min(720px, calc(100vh - var(--safe-area-bottom) - 140px));
   }
 }
+
 @media (min-width: 1024px) {
   :root {
     --game-board-max-h: min(820px, calc(100vh - var(--safe-area-bottom) - 160px));
   }
 }
+
 :root {
   /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -738,24 +746,16 @@ svg {
   list-style-position: outside;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Hide scrollbars globally while keeping scroll functionality. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* Utility classes for elevation effects */
@@ -1716,18 +1716,15 @@ body.chat-conversation-active nav[aria-label="Main navigation"] {
    can see at a glance which tile just changed on the board. */
 @keyframes domino-last-played-glow {
   0% {
-    filter: drop-shadow(0 0 2px rgba(255, 184, 92, 0.4))
-      drop-shadow(0 0 4px rgba(255, 138, 32, 0.2));
+    filter: drop-shadow(0 0 2px rgba(255, 184, 92, 0.4)) drop-shadow(0 0 4px rgba(255, 138, 32, 0.2));
   }
 
   35% {
-    filter: drop-shadow(0 0 10px rgba(255, 200, 110, 1))
-      drop-shadow(0 0 22px rgba(255, 138, 32, 0.85));
+    filter: drop-shadow(0 0 10px rgba(255, 200, 110, 1)) drop-shadow(0 0 22px rgba(255, 138, 32, 0.85));
   }
 
   100% {
-    filter: drop-shadow(0 0 6px rgba(255, 184, 92, 0.85))
-      drop-shadow(0 0 14px rgba(255, 138, 32, 0.55));
+    filter: drop-shadow(0 0 6px rgba(255, 184, 92, 0.85)) drop-shadow(0 0 14px rgba(255, 138, 32, 0.55));
   }
 }
 
@@ -1878,8 +1875,8 @@ body.chat-conversation-active nav[aria-label="Main navigation"] {
   background: var(--domino-board-bg, hsl(var(--game-felt)));
   border: 1px solid var(--domino-board-border, rgba(29, 79, 59, 0.7));
   box-shadow: var(--domino-board-frame,
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 18px 28px rgba(8, 26, 19, 0.4));
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 18px 28px rgba(8, 26, 19, 0.4));
 }
 
 .domino-table-surface::before {
