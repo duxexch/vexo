@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, RotateCcw, Trophy, Star, Sparkles, Users, Globe, Monitor, User } from "lucide-react";
+import { ArrowLeft, Loader2, RotateCcw, Trophy, Star, Sparkles, Users, Globe, Monitor, User, Crown, Flame } from "lucide-react";
 import { getArcadeGame, gameKeyToSlug, isArcadeGameKey } from "@shared/arcade-games";
 import ArcadeInlineLoader from "@/components/games/ArcadeInlineLoader";
 
@@ -83,6 +84,18 @@ export default function ArcadePlayPage() {
   } | null>(null);
 
   const game = useMemo(() => (rawKey ? getArcadeGame(rawKey) : null), [rawKey]);
+
+  const { data: stackTowerLeaderboard = [] } = useQuery<Array<{ user_id?: string; username?: string; best_score?: number; runs?: number }>>({
+    queryKey: ["/api/arcade/leaderboard", "stack_tower"],
+    queryFn: async () => {
+      const res = await fetch("/api/arcade/leaderboard?gameKey=stack_tower&limit=5");
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data?.rows) ? data.rows : [];
+    },
+    enabled: game?.key === "stack_tower",
+    staleTime: 60_000,
+  });
   const lang: "ar" | "en" = language === "en" ? "en" : "ar";
 
   useEffect(() => {
@@ -273,6 +286,38 @@ export default function ArcadePlayPage() {
               ? "تنبيه: الألعاب التي تدعم أكثر من لاعب ستعمل أونلاين افتراضيًا، وليس على نفس الجهاز."
               : "Note: multiplayer-capable games default to online play, not same-device play."}
           </div>
+
+          {game.key === "stack_tower" && stackTowerLeaderboard.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Crown className="h-4 w-4 text-yellow-300" />
+                <h3 className="font-semibold">{lang === "ar" ? "أفضل المتصدرين" : "Top Tower Builders"}</h3>
+                <Badge variant="secondary" className="ms-auto">{lang === "ar" ? "أونلاين" : "Online"}</Badge>
+              </div>
+              <div className="space-y-2">
+                {stackTowerLeaderboard.map((row, index) => (
+                  <div key={`${row.user_id || index}-${index}`} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-full bg-primary/15 grid place-items-center text-xs font-bold shrink-0">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{row.username || (lang === "ar" ? "لاعب" : "Player")}</div>
+                        <div className="text-[11px] text-slate-400">{row.runs || 0} {lang === "ar" ? "محاولة" : "runs"}</div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-yellow-300 flex items-center gap-1 justify-end">
+                        <Flame className="h-3 w-3" />
+                        {Number(row.best_score || 0)}
+                      </div>
+                      <div className="text-[11px] text-slate-400">{lang === "ar" ? "أفضل ارتفاع" : "Best height"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
