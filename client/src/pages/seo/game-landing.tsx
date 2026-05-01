@@ -76,7 +76,7 @@ export default function GameLandingPage() {
           ) : null}
 
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link href="/">
+            <Link href={`/lobby?game=${slug}&quickMatch=1`}>
               <Button data-testid="button-play-now">
                 {isAr ? "العب الآن" : "Play Now"}
               </Button>

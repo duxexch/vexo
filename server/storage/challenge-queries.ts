@@ -47,7 +47,7 @@ export async function getActiveChallenges(): Promise<any[]> {
 
 export async function getChallengeSettings(gameType: string): Promise<ChallengeSettings> {
   // SECURITY: Only allow valid game types to prevent DB pollution
-  const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
+  const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel', 'aim_trainer', 'pong', 'air_hockey', 'typing_duel', 'bomb_pass', 'quiz_rush', 'dice_battle'];
   const safeGameType = VALID_GAME_TYPES.includes(gameType) ? gameType : 'chess';
 
   const [result] = await db.select().from(challengeSettings).where(eq(challengeSettings.gameType, safeGameType));
