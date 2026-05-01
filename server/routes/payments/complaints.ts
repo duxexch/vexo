@@ -4,6 +4,7 @@ import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import crypto from "crypto";
 import { sanitizePlainText } from "../../lib/input-security";
+import { selectAgentForRouting } from "../../storage/agents";
 
 export function registerComplaintRoutes(app: Express): void {
 
@@ -20,7 +21,12 @@ export function registerComplaintRoutes(app: Express): void {
 
   app.post("/api/complaints", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const agent = await storage.getAvailableAgentForAssignment();
+      const selectedAgent = await selectAgentForRouting({
+        requestType: "deposit",
+        currency: null,
+        country: typeof req.body?.country === "string" ? req.body.country : null,
+      });
+      const agent = selectedAgent?.agent ?? (await storage.getAvailableAgentForAssignment());
       // SECURITY: Whitelist allowed fields — prevent mass assignment of userId, status, priority, etc.
       const { subject, description, category, transactionId } = req.body;
       const safeSubject = sanitizePlainText(subject, { maxLength: 200 });

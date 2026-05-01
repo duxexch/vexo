@@ -9,6 +9,7 @@ import { getErrorMessage } from "./helpers";
 import { sanitizeNullablePlainText } from "../lib/input-security";
 import { convertUsdAmountToCurrency, getDepositFxSnapshot } from "../lib/deposit-fx";
 import { normalizeCurrencyCode } from "../lib/p2p-currency-controls";
+import { selectAgentForRouting } from "../storage/agents";
 
 type TransactionStatus = (typeof transactionStatusEnum.enumValues)[number];
 
@@ -17,50 +18,49 @@ export function registerTransactionAgentRoutes(app: Express): void {
     try {
       const { status, adminNote } = req.body;
 
-      // Validate status against whitelist
-      const validStatuses = ['approved', 'completed', 'rejected'];
+      const validStatuses = ["approved", "completed", "rejected"];
       if (!status || !validStatuses.includes(status)) {
-        return res.status(400).json({ error: `Status must be one of: ${validStatuses.join(', ')}` });
+        return res.status(400).json({ error: `Status must be one of: ${validStatuses.join(", ")}` });
       }
 
-      // Sanitize admin note
       const safeAdminNote = sanitizeNullablePlainText(adminNote, 500) || undefined;
 
       const transaction = await storage.getTransaction(req.params.id);
-
       if (!transaction) {
         return res.status(404).json({ error: "Transaction not found" });
       }
 
-      // CRITICAL: Prevent re-processing already-processed transactions
-      if (transaction.status !== 'pending') {
+      if (transaction.status !== "pending") {
         return res.status(400).json({ error: `Transaction already ${transaction.status}. Cannot reprocess.` });
       }
 
-      const agent = await storage.getAgentByUserId(req.user!.id);
+      const userForCurrency = await storage.getUser(transaction.userId);
+      const routing = await selectAgentForRouting({
+        requestType: transaction.type === "withdrawal" ? "withdraw" : "deposit",
+        currency: userForCurrency?.balanceCurrency ?? null,
+        country: typeof req.body?.country === "string" ? req.body.country : null,
+      });
 
-      // SECURITY: Atomic transaction processing — prevents double-spend race conditions
+      const processingAgent = (await storage.getAgentByUserId(req.user!.id)) ?? routing?.agent ?? null;
+
       const updated = await db.transaction(async (tx) => {
-        // Re-read transaction with lock to prevent concurrent processing
         const [txn] = await tx.select().from(transactions)
-          .where(eq(transactions.id, req.params.id)).for('update');
+          .where(eq(transactions.id, req.params.id)).for("update");
 
-        if (!txn || txn.status !== 'pending') {
-          throw new Error(`Transaction already ${txn?.status || 'unknown'}. Cannot reprocess.`);
+        if (!txn || txn.status !== "pending") {
+          throw new Error(`Transaction already ${txn?.status || "unknown"}. Cannot reprocess.`);
         }
 
-        // Update transaction status
         const [updatedTxn] = await tx.update(transactions).set({
           status: status as TransactionStatus,
           adminNote: safeAdminNote,
-          processedBy: agent?.id,
+          processedBy: processingAgent?.id,
           processedAt: new Date(),
         }).where(eq(transactions.id, req.params.id)).returning();
 
         if (status === "approved" || status === "completed") {
-          // Lock user row and do atomic balance update
           const [user] = await tx.select().from(users)
-            .where(eq(users.id, txn.userId)).for('update');
+            .where(eq(users.id, txn.userId)).for("update");
 
           if (user) {
             if (txn.type === "deposit") {
@@ -70,12 +70,9 @@ export function registerTransactionAgentRoutes(app: Express): void {
                 updatedAt: new Date(),
               }).where(eq(users.id, txn.userId));
             } else if (txn.type === "withdrawal") {
-              // SECURITY: For withdrawal approval, the balance was already deducted at request time (escrow).
-              // Just update totalWithdrawn. If the system is in a legacy state where balance wasn't escrowed,
-              // guard against negative balance with a SQL WHERE check.
               const withdrawAmount = parseFloat(txn.amount);
               if (parseFloat(user.balance) < 0) {
-                throw new Error('Insufficient balance — cannot approve withdrawal');
+                throw new Error("Insufficient balance — cannot approve withdrawal");
               }
               await tx.update(users).set({
                 totalWithdrawn: sql`(CAST(${users.totalWithdrawn} AS DECIMAL) + ${withdrawAmount})::TEXT`,
@@ -85,10 +82,9 @@ export function registerTransactionAgentRoutes(app: Express): void {
           }
         }
 
-        // SECURITY: If withdrawal is REJECTED, refund the escrowed balance back to user
         if (status === "rejected" && txn.type === "withdrawal") {
           const [user] = await tx.select().from(users)
-            .where(eq(users.id, txn.userId)).for('update');
+            .where(eq(users.id, txn.userId)).for("update");
           if (user) {
             await tx.update(users).set({
               balance: sql`(CAST(${users.balance} AS DECIMAL) + ${parseFloat(txn.amount)})::TEXT`,
@@ -100,56 +96,54 @@ export function registerTransactionAgentRoutes(app: Express): void {
         return updatedTxn;
       });
 
-      // Phase 6-7: Notify user about transaction status
-      const txType = transaction.type === 'deposit' ?
-        { en: 'Deposit', ar: 'إيداع' } :
-        { en: 'Withdrawal', ar: 'سحب' };
+      const txType = transaction.type === "deposit"
+        ? { en: "Deposit", ar: "إيداع" }
+        : { en: "Withdrawal", ar: "سحب" };
 
       const transactionAmountUsd = parseFloat(transaction.amount);
-      const userForCurrency = await storage.getUser(transaction.userId);
-      const walletCurrency = normalizeCurrencyCode(userForCurrency?.balanceCurrency) || "USD";
-      const fxSnapshot = await getDepositFxSnapshot([walletCurrency]);
-      const displayAmountQuote = convertUsdAmountToCurrency(transactionAmountUsd, walletCurrency, fxSnapshot.usdRateByCurrency);
+      const displayAmountCurrency = normalizeCurrencyCode(userForCurrency?.balanceCurrency) || "USD";
+      const fxSnapshot = await getDepositFxSnapshot([displayAmountCurrency]);
+      const displayAmountQuote = convertUsdAmountToCurrency(transactionAmountUsd, displayAmountCurrency, fxSnapshot.usdRateByCurrency);
       const displayAmount = displayAmountQuote
-        ? `${displayAmountQuote.convertedAmount.toFixed(2)} ${walletCurrency}`
+        ? `${displayAmountQuote.convertedAmount.toFixed(2)} ${displayAmountCurrency}`
         : `${transactionAmountUsd.toFixed(2)} USD`;
 
-      if (status === 'approved' || status === 'completed') {
+      if (status === "approved" || status === "completed") {
         await sendNotification(transaction.userId, {
-          type: 'transaction',
-          priority: 'high',
+          type: "transaction",
+          priority: "high",
           title: `${txType.en} Approved`,
           titleAr: `تمت الموافقة على ${txType.ar}`,
           message: `Your ${txType.en.toLowerCase()} of ${displayAmount} has been approved successfully.`,
           messageAr: `تمت الموافقة على ${txType.ar} بقيمة ${displayAmount} بنجاح.`,
-          link: '/transactions',
+          link: "/transactions",
           metadata: JSON.stringify({ transactionId: transaction.id, type: transaction.type, amount: transaction.amount }),
         }).catch(() => { });
-      } else if (status === 'rejected') {
+      } else if (status === "rejected") {
         await sendNotification(transaction.userId, {
-          type: 'transaction',
-          priority: 'high',
+          type: "transaction",
+          priority: "high",
           title: `${txType.en} Rejected`,
           titleAr: `تم رفض ${txType.ar}`,
-          message: `Your ${txType.en.toLowerCase()} of ${displayAmount} has been rejected.${safeAdminNote ? ' Reason: ' + safeAdminNote : ''}`,
-          messageAr: `تم رفض ${txType.ar} بقيمة ${displayAmount}.${safeAdminNote ? ' السبب: ' + safeAdminNote : ''}`,
-          link: '/transactions',
+          message: `Your ${txType.en.toLowerCase()} of ${displayAmount} has been rejected.${safeAdminNote ? " Reason: " + safeAdminNote : ""}`,
+          messageAr: `تم رفض ${txType.ar} بقيمة ${displayAmount}.${safeAdminNote ? " السبب: " + safeAdminNote : ""}`,
+          link: "/transactions",
           metadata: JSON.stringify({ transactionId: transaction.id, type: transaction.type, amount: transaction.amount }),
         }).catch(() => { });
       }
 
-      res.json(updated);
+      return res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 
-  app.get("/api/transactions/pending", authMiddleware, agentMiddleware, async (req: AuthRequest, res: Response) => {
+  app.get("/api/transactions/pending", authMiddleware, agentMiddleware, async (_req: AuthRequest, res: Response) => {
     try {
-      const transactions = await storage.getPendingTransactions();
-      res.json(transactions);
+      const pendingTransactions = await storage.getPendingTransactions();
+      return res.json(pendingTransactions);
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 }

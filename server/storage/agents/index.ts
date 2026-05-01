@@ -40,3 +40,10 @@ export {
   type AgentSubRole,
   type SubAccountCreationError,
 } from "./sub-accounts";
+
+export {
+  selectAgentForRouting,
+  listActiveAgentTrafficRules,
+  type AgentRoutingContext,
+  type SelectedAgentRoute,
+} from "./traffic";

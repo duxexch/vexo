@@ -365,12 +365,6 @@ async function shouldRunDatabaseWatchdog(state: DatabaseWatchdogState): Promise<
     return false;
   }
 }
-type WatchdogFailureState = {
-  consecutiveFailures: number;
-  backoffUntilMs: number;
-  lastErrorLogAtMs: number;
-};
-
 const WATCHDOG_ERROR_LOG_THROTTLE_MS = 30_000;
 const WATCHDOG_BACKOFF_BASE_MS = 3_000;
 const WATCHDOG_BACKOFF_MAX_MS = 60_000;
