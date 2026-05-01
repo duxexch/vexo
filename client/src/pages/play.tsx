@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,13 @@ function sanitizeHtml(html: string): string {
   });
 }
 
-const GAME_CATEGORIES: { id: string; name: string; nameAr: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [];
+const GAME_CATEGORIES: { id: string; name: string; nameAr: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
+  { id: "crash", name: "Crash", nameAr: "كراش", icon: Zap, color: "text-amber-500" },
+  { id: "dice", name: "Dice", nameAr: "النرد", icon: Dices, color: "text-cyan-500" },
+  { id: "wheel", name: "Wheel", nameAr: "العجلة", icon: CircleDot, color: "text-fuchsia-500" },
+  { id: "slots", name: "Slots", nameAr: "السلوتس", icon: Star, color: "text-emerald-500" },
+  { id: "jackpot", name: "Jackpot", nameAr: "جاكبوت", icon: Trophy, color: "text-yellow-500" },
+];
 
 const quickBetAmounts = ['1.00', '5.00', '10.00', '25.00', '50.00', '100.00'];
 
@@ -336,7 +342,7 @@ interface HistoryGameplayMessage {
 
 // Shape returned by POST /api/gameplay/messages — same as a history row
 // but the `emoji` relation is always inlined when isEmoji is true.
-interface EmojiSendResponse extends HistoryGameplayMessage {}
+interface EmojiSendResponse extends HistoryGameplayMessage { }
 
 interface EmojiBubble {
   messageId: string;
@@ -1790,10 +1796,15 @@ export default function PlayPage() {
   };
 
   const getGamesByCategory = (categoryId: string) => {
-    return games?.filter(g => g.category === categoryId &&
+    return games?.filter((g) =>
+      g.category === categoryId &&
       (searchQuery === "" || g.name.toLowerCase().includes(searchQuery.toLowerCase()))
     ) || [];
   };
+
+  const hasAnyCategorizedGames = useMemo(() => {
+    return Boolean(games?.some((game) => GAME_CATEGORIES.some((category) => category.id === game.category)));
+  }, [games]);
 
   if (gamesLoading) {
     return (
@@ -1873,26 +1884,34 @@ export default function PlayPage() {
 
           {/* All game categories with Show More/Hide buttons */}
           <div className="space-y-2">
-            {GAME_CATEGORIES.map((category, index) => {
-              const categoryGames = getGamesByCategory(category.id);
-              if (categoryGames.length === 0 && searchQuery) return null;
+            {hasAnyCategorizedGames ? (
+              GAME_CATEGORIES.map((category, index) => {
+                const categoryGames = getGamesByCategory(category.id);
+                if (categoryGames.length === 0 && searchQuery) return null;
 
-              return (
-                <GameSection
-                  key={category.id}
-                  title={category.name}
-                  titleAr={category.nameAr}
-                  games={categoryGames}
-                  onSelectGame={(game) => {
-                    setSelectedGame(game);
-                    setLastResult(null);
-                  }}
-                  icon={category.icon}
-                  iconColor={category.color}
-                  initiallyExpanded={index === 0}
-                />
-              );
-            })}
+                return (
+                  <GameSection
+                    key={category.id}
+                    title={category.name}
+                    titleAr={category.nameAr}
+                    games={categoryGames}
+                    onSelectGame={(game) => {
+                      setSelectedGame(game);
+                      setLastResult(null);
+                    }}
+                    icon={category.icon}
+                    iconColor={category.color}
+                    initiallyExpanded={index === 0}
+                  />
+                );
+              })
+            ) : (
+              <Card className="border-dashed">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  {language === "ar" ? "لا توجد ألعاب مصنفة بعد" : "No categorized games available yet"}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       ) : (

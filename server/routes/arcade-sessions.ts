@@ -41,11 +41,23 @@ const MAX_SCORE_PER_SECOND: Record<string, number> = {
     aim_trainer: 25,
     pong: 4,
     air_hockey: 4,
-    typing_duel: 30,
+    typing_duel: 120,
     bomb_pass: 50,
     quiz_rush: 200,
     dice_battle: 100,
 };
+
+function computeTypingDuelScore(metadata: Record<string, unknown> | undefined, score: number): number {
+    const rawAccuracy = Number(metadata?.accuracy ?? 0);
+    const rawWpm = Number(metadata?.wpm ?? 0);
+    const rawOpponentWpm = Number(metadata?.opponentWpm ?? 0);
+    const accuracy = Number.isFinite(rawAccuracy) ? Math.max(0, Math.min(100, rawAccuracy)) : 0;
+    const wpm = Number.isFinite(rawWpm) ? Math.max(0, Math.min(300, rawWpm)) : 0;
+    const opponentWpm = Number.isFinite(rawOpponentWpm) ? Math.max(0, Math.min(300, rawOpponentWpm)) : 0;
+    const speedEdge = Math.max(0, wpm - opponentWpm);
+    const base = Math.round(wpm * 8 + accuracy * 3 + speedEdge * 5);
+    return Math.max(score, base);
+}
 const MIN_RUN_MS = 1500;
 
 function isPlausibleScore(gameKey: string, score: number, durationMs: number): boolean {
