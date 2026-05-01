@@ -11,32 +11,156 @@ export interface ArcadeGameMeta {
   maxPlayers: number;
   scoringDirection: "higher_better" | "lower_better";
   iconEmoji: string;
+  aliases?: readonly string[];
 }
 
-export const ARCADE_GAMES: readonly ArcadeGameMeta[] = [
-  { key: "memory", slug: "memory", titleAr: "تحدي الذاكرة", titleEn: "Memory Challenge", color: "#8b5cf6", kind: "duo", minPlayers: 1, maxPlayers: 2, scoringDirection: "higher_better", iconEmoji: "🧠" },
-  { key: "snake", slug: "snake", titleAr: "حلبة الثعبان", titleEn: "Snake Arena", color: "#22c55e", kind: "solo", minPlayers: 1, maxPlayers: 1, scoringDirection: "higher_better", iconEmoji: "🐍" },
-  { key: "stack_tower", slug: "stack-tower", titleAr: "برج المكعبات", titleEn: "Stack Tower", color: "#f59e0b", kind: "solo", minPlayers: 1, maxPlayers: 1, scoringDirection: "higher_better", iconEmoji: "🏗️" },
-  { key: "aim_trainer", slug: "aim-trainer", titleAr: "مدرّب التصويب", titleEn: "Aim Trainer", color: "#ef4444", kind: "solo", minPlayers: 1, maxPlayers: 1, scoringDirection: "higher_better", iconEmoji: "🎯" },
-  { key: "pong", slug: "pong", titleAr: "مبارزة بونغ", titleEn: "Pong Duel", color: "#06b6d4", kind: "duo", minPlayers: 1, maxPlayers: 2, scoringDirection: "higher_better", iconEmoji: "🏓" },
-  { key: "air_hockey", slug: "air-hockey", titleAr: "هوكي الهواء", titleEn: "Air Hockey", color: "#3b82f6", kind: "duo", minPlayers: 1, maxPlayers: 2, scoringDirection: "higher_better", iconEmoji: "🏒" },
-  { key: "typing_duel", slug: "typing-duel", titleAr: "مبارزة الكتابة", titleEn: "Typing Duel", color: "#a855f7", kind: "duo", minPlayers: 1, maxPlayers: 2, scoringDirection: "higher_better", iconEmoji: "⌨️" },
-  { key: "bomb_pass", slug: "bomb-pass", titleAr: "تمرير القنبلة", titleEn: "Bomb Pass", color: "#dc2626", kind: "party", minPlayers: 2, maxPlayers: 8, scoringDirection: "higher_better", iconEmoji: "💣" },
-  { key: "quiz_rush", slug: "quiz-rush", titleAr: "سباق الأسئلة", titleEn: "Quiz Rush", color: "#8b5cf6", kind: "party", minPlayers: 2, maxPlayers: 8, scoringDirection: "higher_better", iconEmoji: "❓" },
-  { key: "dice_battle", slug: "dice-battle", titleAr: "معركة النرد", titleEn: "Dice Battle", color: "#0ea5e9", kind: "party", minPlayers: 2, maxPlayers: 8, scoringDirection: "higher_better", iconEmoji: "🎲" },
-] as const;
+export const ARCADE_GAMES = [
+  {
+    key: "memory",
+    slug: "memory",
+    titleAr: "تحدي الذاكرة",
+    titleEn: "Memory Challenge",
+    color: "#8b5cf6",
+    kind: "duo",
+    minPlayers: 1,
+    maxPlayers: 2,
+    scoringDirection: "higher_better",
+    iconEmoji: "🧠",
+    aliases: ["memory_battle", "memory-flip", "memory-flip-battle"],
+  },
+  {
+    key: "snake",
+    slug: "snake",
+    titleAr: "حلبة الثعبان",
+    titleEn: "Snake Arena",
+    color: "#22c55e",
+    kind: "solo",
+    minPlayers: 1,
+    maxPlayers: 1,
+    scoringDirection: "higher_better",
+    iconEmoji: "🐍",
+    aliases: ["snake_arena"],
+  },
+  {
+    key: "stack_tower",
+    slug: "stack-tower",
+    titleAr: "برج المكعبات",
+    titleEn: "Stack Tower",
+    color: "#f59e0b",
+    kind: "solo",
+    minPlayers: 1,
+    maxPlayers: 1,
+    scoringDirection: "higher_better",
+    iconEmoji: "🏗️",
+    aliases: ["stack-tower"],
+  },
+  {
+    key: "aim_trainer",
+    slug: "aim-trainer",
+    titleAr: "مدرّب التصويب",
+    titleEn: "Aim Trainer",
+    color: "#ef4444",
+    kind: "solo",
+    minPlayers: 1,
+    maxPlayers: 1,
+    scoringDirection: "higher_better",
+    iconEmoji: "🎯",
+    aliases: ["aim-trainer"],
+  },
+  {
+    key: "pong",
+    slug: "pong",
+    titleAr: "مبارزة بونغ",
+    titleEn: "Pong Duel",
+    color: "#06b6d4",
+    kind: "duo",
+    minPlayers: 1,
+    maxPlayers: 2,
+    scoringDirection: "higher_better",
+    iconEmoji: "🏓",
+    aliases: ["pong_duel"],
+  },
+  {
+    key: "air_hockey",
+    slug: "air-hockey",
+    titleAr: "هوكي الهواء",
+    titleEn: "Air Hockey",
+    color: "#3b82f6",
+    kind: "duo",
+    minPlayers: 1,
+    maxPlayers: 2,
+    scoringDirection: "higher_better",
+    iconEmoji: "🏒",
+    aliases: ["air-hockey"],
+  },
+  {
+    key: "typing_duel",
+    slug: "typing-duel",
+    titleAr: "مبارزة الكتابة",
+    titleEn: "Typing Duel",
+    color: "#a855f7",
+    kind: "duo",
+    minPlayers: 1,
+    maxPlayers: 2,
+    scoringDirection: "higher_better",
+    iconEmoji: "⌨️",
+    aliases: ["typing-duel"],
+  },
+  {
+    key: "bomb_pass",
+    slug: "bomb-pass",
+    titleAr: "تمرير القنبلة",
+    titleEn: "Bomb Pass",
+    color: "#dc2626",
+    kind: "party",
+    minPlayers: 2,
+    maxPlayers: 8,
+    scoringDirection: "higher_better",
+    iconEmoji: "💣",
+    aliases: ["bomb-pass"],
+  },
+  {
+    key: "quiz_rush",
+    slug: "quiz-rush",
+    titleAr: "سباق الأسئلة",
+    titleEn: "Quiz Rush",
+    color: "#8b5cf6",
+    kind: "party",
+    minPlayers: 2,
+    maxPlayers: 8,
+    scoringDirection: "higher_better",
+    iconEmoji: "❓",
+    aliases: ["quiz-rush"],
+  },
+  {
+    key: "dice_battle",
+    slug: "dice-battle",
+    titleAr: "معركة النرد",
+    titleEn: "Dice Battle",
+    color: "#0ea5e9",
+    kind: "party",
+    minPlayers: 2,
+    maxPlayers: 8,
+    scoringDirection: "higher_better",
+    iconEmoji: "🎲",
+    aliases: ["dice-battle"],
+  },
+] as const satisfies readonly ArcadeGameMeta[];
 
 const BY_KEY = new Map<string, ArcadeGameMeta>(ARCADE_GAMES.map((g) => [g.key, g]));
 const BY_SLUG = new Map<string, ArcadeGameMeta>(ARCADE_GAMES.map((g) => [g.slug, g]));
+const BY_ALIAS = new Map<string, ArcadeGameMeta>(
+  ARCADE_GAMES.flatMap((g) => (g.aliases ?? []).map((alias) => [alias, g] as const)),
+);
 
 export function getArcadeGame(keyOrSlug: string): ArcadeGameMeta | undefined {
   if (!keyOrSlug) return undefined;
-  return BY_KEY.get(keyOrSlug) ?? BY_SLUG.get(keyOrSlug);
+  return BY_KEY.get(keyOrSlug) ?? BY_SLUG.get(keyOrSlug) ?? BY_ALIAS.get(keyOrSlug);
 }
 
 export function isArcadeGameKey(key: string | undefined | null): boolean {
   if (!key) return false;
-  return BY_KEY.has(key) || BY_SLUG.has(key);
+  return Boolean(getArcadeGame(key));
 }
 
 export function gameKeyToSlug(key: string): string {

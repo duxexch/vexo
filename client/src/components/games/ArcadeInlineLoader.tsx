@@ -12,6 +12,33 @@ interface Props {
 const SDK_BLACKLIST = ["/games/vex-sdk.js", "/games/_shared/vex-game.js"];
 const BOOT_FALLBACK_MS = 2500;
 
+function buildGameUrlCandidates(gameSlug: string): string[] {
+  const normalized = gameSlug.trim();
+  const underscored = normalized.replace(/-/g, "_");
+  const hyphenated = normalized.replace(/_/g, "-");
+  const candidates = new Set<string>([
+    `/games/${normalized}/index.html`,
+    `/games/${hyphenated}/index.html`,
+    `/games/${underscored}/index.html`,
+    `/games/${hyphenated}.html`,
+    `/games/${underscored}.html`,
+    `/games/${normalized}.html`,
+  ]);
+  if (normalized === "stack-tower") {
+    candidates.add("/games/stack_tower/index.html");
+  }
+  if (normalized === "snake") {
+    candidates.add("/games/snake_arena/index.html");
+  }
+  if (normalized === "memory") {
+    candidates.add("/games/memory.html");
+  }
+  if (normalized === "puzzle-challenge" || normalized === "puzzle_challenge") {
+    candidates.add("/games/puzzle.html");
+  }
+  return [...candidates];
+}
+
 export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSession, onReportScore, onError }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -66,13 +93,22 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
     };
 
     const bootTimer = window.setTimeout(triggerBoot, BOOT_FALLBACK_MS);
-    const gameUrl = `/games/${gameSlug}/index.html`;
+    const gameUrls = buildGameUrlCandidates(gameSlug);
     let aborted = false;
     let injectedScripts: HTMLScriptElement[] = [];
     let injectedStyles: HTMLStyleElement[] = [];
 
-    fetch(gameUrl)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+    const loadGame = async (): Promise<string> => {
+      for (const gameUrl of gameUrls) {
+        const res = await fetch(gameUrl);
+        if (res.ok) {
+          return await res.text();
+        }
+      }
+      throw new Error(`Unable to load arcade game. Tried: ${gameUrls.join(", ")}`);
+    };
+
+    loadGame()
       .then(html => {
         if (aborted) return;
         const parser = new DOMParser();
