@@ -9,7 +9,7 @@ import {
   p2pTrades,
   p2pTransactionLogs,
 } from "@shared/schema";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { eq, and, or, sql, lt } from "drizzle-orm";
 import { broadcastSystemEvent, challengeGameRooms } from "../websocket";
 import { logger } from "../lib/logger";
@@ -320,6 +320,57 @@ type WatchdogFailureState = {
   lastErrorLogAtMs: number;
 };
 
+type DatabaseWatchdogState = WatchdogFailureState & {
+  lastProbeAtMs: number;
+  probeSucceededAtMs: number;
+};
+
+const DATABASE_PROBE_MIN_INTERVAL_MS = 5_000;
+const DATABASE_PROBE_FAILURE_BACKOFF_MS = 30_000;
+
+function createDatabaseWatchdogState(): DatabaseWatchdogState {
+  return {
+    consecutiveFailures: 0,
+    backoffUntilMs: 0,
+    lastErrorLogAtMs: 0,
+    lastProbeAtMs: 0,
+    probeSucceededAtMs: 0,
+  };
+}
+
+async function shouldRunDatabaseWatchdog(state: DatabaseWatchdogState): Promise<boolean> {
+  const now = Date.now();
+  if (now < state.backoffUntilMs) {
+    return false;
+  }
+
+  if (now - state.lastProbeAtMs < DATABASE_PROBE_MIN_INTERVAL_MS && state.probeSucceededAtMs > 0) {
+    return true;
+  }
+
+  state.lastProbeAtMs = now;
+  try {
+    await pool.query("SELECT 1");
+    state.probeSucceededAtMs = now;
+    state.consecutiveFailures = 0;
+    state.backoffUntilMs = 0;
+    return true;
+  } catch {
+    state.consecutiveFailures += 1;
+    state.backoffUntilMs = now + DATABASE_PROBE_FAILURE_BACKOFF_MS;
+    if (state.consecutiveFailures === 1 || now - state.lastErrorLogAtMs >= WATCHDOG_ERROR_LOG_THROTTLE_MS) {
+      logger.warn("[Database Watchdog Gate] Skipping schedulers because the database is unavailable");
+      state.lastErrorLogAtMs = now;
+    }
+    return false;
+  }
+}
+type WatchdogFailureState = {
+  consecutiveFailures: number;
+  backoffUntilMs: number;
+  lastErrorLogAtMs: number;
+};
+
 const WATCHDOG_ERROR_LOG_THROTTLE_MS = 30_000;
 const WATCHDOG_BACKOFF_BASE_MS = 3_000;
 const WATCHDOG_BACKOFF_MAX_MS = 60_000;
@@ -441,9 +492,13 @@ export function startSchedulers(): void {
   // ==================== P2P TRADE EXPIRY SCHEDULER ====================
   const P2P_EXPIRY_INTERVAL = 60 * 1000; // 1 minute
   const p2pExpirySchedulerState = createWatchdogFailureState();
+  const databaseWatchdogState = createDatabaseWatchdogState();
 
   async function processExpiredTrades() {
     if (!shouldRunWatchdog(p2pExpirySchedulerState)) {
+      return;
+    }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
       return;
     }
 
@@ -699,6 +754,9 @@ export function startSchedulers(): void {
     if (!shouldRunWatchdog(chessTimeoutWatchdogState)) {
       return;
     }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
+      return;
+    }
 
     try {
       const activeRows = await db.select({
@@ -864,6 +922,9 @@ export function startSchedulers(): void {
     }
 
     if (!shouldRunWatchdog(dominoTimeoutWatchdogState)) {
+      return;
+    }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
       return;
     }
 
@@ -1199,6 +1260,9 @@ export function startSchedulers(): void {
     if (!shouldRunWatchdog(languageDuelTimeoutWatchdogState)) {
       return;
     }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
+      return;
+    }
 
     try {
       const activeRows = await db.select({
@@ -1495,6 +1559,9 @@ export function startSchedulers(): void {
     }
 
     if (!shouldRunWatchdog(balootTimeoutWatchdogState)) {
+      return;
+    }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
       return;
     }
 
@@ -1837,6 +1904,9 @@ export function startSchedulers(): void {
     }
 
     if (!shouldRunWatchdog(tarneebTimeoutWatchdogState)) {
+      return;
+    }
+    if (!(await shouldRunDatabaseWatchdog(databaseWatchdogState))) {
       return;
     }
 

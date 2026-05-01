@@ -115,7 +115,18 @@ version every agent must know:
 
 ---
 
-## 6. Where to find more context
+## 6. Replit-like operating style
+
+- Work in short, visible steps: understand first, then plan, then execute, then verify.
+- Prefer the smallest safe change that moves the task forward.
+- When a task has independent pieces, split them and route them to the right helper only if that reduces risk or saves time.
+- Read the relevant file before editing it; never guess interfaces or filenames.
+- Treat errors as signals to diagnose, not to silence.
+- Verify the result after each meaningful change before moving on.
+- Keep the user updated with concrete progress, not internal speculation.
+- If the task is ambiguous, reduce the ambiguity by inspecting the codebase first; ask the user only when necessary.
+
+## 7. Where to find more context
 
 - `replit.md` — full project overview, architecture, quality gates, mobile
   verification index, signing canon.
