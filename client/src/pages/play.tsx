@@ -1901,6 +1901,15 @@ export default function PlayPage() {
     },
   });
 
+  const { data: gameSections = [] } = useQuery<GameSectionType[]>({
+    queryKey: ['/api/game-sections'],
+    queryFn: async () => {
+      const res = await fetch('/api/game-sections');
+      if (!res.ok) throw new Error('Failed to load game sections');
+      return res.json();
+    },
+  });
+
   const playMutation = useMutation({
     mutationFn: async ({ gameId, amount, extra }: { gameId: string; amount: string; extra?: Record<string, unknown> }) => {
       const res = await apiRequest('POST', '/api/games/play', { gameId, amount, ...extra });
@@ -1950,9 +1959,14 @@ export default function PlayPage() {
     ) || [];
   };
 
+  const visibleGameCategories = useMemo(() => {
+    const sectionKeys = new Set(gameSections.map((section) => section.key));
+    return GAME_CATEGORIES.filter((category) => sectionKeys.has(category.id));
+  }, [gameSections]);
+
   const hasAnyCategorizedGames = useMemo(() => {
-    return Boolean(games?.some((game) => GAME_CATEGORIES.some((category) => category.id === game.category)));
-  }, [games]);
+    return Boolean(games?.some((game) => visibleGameCategories.some((category) => category.id === game.category)));
+  }, [games, visibleGameCategories]);
 
   if (gamesLoading) {
     return (
@@ -2034,7 +2048,7 @@ export default function PlayPage() {
           {/* All game categories with Show More/Hide buttons */}
           <div className="space-y-2">
             {hasAnyCategorizedGames ? (
-              GAME_CATEGORIES.map((category, index) => {
+              visibleGameCategories.map((category, index) => {
                 const categoryGames = getGamesByCategory(category.id);
                 if (categoryGames.length === 0 && searchQuery) return null;
 

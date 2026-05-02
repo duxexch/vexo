@@ -96,6 +96,7 @@ import {
 import { queryClient } from "@/lib/queryClient";
 import { invalidateAllGameCaches } from "@/lib/game-cache-invalidation";
 import { useToast } from "@/hooks/use-toast";
+import type { GameSection } from "@shared/schema";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");
@@ -1104,6 +1105,11 @@ export default function AdminUnifiedGames() {
     queryFn: () => adminFetch("/api/admin/multiplayer-games"),
   });
 
+  const { data: gameSections = [] } = useQuery<GameSection[]>({
+    queryKey: ["/api/game-sections"],
+    queryFn: () => adminFetch("/api/game-sections"),
+  });
+
   // Fetch single-player games from games table
   const { data: spGames = [], isLoading: spLoading } = useQuery<SinglePlayerGame[]>({
     queryKey: ["/api/admin/games"],
@@ -1369,6 +1375,19 @@ export default function AdminUnifiedGames() {
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
+
+  const sectionCategories = gameSections.map((section) => ({
+    key: section.key,
+    labelEn: section.nameEn,
+    labelAr: section.nameAr,
+    icon: GAME_CATEGORIES.find((cat) => cat.key === section.key)?.icon || LayoutGrid,
+  }));
+
+  const categoryOptions = [
+    GAME_CATEGORIES[0],
+    ...GAME_CATEGORIES.filter((cat) => cat.key !== "all" && sectionCategories.some((section) => section.key === cat.key)),
+    ...sectionCategories.filter((section) => !GAME_CATEGORIES.some((cat) => cat.key === section.key)),
+  ];
 
   const filteredGames = allGames.filter((game) => {
     const matchesCategory = activeCategory === "all" || game.category === activeCategory;
@@ -1680,7 +1699,7 @@ export default function AdminUnifiedGames() {
                 <SelectValue placeholder={language === "ar" ? "الفئة" : "Category"} />
               </SelectTrigger>
               <SelectContent>
-                {GAME_CATEGORIES.map((cat) => {
+                {categoryOptions.map((cat) => {
                   const IconComp = cat.icon;
                   return (
                     <SelectItem key={cat.key} value={cat.key}>
