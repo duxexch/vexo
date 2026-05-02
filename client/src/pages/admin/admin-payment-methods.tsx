@@ -112,6 +112,7 @@ const DIALOG_SURFACE_CLASS = "max-h-[92vh] overflow-y-auto rounded-[32px] border
 
 export default function AdminPaymentMethodsPage() {
   const { t, language } = useI18n();
+  const isAr = language === "ar";
   const { toast } = useToast();
   const [editingMethod, setEditingMethod] = useState<CountryPaymentMethod | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -181,7 +182,7 @@ export default function AdminPaymentMethodsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
-      toast({ title: "Success", description: "Payment method created" });
+      toast({ title: isAr ? "نجاح" : "Success", description: isAr ? "تم إنشاء وسيلة الدفع" : "Payment method created" });
       setShowDialog(false);
       form.reset();
     },
@@ -196,7 +197,7 @@ export default function AdminPaymentMethodsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
-      toast({ title: "Success", description: "Payment method updated" });
+      toast({ title: isAr ? "نجاح" : "Success", description: isAr ? "تم تحديث وسيلة الدفع" : "Payment method updated" });
       setShowDialog(false);
       setEditingMethod(null);
       form.reset();
@@ -212,7 +213,7 @@ export default function AdminPaymentMethodsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
-      toast({ title: "Success", description: "Payment method deleted" });
+      toast({ title: isAr ? "نجاح" : "Success", description: isAr ? "تم حذف وسيلة الدفع" : "Payment method deleted" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -248,8 +249,8 @@ export default function AdminPaymentMethodsPage() {
       setShowBulkDeleteConfirm(false);
 
       toast({
-        title: "Success",
-        description: `Bulk action completed on ${result.affectedCount} method(s)`,
+        title: isAr ? "نجاح" : "Success",
+        description: isAr ? `تم تنفيذ الإجراء على ${result.affectedCount} طريقة/طرق` : `Bulk action completed on ${result.affectedCount} method(s)`,
       });
     },
     onError: (err: Error) => {

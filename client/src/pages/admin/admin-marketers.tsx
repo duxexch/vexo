@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/admin-api";
+import { useI18n } from "@/lib/i18n";
 import {
     Crown,
     Search,
@@ -238,6 +239,7 @@ function StatCard({
 
 export default function AdminMarketersPage() {
     const { toast } = useToast();
+    const { language } = useI18n();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [selectedUserId, setSelectedUserId] = useState("");
@@ -436,8 +438,10 @@ export default function AdminMarketersPage() {
     const topMarketer = overviewData?.topMarketers?.[0] || null;
     const recentHealthy = filteredRuns.filter((run) => run.status === "success").length;
 
+    const isAr = language === "ar";
+
     return (
-        <div className="min-h-screen p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6" dir="rtl">
+        <div className="min-h-screen p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6" dir={isAr ? "rtl" : "ltr"}>
             <Card className="border-sky-500/20 bg-gradient-to-br from-sky-500/5 via-background to-background">
                 <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -445,28 +449,30 @@ export default function AdminMarketersPage() {
                             <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="secondary" className="gap-1">
                                     <Layers3 className="h-3.5 w-3.5" />
-                                    Operation Center
+                                    {isAr ? "مركز العمليات" : "Operation Center"}
                                 </Badge>
                                 <Badge variant="outline" className="gap-1">
                                     <ShieldCheck className="h-3.5 w-3.5" />
-                                    Enterprise-grade control
+                                    {isAr ? "تحكم بمستوى مؤسسي" : "Enterprise-grade control"}
                                 </Badge>
                                 <Badge variant="outline" className="gap-1">
                                     <Sparkles className="h-3.5 w-3.5" />
-                                    Global scale ready
+                                    {isAr ? "جاهزية للنطاق العالمي" : "Global scale ready"}
                                 </Badge>
                             </div>
                             <CardTitle className="text-2xl flex items-center gap-2">
                                 <Crown className="h-6 w-6 text-sky-500" />
-                                إدارة المسوقين
+                                {isAr ? "إدارة المسوقين" : "Marketers Management"}
                             </CardTitle>
                             <CardDescription className="max-w-3xl">
-                                لوحة تشغيل احترافية لإدارة الشارة، CPA، RevShare، شروط التأهيل، وحركة المجدول مع رؤية مالية وتشغيلية أوضح.
+                                {isAr
+                                    ? "لوحة تشغيل احترافية لإدارة الشارة وCPA وRevShare وشروط التأهيل والمجدول مع رؤية مالية وتشغيلية أوضح."
+                                    : "Professional operations console for badge, CPA, RevShare, qualification rules, and scheduler activity with clearer financial and operational visibility."}
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Activity className="h-4 w-4" />
-                            <span>{marketersFetching || runsFetching ? "Updating live" : "Live ready"}</span>
+                            <span>{marketersFetching || runsFetching ? (isAr ? "جارٍ التحديث" : "Updating live") : (isAr ? "جاهز للبث المباشر" : "Live ready")}</span>
                         </div>
                     </div>
                 </CardHeader>
@@ -476,28 +482,28 @@ export default function AdminMarketersPage() {
                 <StatCard
                     title="إجمالي المسوقين"
                     value={overviewLoading ? "..." : String(totalMarketers)}
-                    description="إجمالي الحسابات المسجلة في النظام"
+                    description={isAr ? "إجمالي الحسابات المسجلة في النظام" : "Total registered accounts in the system"}
                     icon={Users}
                     tone="info"
                 />
                 <StatCard
                     title="المعتمدون"
                     value={overviewLoading ? "..." : String(approvedCount)}
-                    description={`${pct(approvedCount, totalMarketers)} من الإجمالي`}
+                    description={isAr ? `${pct(approvedCount, totalMarketers)} من الإجمالي` : `${pct(approvedCount, totalMarketers)} of total`}
                     icon={BadgeCheck}
                     tone="success"
                 />
                 <StatCard
                     title="قيد المراجعة"
                     value={overviewLoading ? "..." : String(pendingCount)}
-                    description={`${pct(pendingCount, totalMarketers)} من الإجمالي`}
+                    description={isAr ? `${pct(pendingCount, totalMarketers)} من الإجمالي` : `${pct(pendingCount, totalMarketers)} of total`}
                     icon={Clock3}
                     tone="warning"
                 />
                 <StatCard
                     title="العمولات الكلية"
                     value={overviewLoading ? "..." : formatCoins(totals?.total_commissions)}
-                    description={`Paid ${formatCoins(totals?.total_paid)} · Withdrawable ${formatCoins(totals?.total_withdrawable)}`}
+                    description={isAr ? `مدفوع ${formatCoins(totals?.total_paid)} · قابل للسحب ${formatCoins(totals?.total_withdrawable)}` : `Paid ${formatCoins(totals?.total_paid)} · Withdrawable ${formatCoins(totals?.total_withdrawable)}`}
                     icon={TrendingUp}
                     tone="default"
                 />
@@ -509,9 +515,9 @@ export default function AdminMarketersPage() {
                         <div className="flex items-start justify-between gap-2">
                             <div>
                                 <CardTitle className="text-base flex items-center gap-2">
-                                    <Search className="w-4 h-4" /> قائمة المسوقين
+                                    <Search className="w-4 h-4" /> {isAr ? "قائمة المسوقين" : "Marketers list"}
                                 </CardTitle>
-                                <CardDescription>اختيار مباشر مع بحث سريع وحالة واضحة.</CardDescription>
+                                <CardDescription>{isAr ? "اختيار مباشر مع بحث سريع وحالة واضحة." : "Quick search with clear status and direct selection."}</CardDescription>
                             </div>
                             <Badge variant="outline">{filteredMarketers.length}</Badge>
                         </div>
@@ -520,11 +526,11 @@ export default function AdminMarketersPage() {
                         <Input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search username, nickname, status"
+                            placeholder={isAr ? "ابحث باسم المستخدم أو اللقب أو الحالة" : "Search username, nickname, status"}
                         />
                         <div className="max-h-[62svh] overflow-auto space-y-2 pr-1">
                             {marketersLoading ? (
-                                <p className="text-sm text-muted-foreground">Loading marketers...</p>
+                                <p className="text-sm text-muted-foreground">{isAr ? "جارٍ تحميل المسوقين..." : "Loading marketers..."}</p>
                             ) : filteredMarketers.length === 0 ? (
                                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                                     لا يوجد مسوقين مطابقين.
@@ -549,7 +555,7 @@ export default function AdminMarketersPage() {
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="min-w-0">
                                                     <p className="font-medium text-sm truncate">
-                                                        {row.nickname || row.username || "Unknown"}
+                                                        {row.nickname || row.username || (isAr ? "غير معروف" : "Unknown")}
                                                     </p>
                                                     <p className="text-xs text-muted-foreground truncate">
                                                         @{row.username || "-"}
@@ -561,10 +567,10 @@ export default function AdminMarketersPage() {
                                             </div>
                                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                                                 <div className="rounded-md bg-muted/40 px-2 py-1">
-                                                    Earned <span className="font-semibold text-foreground">{formatCoins(row.total_commission_earned)}</span>
+                                                    {isAr ? "المكتسب" : "Earned"} <span className="font-semibold text-foreground">{formatCoins(row.total_commission_earned)}</span>
                                                 </div>
                                                 <div className="rounded-md bg-muted/40 px-2 py-1">
-                                                    Withdrawable <span className="font-semibold text-foreground">{formatCoins(row.total_withdrawable_commission)}</span>
+                                                    {isAr ? "قابل للسحب" : "Withdrawable"} <span className="font-semibold text-foreground">{formatCoins(row.total_withdrawable_commission)}</span>
                                                 </div>
                                             </div>
                                         </button>
@@ -580,12 +586,12 @@ export default function AdminMarketersPage() {
                         <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
                                 <CardTitle className="text-base flex items-center gap-2">
-                                    <ShieldCheck className="w-4 h-4 text-sky-500" /> مركز التحكم
+                                    <ShieldCheck className="w-4 h-4 text-sky-500" /> {isAr ? "مركز التحكم" : "Control center"}
                                 </CardTitle>
                                 <CardDescription>
                                     {selectedMarketer
-                                        ? `Controlling @${selectedMarketer.username || "unknown"}`
-                                        : "اختر مسوقًا لعرض التفاصيل والتحكم."}
+                                        ? (isAr ? `التحكم في @${selectedMarketer.username || "غير معروف"}` : `Controlling @${selectedMarketer.username || "unknown"}`)
+                                        : (isAr ? "اختر مسوقًا لعرض التفاصيل والتحكم." : "Select a marketer to view details and control settings.")}
                                 </CardDescription>
                             </div>
                             <div className="flex items-center gap-2">
@@ -595,7 +601,7 @@ export default function AdminMarketersPage() {
                                     disabled={marketersFetching || overviewLoading}
                                 >
                                     <RefreshCw className="w-4 h-4 mr-2" />
-                                    Refresh
+                                    {isAr ? "تحديث" : "Refresh"}
                                 </Button>
                             </div>
                         </div>
@@ -606,16 +612,16 @@ export default function AdminMarketersPage() {
                         ) : detailsData?.affiliate ? (
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                                 <TabsList className="grid w-full grid-cols-3 lg:grid-cols-4">
-                                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                                    <TabsTrigger value="controls">Controls</TabsTrigger>
-                                    <TabsTrigger value="performance">Performance</TabsTrigger>
-                                    <TabsTrigger value="events">Events</TabsTrigger>
+                                    <TabsTrigger value="overview">{isAr ? "نظرة عامة" : "Overview"}</TabsTrigger>
+                                    <TabsTrigger value="controls">{isAr ? "التحكم" : "Controls"}</TabsTrigger>
+                                    <TabsTrigger value="performance">{isAr ? "الأداء" : "Performance"}</TabsTrigger>
+                                    <TabsTrigger value="events">{isAr ? "الأحداث" : "Events"}</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="overview" className="space-y-4">
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                         <div className="rounded-xl border p-3">
-                                            <p className="text-xs text-muted-foreground">Status</p>
+                                            <p className="text-xs text-muted-foreground">{isAr ? "الحالة" : "Status"}</p>
                                             <p className="font-bold capitalize">{detailsData.affiliate.marketerStatus}</p>
                                         </div>
                                         <div className="rounded-xl border p-3">

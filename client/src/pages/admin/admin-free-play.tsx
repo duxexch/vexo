@@ -935,19 +935,19 @@ export default function AdminFreePlayPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Total Impressions</p>
+                <p className="text-xs text-muted-foreground">Total Impressions / إجمالي مرات الظهور</p>
                 <p className="text-2xl font-bold">{adsAnalytics?.totals?.views || 0}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Total Clicks</p>
+                <p className="text-xs text-muted-foreground">Total Clicks / إجمالي النقرات</p>
                 <p className="text-2xl font-bold">{adsAnalytics?.totals?.clicks || 0}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Average CTR</p>
+                <p className="text-xs text-muted-foreground">Average CTR / متوسط نسبة النقر إلى الظهور</p>
                 <p className="text-2xl font-bold">{adsAnalytics?.totals?.clickThroughRate || "0.00"}%</p>
               </CardContent>
             </Card>
@@ -957,9 +957,9 @@ export default function AdminFreePlayPage() {
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Tv className="w-4 h-4 text-blue-500" /> Ads Campaign Management
+                  <Tv className="w-4 h-4 text-blue-500" /> Ads Campaign Management / إدارة الحملات الإعلانية
                 </CardTitle>
-                <CardDescription>Create image/video/link campaigns and monitor performance</CardDescription>
+                <CardDescription>Create image/video/link campaigns and monitor performance / أنشئ حملات صور أو فيديو أو روابط وراقب الأداء</CardDescription>
               </div>
               <Button className="min-h-[40px]" onClick={openCreateCampaign}>
                 <Plus className="w-4 h-4 mr-2" /> New Campaign
@@ -967,7 +967,7 @@ export default function AdminFreePlayPage() {
             </CardHeader>
             <CardContent>
               {adsCampaignsLoading || adsAnalyticsLoading ? (
-                <div className="text-center text-muted-foreground py-6">Loading campaigns...</div>
+                <div className="text-center text-muted-foreground py-6">Loading campaigns... / جارٍ تحميل الحملات...</div>
               ) : adsCampaigns?.campaigns?.length ? (
                 <div className="space-y-2">
                   {adsCampaigns.campaigns.map((campaign) => {
@@ -976,12 +976,12 @@ export default function AdminFreePlayPage() {
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold">{campaign.title}</p>
-                            <p className="text-xs text-muted-foreground">{campaign.type.toUpperCase()} • {campaign.target_url || "No target URL"}</p>
+                            <p className="text-xs text-muted-foreground">{campaign.type.toUpperCase()} • {campaign.target_url || "No target URL / لا يوجد رابط مستهدف"}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant={campaign.is_active ? "default" : "outline"}>{campaign.is_active ? "Active" : "Inactive"}</Badge>
+                            <Badge variant={campaign.is_active ? "default" : "outline"}>{campaign.is_active ? "Active / نشط" : "Inactive / غير نشط"}</Badge>
                             <Button size="sm" className="min-h-[40px]" variant="outline" onClick={() => openEditCampaign(campaign)}>
-                              <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                              <Pencil className="w-3.5 h-3.5 mr-1" /> Edit / تعديل
                             </Button>
                             <Button
                               size="sm"
@@ -990,14 +990,14 @@ export default function AdminFreePlayPage() {
                               onClick={() => deleteCampaignMut.mutate(campaign.id)}
                               disabled={deleteCampaignMut.isPending}
                             >
-                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete / حذف
                             </Button>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                          <div className="p-2 rounded bg-muted/40">Impressions: <span className="font-semibold">{campaign.tracked_views || 0}</span></div>
-                          <div className="p-2 rounded bg-muted/40">Clicks: <span className="font-semibold">{campaign.tracked_clicks || 0}</span></div>
-                          <div className="p-2 rounded bg-muted/40">Claims: <span className="font-semibold">{campaign.reward_claims || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">Impressions / مرات الظهور: <span className="font-semibold">{campaign.tracked_views || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">Clicks / النقرات: <span className="font-semibold">{campaign.tracked_clicks || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">Claims / المطالبات: <span className="font-semibold">{campaign.reward_claims || 0}</span></div>
                           <div className="p-2 rounded bg-muted/40">CTR: <span className="font-semibold">{campaign.tracked_views > 0 ? ((campaign.tracked_clicks / campaign.tracked_views) * 100).toFixed(2) : "0.00"}%</span></div>
                         </div>
                       </div>
@@ -1005,7 +1005,7 @@ export default function AdminFreePlayPage() {
                   })}
                 </div>
               ) : (
-                <div className="text-center text-muted-foreground py-6">No campaigns found</div>
+                <div className="text-center text-muted-foreground py-6">No campaigns found / لم يتم العثور على حملات</div>
               )}
             </CardContent>
           </Card>
@@ -1013,12 +1013,12 @@ export default function AdminFreePlayPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-blue-500" /> Ads Activity Leaderboard
+                <Trophy className="w-4 h-4 text-blue-500" /> Ads Activity Leaderboard / لوحة صدارة نشاط الإعلانات
               </CardTitle>
             </CardHeader>
             <CardContent>
               {adsLeaderboardLoading ? (
-                <div className="text-center text-muted-foreground py-6">Loading ads leaderboard...</div>
+                <div className="text-center text-muted-foreground py-6">Loading ads leaderboard... / جارٍ تحميل لوحة صدارة الإعلانات...</div>
               ) : adsLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
                   {adsLeaderboard.rows.map((row, idx) => (
@@ -1028,14 +1028,14 @@ export default function AdminFreePlayPage() {
                         <p className="text-xs text-muted-foreground">@{row.username}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold">{row.activity_count || 0} ad interactions</p>
+                        <p className="text-sm font-semibold">{row.activity_count || 0} ad interactions / تفاعلات الإعلانات</p>
                         <p className="text-xs text-green-500">{formatProjectCoins(row.total_rewards || 0)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-muted-foreground py-6">No ads activity data</div>
+                <div className="text-center text-muted-foreground py-6">No ads activity data / لا توجد بيانات لنشاط الإعلانات</div>
               )}
             </CardContent>
           </Card>
@@ -1045,23 +1045,23 @@ export default function AdminFreePlayPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Settings className="w-4 h-4" /> Referral Controls
+                <Settings className="w-4 h-4" /> Referral Controls / التحكم في الإحالات
               </CardTitle>
               <CardDescription>
-                Configure referral rewards in project currency and adjust the referral profit rate (%) from one place.
+                Configure referral rewards in project currency and adjust the referral profit rate (%) from one place. / قم بضبط مكافآت الإحالة بعملة المشروع وتعديل معدل ربح الإحالة (%) من مكان واحد.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5 md:col-span-1">
-                  <Label>Referral Rewards Enabled</Label>
+                  <Label>Referral Rewards Enabled / تفعيل مكافآت الإحالة</Label>
                   <div className="flex items-center justify-between border rounded-md p-3">
-                    <p className="text-xs text-muted-foreground">Allow referral bonus crediting</p>
+                    <p className="text-xs text-muted-foreground">Allow referral bonus crediting / السماح بإضافة مكافأة الإحالة</p>
                     <Switch checked={isOn("referral_reward_enabled")} onCheckedChange={() => toggleLocal("referral_reward_enabled")} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Base Reward Amount (Project Coins)</Label>
+                  <Label>Base Reward Amount (Project Coins) / مقدار المكافأة الأساسية (عملات المشروع)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1071,7 +1071,7 @@ export default function AdminFreePlayPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Referral Rate (%)</Label>
+                  <Label>Referral Rate (%) / معدل الإحالة (%)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1084,7 +1084,7 @@ export default function AdminFreePlayPage() {
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-                <span className="text-muted-foreground">Effective reward per successful referral: </span>
+                <span className="text-muted-foreground">Effective reward per successful referral: / المكافأة الفعلية لكل إحالة ناجحة: </span>
                 <span className="font-semibold text-green-600">
                   {formatProjectCoins(
                     (Number.parseFloat(getSettingVal("referral_reward_amount", "0")) || 0)
@@ -1096,7 +1096,7 @@ export default function AdminFreePlayPage() {
               <div className="flex justify-end">
                 <Button onClick={handleSaveSettings} disabled={updateSettingsMut.isPending || settingsLoading}>
                   <Save className="w-4 h-4 mr-2" />
-                  {updateSettingsMut.isPending ? "Saving..." : "Save Referral Controls"}
+                  {updateSettingsMut.isPending ? "Saving... / جارٍ الحفظ..." : "Save Referral Controls / حفظ إعدادات الإحالة"}
                 </Button>
               </div>
             </CardContent>
@@ -1105,26 +1105,26 @@ export default function AdminFreePlayPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Medal className="w-4 h-4 text-sky-500" /> Marketer Program Overview
+                <Medal className="w-4 h-4 text-sky-500" /> Marketer Program Overview / نظرة عامة على برنامج المسوّقين
               </CardTitle>
-              <CardDescription>CPA + RevShare health, pending balances, and top marketers</CardDescription>
+              <CardDescription>CPA + RevShare health, pending balances, and top marketers / حالة CPA وRevShare والأرصدة المعلقة وأفضل المسوّقين</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-3 rounded border">
-                  <p className="text-xs text-muted-foreground">Approved</p>
+                  <p className="text-xs text-muted-foreground">Approved / معتمد</p>
                   <p className="text-xl font-bold">{Number(marketerOverview?.summary?.approved_marketers || 0)}</p>
                 </div>
                 <div className="p-3 rounded border">
-                  <p className="text-xs text-muted-foreground">Pending</p>
+                  <p className="text-xs text-muted-foreground">Pending / قيد الانتظار</p>
                   <p className="text-xl font-bold">{Number(marketerOverview?.summary?.pending_marketers || 0)}</p>
                 </div>
                 <div className="p-3 rounded border">
-                  <p className="text-xs text-muted-foreground">Total Pending</p>
+                  <p className="text-xs text-muted-foreground">Total Pending / إجمالي المعلّق</p>
                   <p className="text-xl font-bold">{formatProjectCoins(marketerOverview?.summary?.total_pending || 0)}</p>
                 </div>
                 <div className="p-3 rounded border">
-                  <p className="text-xs text-muted-foreground">Total Withdrawable</p>
+                  <p className="text-xs text-muted-foreground">Total Withdrawable / إجمالي القابل للسحب</p>
                   <p className="text-xl font-bold">{formatProjectCoins(marketerOverview?.summary?.total_withdrawable || 0)}</p>
                 </div>
               </div>
@@ -1135,7 +1135,7 @@ export default function AdminFreePlayPage() {
                   onClick={() => syncMarketerMut.mutate({ userId: selectedReferrerId || undefined, releaseOnly: false })}
                   disabled={syncMarketerMut.isPending}
                 >
-                  {syncMarketerMut.isPending ? "Syncing..." : "Run RevShare Sync"}
+                  {syncMarketerMut.isPending ? "Syncing... / جارٍ المزامنة..." : "Run RevShare Sync / تشغيل مزامنة RevShare"}
                 </Button>
                 <Button
                   variant="outline"
