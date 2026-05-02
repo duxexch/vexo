@@ -1094,6 +1094,7 @@ export default function AdminUnifiedGames() {
   const [iconUploadTarget, setIconUploadTarget] = useState<UnifiedGame | null>(null);
   const [mediaUploadMode, setMediaUploadMode] = useState<"icon" | "background">("icon");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [pendingStatusGameId, setPendingStatusGameId] = useState<string | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -1183,6 +1184,13 @@ export default function AdminUnifiedGames() {
       });
     },
   });
+
+  const quickToggleStatus = (game: UnifiedGame) => {
+    const nextStatus = game.status === "active" ? "inactive" : "active";
+    toggleStatusMutation.mutate({ id: game.id, status: nextStatus, gameType: game._type });
+  };
+
+  const isStatusPending = (gameId: string) => pendingStatusGameId === gameId || toggleStatusMutation.isPending;
 
   const updateDisplayLocationsMutation = useMutation({
     mutationFn: ({ id, displayLocations, gameType }: { id: string; displayLocations: string[]; gameType: "multiplayer" | "single" }) => {
@@ -1796,8 +1804,8 @@ export default function AdminUnifiedGames() {
                 const hasCustomIcon = isCustomImagePath(game.iconUrl);
                 const statusDot =
                   game.status === "active" ? "bg-green-500" :
-                  game.status === "listed" ? "bg-yellow-500" :
-                  game.status === "inactive" ? "bg-red-500" : "bg-blue-500";
+                    game.status === "listed" ? "bg-yellow-500" :
+                      game.status === "inactive" ? "bg-red-500" : "bg-blue-500";
                 const statusLabel = STATUS_LABELS[game.status as keyof typeof STATUS_LABELS];
                 return (
                   <button
@@ -1916,32 +1924,194 @@ export default function AdminUnifiedGames() {
                       </div>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={game.status}
+                        onValueChange={(value) => toggleStatusMutation.mutate({ id: game.id, status: value, gameType: game._type })}
+                        disabled={isStatusPending(game.id)}
+                      >
+                        <SelectTrigger className={`${INPUT_SURFACE_CLASS} ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] || ""}`} data-testid={`select-status-${game.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500" />{language === "ar" ? "نشطة" : "Active"}</span></SelectItem>
+                          <SelectItem value="listed"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-yellow-500" />{language === "ar" ? "مدرجة" : "Listed"}</span></SelectItem>
+                          <SelectItem value="inactive"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" />{language === "ar" ? "خاملة" : "Inactive"}</span></SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="icon"
+                        className={`${BUTTON_3D_PRIMARY_CLASS} h-10 w-10 shrink-0`}
+                        onClick={() => quickToggleStatus(game)}
+                        disabled={isStatusPending(game.id)}
+                        title={game.status === "active" ? (language === "ar" ? "تعطيل سريع" : "Quick disable") : (language === "ar" ? "تفعيل سريع" : "Quick enable")}
+                        data-testid={`button-toggle-status-${game.id}`}
+                      >
+                        <Power className={`h-4 w-4 ${isStatusPending(game.id) ? "animate-pulse" : ""}`} />
+                      </Button>
+                      +                    </div>
+                  </SelectTrigger>
+                  *** End Patch
+
+                  <div className="flex flex-wrap gap-2">
+                    {(game.displayLocations || []).map((loc) => {
+                      const locInfo = DISPLAY_LOCATIONS.find((item) => item.key === loc);
+                      if (!locInfo) return null;
+                      const LocIcon = locInfo.icon;
+                      return (
+                        <Badge key={loc} variant="outline" className="rounded-full px-3 py-1 text-xs">
+                          <LocIcon className="me-1 h-3 w-3" />
+                          {language === "ar" ? locInfo.labelAr : locInfo.labelEn}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} data-testid={`button-actions-${game.id}`}>
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>{language === "ar" ? "أماكن العرض" : "Display Locations"}</DropdownMenuLabel>
+                        {DISPLAY_LOCATIONS.map((loc) => {
+                          const LocIcon = loc.icon;
+                          const currentLocations = Array.isArray(game.displayLocations) ? game.displayLocations : [];
+                          const isInLocation = currentLocations.includes(loc.key);
+                          return (
+                            <DropdownMenuItem key={loc.key} onClick={() => toggleDisplayLocation(game, loc.key)} data-testid={`menu-toggle-${loc.key}-${game.id}`}>
+                              <LocIcon className="h-4 w-4 me-2" />
+                              {language === "ar" ? loc.labelAr : loc.labelEn}
+                              {isInLocation && <Check className="ml-auto h-4 w-4 text-green-500" />}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                        <DropdownMenuSeparator />
+                        {displayLocationFilter !== "all" && (
+                          <DropdownMenuItem onClick={() => { setDeleteGameId(game.id); setDeleteMode("remove_from_section"); }} data-testid={`menu-remove-from-section-${game.id}`}>
+                            <X className="h-4 w-4 me-2" />
+                            {language === "ar"
+                              ? `إزالة من ${getLocalizedLocationLabel(displayLocationFilter, language)}`
+                              : `Remove from ${getLocalizedLocationLabel(displayLocationFilter, language)}`}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setDeleteGameId(game.id); setDeleteMode("permanent"); }} data-testid={`menu-delete-${game.id}`}>
+                          <Trash2 className="h-4 w-4 me-2" />
+                          {language === "ar" ? "حذف نهائي" : "Delete Permanently"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+                </Card>
+          );
+            })}
+        </div>
+
+      <div className={`hidden xl:block ${TABLE_WRAP_CLASS}`}>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[250px]">{language === "ar" ? "اللعبة" : "Game"}</TableHead>
+              <TableHead>{language === "ar" ? "الفئة" : "Category"}</TableHead>
+              <TableHead>{language === "ar" ? "الحالة" : "Status"}</TableHead>
+              <TableHead>{language === "ar" ? "السعر (USD)" : "Price (USD)"}</TableHead>
+              <TableHead>{language === "ar" ? "السعر (VEX)" : "Price (VEX)"}</TableHead>
+              <TableHead>{language === "ar" ? "اللعب المجاني" : "Free Plays"}</TableHead>
+              <TableHead>{language === "ar" ? "أماكن العرض" : "Display"}</TableHead>
+              <TableHead className="text-end">{language === "ar" ? "الإجراءات" : "Actions"}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedFilteredGames.map((game) => {
+              const IconComp = getIconComponent(game.iconName);
+              const hasCustomIcon = isCustomImagePath(game.iconUrl);
+              return (
+                <TableRow key={`${game._type}-${game.id}`} data-testid={`row-game-${game.id}`}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-lg p-2 ${hasCustomIcon ? "border border-border bg-muted/60" : game.colorClass}`}>
+                        {hasCustomIcon ? (
+                          <img src={String(game.iconUrl)} alt={language === "ar" ? `أيقونة ${game.nameAr}` : `${game.name} icon`} className="h-5 w-5 rounded object-contain" loading="lazy" />
+                        ) : (
+                          <IconComp className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">{language === "ar" ? game.nameAr : game.name}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          {game.key}
+                          {game._type === "multiplayer" && <Badge variant="outline" className="text-[10px] px-1 py-0">MP</Badge>}
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{getLocalizedCategoryLabel(game.category, language)}</Badge>
+                  </TableCell>
+                  <TableCell>
                     <Select value={game.status} onValueChange={(value) => toggleStatusMutation.mutate({ id: game.id, status: value, gameType: game._type })}>
-                      <SelectTrigger className={`${INPUT_SURFACE_CLASS} ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] || ""}`} data-testid={`select-status-${game.id}`}>
+                      <SelectTrigger className={`w-32 ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] || ""}`} data-testid={`select-status-${game.id}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500" />{language === "ar" ? "نشطة" : "Active"}</span></SelectItem>
-                        <SelectItem value="listed"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-yellow-500" />{language === "ar" ? "مدرجة" : "Listed"}</span></SelectItem>
-                        <SelectItem value="inactive"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" />{language === "ar" ? "خاملة" : "Inactive"}</span></SelectItem>
+                        <SelectItem value="active"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />{language === "ar" ? "نشطة" : "Active"}</span></SelectItem>
+                        <SelectItem value="listed"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" />{language === "ar" ? "مدرجة" : "Listed"}</span></SelectItem>
+                        <SelectItem value="inactive"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />{language === "ar" ? "خاملة" : "Inactive"}</span></SelectItem>
                       </SelectContent>
                     </Select>
-
-                    <div className="flex flex-wrap gap-2">
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-sm">
+                      <DollarSign className="h-3 w-3" />
+                      {game.minBet} - {game.maxBet}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-sm text-primary font-medium">
+                      <Coins className="h-3 w-3" />
+                      {game.priceVex || "0"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {game.freePlayLimit > 0 ? (
+                      <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                        <Gift className="h-3 w-3" />
+                        {formatFreePlayLabel(game.freePlayLimit, game.freePlayPeriod, language)}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
                       {(game.displayLocations || []).map((loc) => {
                         const locInfo = DISPLAY_LOCATIONS.find((item) => item.key === loc);
                         if (!locInfo) return null;
                         const LocIcon = locInfo.icon;
                         return (
-                          <Badge key={loc} variant="outline" className="rounded-full px-3 py-1 text-xs">
-                            <LocIcon className="me-1 h-3 w-3" />
+                          <Badge key={loc} variant="outline" className="text-xs">
+                            <LocIcon className="h-3 w-3 me-1" />
                             {language === "ar" ? locInfo.labelAr : locInfo.labelEn}
                           </Badge>
                         );
                       })}
                     </div>
-
-                    <div className="flex items-center justify-end gap-2">
+                  </TableCell>
+                  <TableCell className="text-end">
+                    <div className="flex justify-end gap-2">
+                      <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "icon")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع أيقونة من الجهاز" : "Upload icon from device"} data-testid={`button-upload-icon-${game.id}`}>
+                        <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "icon" ? "animate-pulse" : ""}`} />
+                      </Button>
+                      <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "background")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع صورة خلفية من الجهاز" : "Upload background image from device"} data-testid={`button-upload-background-${game.id}`}>
+                        <ImagePlus className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "background" ? "animate-pulse" : ""}`} />
+                      </Button>
+                      <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleEdit(game)} data-testid={`button-edit-${game.id}`}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} data-testid={`button-actions-${game.id}`}>
@@ -1958,7 +2128,7 @@ export default function AdminUnifiedGames() {
                               <DropdownMenuItem key={loc.key} onClick={() => toggleDisplayLocation(game, loc.key)} data-testid={`menu-toggle-${loc.key}-${game.id}`}>
                                 <LocIcon className="h-4 w-4 me-2" />
                                 {language === "ar" ? loc.labelAr : loc.labelEn}
-                                {isInLocation && <Check className="ml-auto h-4 w-4 text-green-500" />}
+                                {isInLocation && <Check className="h-4 w-4 ml-auto text-green-500" />}
                               </DropdownMenuItem>
                             );
                           })}
@@ -1978,158 +2148,16 @@ export default function AdminUnifiedGames() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  </CardContent>
-                </Card>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </div>
-
-          <div className={`hidden xl:block ${TABLE_WRAP_CLASS}`}>
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-[250px]">{language === "ar" ? "اللعبة" : "Game"}</TableHead>
-                  <TableHead>{language === "ar" ? "الفئة" : "Category"}</TableHead>
-                  <TableHead>{language === "ar" ? "الحالة" : "Status"}</TableHead>
-                  <TableHead>{language === "ar" ? "السعر (USD)" : "Price (USD)"}</TableHead>
-                  <TableHead>{language === "ar" ? "السعر (VEX)" : "Price (VEX)"}</TableHead>
-                  <TableHead>{language === "ar" ? "اللعب المجاني" : "Free Plays"}</TableHead>
-                  <TableHead>{language === "ar" ? "أماكن العرض" : "Display"}</TableHead>
-                  <TableHead className="text-end">{language === "ar" ? "الإجراءات" : "Actions"}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedFilteredGames.map((game) => {
-                  const IconComp = getIconComponent(game.iconName);
-                  const hasCustomIcon = isCustomImagePath(game.iconUrl);
-                  return (
-                    <TableRow key={`${game._type}-${game.id}`} data-testid={`row-game-${game.id}`}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className={`rounded-lg p-2 ${hasCustomIcon ? "border border-border bg-muted/60" : game.colorClass}`}>
-                            {hasCustomIcon ? (
-                              <img src={String(game.iconUrl)} alt={language === "ar" ? `أيقونة ${game.nameAr}` : `${game.name} icon`} className="h-5 w-5 rounded object-contain" loading="lazy" />
-                            ) : (
-                              <IconComp className="h-5 w-5" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">{language === "ar" ? game.nameAr : game.name}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              {game.key}
-                              {game._type === "multiplayer" && <Badge variant="outline" className="text-[10px] px-1 py-0">MP</Badge>}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{getLocalizedCategoryLabel(game.category, language)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Select value={game.status} onValueChange={(value) => toggleStatusMutation.mutate({ id: game.id, status: value, gameType: game._type })}>
-                          <SelectTrigger className={`w-32 ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] || ""}`} data-testid={`select-status-${game.id}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />{language === "ar" ? "نشطة" : "Active"}</span></SelectItem>
-                            <SelectItem value="listed"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" />{language === "ar" ? "مدرجة" : "Listed"}</span></SelectItem>
-                            <SelectItem value="inactive"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />{language === "ar" ? "خاملة" : "Inactive"}</span></SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <DollarSign className="h-3 w-3" />
-                          {game.minBet} - {game.maxBet}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-primary font-medium">
-                          <Coins className="h-3 w-3" />
-                          {game.priceVex || "0"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {game.freePlayLimit > 0 ? (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                            <Gift className="h-3 w-3" />
-                            {formatFreePlayLabel(game.freePlayLimit, game.freePlayPeriod, language)}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(game.displayLocations || []).map((loc) => {
-                            const locInfo = DISPLAY_LOCATIONS.find((item) => item.key === loc);
-                            if (!locInfo) return null;
-                            const LocIcon = locInfo.icon;
-                            return (
-                              <Badge key={loc} variant="outline" className="text-xs">
-                                <LocIcon className="h-3 w-3 me-1" />
-                                {language === "ar" ? locInfo.labelAr : locInfo.labelEn}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-end">
-                        <div className="flex justify-end gap-2">
-                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "icon")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع أيقونة من الجهاز" : "Upload icon from device"} data-testid={`button-upload-icon-${game.id}`}>
-                            <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "icon" ? "animate-pulse" : ""}`} />
-                          </Button>
-                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "background")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع صورة خلفية من الجهاز" : "Upload background image from device"} data-testid={`button-upload-background-${game.id}`}>
-                            <ImagePlus className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "background" ? "animate-pulse" : ""}`} />
-                          </Button>
-                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleEdit(game)} data-testid={`button-edit-${game.id}`}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} data-testid={`button-actions-${game.id}`}>
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>{language === "ar" ? "أماكن العرض" : "Display Locations"}</DropdownMenuLabel>
-                              {DISPLAY_LOCATIONS.map((loc) => {
-                                const LocIcon = loc.icon;
-                                const currentLocations = Array.isArray(game.displayLocations) ? game.displayLocations : [];
-                                const isInLocation = currentLocations.includes(loc.key);
-                                return (
-                                  <DropdownMenuItem key={loc.key} onClick={() => toggleDisplayLocation(game, loc.key)} data-testid={`menu-toggle-${loc.key}-${game.id}`}>
-                                    <LocIcon className="h-4 w-4 me-2" />
-                                    {language === "ar" ? loc.labelAr : loc.labelEn}
-                                    {isInLocation && <Check className="h-4 w-4 ml-auto text-green-500" />}
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                              <DropdownMenuSeparator />
-                              {displayLocationFilter !== "all" && (
-                                <DropdownMenuItem onClick={() => { setDeleteGameId(game.id); setDeleteMode("remove_from_section"); }} data-testid={`menu-remove-from-section-${game.id}`}>
-                                  <X className="h-4 w-4 me-2" />
-                                  {language === "ar"
-                                    ? `إزالة من ${getLocalizedLocationLabel(displayLocationFilter, language)}`
-                                    : `Remove from ${getLocalizedLocationLabel(displayLocationFilter, language)}`}
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setDeleteGameId(game.id); setDeleteMode("permanent"); }} data-testid={`menu-delete-${game.id}`}>
-                                <Trash2 className="h-4 w-4 me-2" />
-                                {language === "ar" ? "حذف نهائي" : "Delete Permanently"}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      )}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  )
+}
 
       <Dialog
         open={isFormOpen}
@@ -2232,6 +2260,6 @@ export default function AdminUnifiedGames() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 }
