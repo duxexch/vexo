@@ -1646,7 +1646,7 @@ function ArcadeOverviewCard() {
 
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm" className="gap-2">
-            <a href="/arcade-play/stack_tower">
+            <a href="/arcade/stack_tower">
               <Play className="w-4 h-4" />
               {language === 'ar' ? 'ابدأ الآن' : 'Start now'}
             </a>
@@ -1657,7 +1657,7 @@ function ArcadeOverviewCard() {
             </a>
           </Button>
           <Button asChild size="sm" variant="secondary">
-            <a href={overview.topGame?.slug ? `/arcade-play/${overview.topGame.slug}` : '/arcade-play/stack_tower'}>
+            <a href={overview.topGame?.slug ? `/arcade/${overview.topGame.slug}` : '/arcade/stack_tower'}>
               {language === 'ar' ? 'العب الأكثر رواجًا' : 'Play the hottest title'}
             </a>
           </Button>
