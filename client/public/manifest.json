@@ -2,7 +2,7 @@
   "name": "VEX - منصة الألعاب والتداول | Gaming & Trading",
   "short_name": "VEX",
   "description": "العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين. تداول P2P آمن مع 85+ عملة. محفظة رقمية ومكافآت يومية. Play Chess, Backgammon, Domino, Tarneeb & Baloot online. Secure P2P trading.",
-  "start_url": "/?source=pwa",
+  "start_url": "/p2p?source=pwa",
   "id": "/",
   "display": "standalone",
   "background_color": "#0f1419",
@@ -11,9 +11,21 @@
   "scope": "/",
   "lang": "ar",
   "dir": "rtl",
-  "categories": ["games", "entertainment", "finance", "social", "board", "card"],
+  "categories": [
+    "games",
+    "entertainment",
+    "finance",
+    "social",
+    "board",
+    "card"
+  ],
   "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
-  "display_override": ["window-controls-overlay", "tabbed", "standalone", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "tabbed",
+    "standalone",
+    "minimal-ui"
+  ],
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
@@ -108,21 +120,39 @@
       "short_name": "Games",
       "description": "العب الآن - جميع الألعاب التفاعلية",
       "url": "/play?source=shortcut",
-      "icons": [{ "src": "/icons/vex-online-games-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/icons/vex-online-games-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "المحفظة",
       "short_name": "Wallet",
       "description": "إدارة رصيدك والإيداع والسحب",
       "url": "/wallet?source=shortcut",
-      "icons": [{ "src": "/icons/vex-wallet-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/icons/vex-wallet-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "تداول P2P",
       "short_name": "P2P",
       "description": "تداول آمن مع مستخدمين آخرين",
       "url": "/p2p?source=shortcut",
-      "icons": [{ "src": "/icons/vex-p2p-trading-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/icons/vex-p2p-trading-app-icon.svg",
+          "sizes": "512x512",
+          "type": "image/svg+xml"
+        }
+      ]
     }
   ],
   "related_applications": [
@@ -160,8 +190,13 @@
     {
       "action": "/games",
       "accept": {
-        "application/json": [".json", ".vex"],
-        "text/plain": [".txt"]
+        "application/json": [
+          ".json",
+          ".vex"
+        ],
+        "text/plain": [
+          ".txt"
+        ]
       }
     }
   ],
@@ -181,10 +216,16 @@
         }
       ],
       "icons": [
-        { "src": "/icons/vex-gaming-logo-96x96.png", "sizes": "96x96" }
+        {
+          "src": "/icons/vex-gaming-logo-96x96.png",
+          "sizes": "96x96"
+        }
       ],
       "backgrounds": [
-        { "src": "/icons/vex-gaming-logo-512x512.png", "sizes": "512x512" }
+        {
+          "src": "/icons/vex-gaming-logo-512x512.png",
+          "sizes": "512x512"
+        }
       ]
     }
   ],
@@ -195,7 +236,10 @@
     "home_tab": {
       "url": "/",
       "icons": [
-        { "src": "/icons/vex-gaming-logo-96x96.png", "sizes": "96x96" }
+        {
+          "src": "/icons/vex-gaming-logo-96x96.png",
+          "sizes": "96x96"
+        }
       ]
     },
     "new_tab_button": {
