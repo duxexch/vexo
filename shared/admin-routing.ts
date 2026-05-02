@@ -17,6 +17,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     { key: "p2p", path: "/admin/p2p", labelEn: "P2P", labelAr: "P2P", category: "management" },
     { key: "support-settings", path: "/admin/support-settings", labelEn: "Support settings", labelAr: "إعدادات الدعم", category: "management" },
     { key: "id-verification", path: "/admin/id-verification", labelEn: "ID verification", labelAr: "التحقق من الهوية", category: "management" },
+    { key: "realtime", path: "/admin/realtime", labelEn: "Realtime", labelAr: "الوقت الحقيقي", category: "settings" },
     { key: "support", path: "/admin/support", labelEn: "Support contacts", labelAr: "جهات الدعم", category: "management" },
     { key: "anti-cheat", path: "/admin/anti-cheat", labelEn: "Anti-cheat", labelAr: "مكافحة الغش", category: "management" },
     { key: "payment-security", path: "/admin/payment-security", labelEn: "Payment security", labelAr: "أمان المدفوعات", category: "management" },

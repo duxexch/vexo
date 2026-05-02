@@ -3,7 +3,7 @@ import { storage } from "../../storage";
 import { users, transactions, projectCurrencyWallets, projectCurrencyLedger, notifications, type UserRole, type UserStatus, type TransactionType, type CurrencyLedgerType } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { toSafeUser, toSafeUsers } from "../../lib/safe-user";
 import { sanitizePlainText } from "../../lib/input-security";
@@ -97,7 +97,7 @@ export function registerUserCrudRoutes(app: Express) {
           .orderBy(desc(users.createdAt))
           .limit(parsedLimit)
           .offset(parsedOffset),
-        db.select({ count: db.sql<number>`count(*)` }).from(users),
+        db.select({ count: sql<number>`count(*)` }).from(users),
       ]);
 
       res.json({
