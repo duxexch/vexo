@@ -231,7 +231,13 @@ export default function AdminUsersPage() {
   const unreadEntityIds = new Set(unreadData?.entityIds || []);
   const markAlertRead = useMarkAlertReadByEntity();
 
-  const { data: users, isLoading } = useQuery({
+  const { data: usersResponse, isLoading } = useQuery<{
+    users: UserType[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  } | UserType[]>({
     queryKey: ["/api/admin/users"],
     queryFn: () => adminFetch("/api/admin/users"),
   });
@@ -507,7 +513,11 @@ export default function AdminUsersPage() {
     });
   };
 
-  const filteredUsers = users?.filter((user: UserType) =>
+  const users = Array.isArray(usersResponse) ? usersResponse : usersResponse?.users || [];
+  const totalUsers = Array.isArray(usersResponse) ? usersResponse.length : usersResponse?.total || users.length;
+  const hasMoreUsers = Array.isArray(usersResponse) ? false : Boolean(usersResponse?.hasMore);
+
+  const filteredUsers = users.filter((user: UserType) =>
     user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (user.phone && user.phone.includes(searchQuery))
@@ -561,6 +571,9 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-3xl font-bold">User Management</h1>
           <p className="text-muted-foreground">Manage all platform users</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Showing {filteredUsers.length} of {totalUsers} users{hasMoreUsers ? " (load more available)" : ""}
+          </p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -851,545 +864,545 @@ export default function AdminUsersPage() {
                 </TabsList>
 
                 <TabsContent value="profile" className="mt-4 space-y-6">
-              <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={selectedUser.profilePicture ?? undefined} />
-                  <AvatarFallback className="text-xl">
-                    {(selectedUser.nickname || selectedUser.username).substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-xl font-bold truncate" dir="auto">{selectedUser.nickname || selectedUser.username}</h3>
-                  {selectedUser.nickname && selectedUser.nickname !== selectedUser.username && (
-                    <p className="text-sm text-muted-foreground" dir="auto">@{selectedUser.username}</p>
-                  )}
-                  {!selectedUser.nickname && (selectedUser.firstName || selectedUser.lastName) && (
-                    <p className="text-sm text-muted-foreground" dir="auto">{`${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim()}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={getStatusColor(selectedUser.status)}>
-                      {selectedUser.status}
-                    </Badge>
-                    <Badge variant="outline">{selectedUser.role}</Badge>
-                    <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
-                      VIP {selectedUser.vipLevel ?? 0}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Profile Information
-                </h4>
-
-                <div className="grid gap-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Username</Label>
-                      {editMode ? (
-                        <Input
-                          value={editFormData.username || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
-                          data-testid="input-edit-username"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.username}</div>
+                  <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={selectedUser.profilePicture ?? undefined} />
+                      <AvatarFallback className="text-xl">
+                        {(selectedUser.nickname || selectedUser.username).substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-bold truncate" dir="auto">{selectedUser.nickname || selectedUser.username}</h3>
+                      {selectedUser.nickname && selectedUser.nickname !== selectedUser.username && (
+                        <p className="text-sm text-muted-foreground" dir="auto">@{selectedUser.username}</p>
                       )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Nickname</Label>
-                      {editMode ? (
-                        <Input
-                          value={editFormData.nickname || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, nickname: e.target.value })}
-                          data-testid="input-edit-nickname"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.nickname || "-"}</div>
+                      {!selectedUser.nickname && (selectedUser.firstName || selectedUser.lastName) && (
+                        <p className="text-sm text-muted-foreground" dir="auto">{`${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim()}</p>
                       )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant={getStatusColor(selectedUser.status)}>
+                          {selectedUser.status}
+                        </Badge>
+                        <Badge variant="outline">{selectedUser.role}</Badge>
+                        <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
+                          VIP {selectedUser.vipLevel ?? 0}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>First Name</Label>
-                      {editMode ? (
-                        <Input
-                          value={editFormData.firstName || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
-                          data-testid="input-edit-firstname"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.firstName || "-"}</div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Last Name</Label>
-                      {editMode ? (
-                        <Input
-                          value={editFormData.lastName || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
-                          data-testid="input-edit-lastname"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.lastName || "-"}</div>
-                      )}
-                    </div>
-                  </div>
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Profile Information
+                    </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        Email
-                      </Label>
-                      {editMode ? (
-                        <Input
-                          type="email"
-                          value={editFormData.email || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                          data-testid="input-edit-email"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.email || "-"}</div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        Phone
-                      </Label>
-                      {editMode ? (
-                        <Input
-                          value={editFormData.phone || ""}
-                          onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                          data-testid="input-edit-phone"
-                        />
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm">{selectedUser.phone || "-"}</div>
-                      )}
-                    </div>
-                  </div>
+                    <div className="grid gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Username</Label>
+                          {editMode ? (
+                            <Input
+                              value={editFormData.username || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+                              data-testid="input-edit-username"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.username}</div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Nickname</Label>
+                          {editMode ? (
+                            <Input
+                              value={editFormData.nickname || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, nickname: e.target.value })}
+                              data-testid="input-edit-nickname"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.nickname || "-"}</div>
+                          )}
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1">
-                        <Shield className="h-3 w-3" />
-                        Role
-                      </Label>
-                      {editMode ? (
-                        <Select
-                          value={editFormData.role}
-                          onValueChange={(v) => setEditFormData({ ...editFormData, role: v as UserType["role"] })}
-                        >
-                          <SelectTrigger data-testid="select-edit-role">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="player">Player</SelectItem>
-                            <SelectItem value="agent">Agent</SelectItem>
-                            <SelectItem value="affiliate">Affiliate</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm capitalize">{selectedUser.role}</div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      {editMode ? (
-                        <Select
-                          value={editFormData.status}
-                          onValueChange={(v) => setEditFormData({ ...editFormData, status: v as UserType["status"] })}
-                        >
-                          <SelectTrigger data-testid="select-edit-status">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                            <SelectItem value="suspended">Suspended</SelectItem>
-                            <SelectItem value="banned">Banned</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="p-2 bg-muted rounded text-sm capitalize">{selectedUser.status}</div>
-                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>First Name</Label>
+                          {editMode ? (
+                            <Input
+                              value={editFormData.firstName || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                              data-testid="input-edit-firstname"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.firstName || "-"}</div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Last Name</Label>
+                          {editMode ? (
+                            <Input
+                              value={editFormData.lastName || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                              data-testid="input-edit-lastname"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.lastName || "-"}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            Email
+                          </Label>
+                          {editMode ? (
+                            <Input
+                              type="email"
+                              value={editFormData.email || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                              data-testid="input-edit-email"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.email || "-"}</div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            Phone
+                          </Label>
+                          {editMode ? (
+                            <Input
+                              value={editFormData.phone || ""}
+                              onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                              data-testid="input-edit-phone"
+                            />
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm">{selectedUser.phone || "-"}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <Shield className="h-3 w-3" />
+                            Role
+                          </Label>
+                          {editMode ? (
+                            <Select
+                              value={editFormData.role}
+                              onValueChange={(v) => setEditFormData({ ...editFormData, role: v as UserType["role"] })}
+                            >
+                              <SelectTrigger data-testid="select-edit-role">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="player">Player</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="affiliate">Affiliate</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm capitalize">{selectedUser.role}</div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          {editMode ? (
+                            <Select
+                              value={editFormData.status}
+                              onValueChange={(v) => setEditFormData({ ...editFormData, status: v as UserType["status"] })}
+                            >
+                              <SelectTrigger data-testid="select-edit-status">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                                <SelectItem value="banned">Banned</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="p-2 bg-muted rounded text-sm capitalize">{selectedUser.status}</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
                 </TabsContent>
 
                 <TabsContent value="balances" className="mt-4 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Card className="p-4">
-                  <div className="text-xs text-muted-foreground">Primary Balance (USD)</div>
-                  <div className="text-2xl font-bold text-primary" data-testid="text-balance-usd">
-                    {formatCurrency(selectedUserOverview?.metrics?.fiatBalance ?? selectedUser.balance)}
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs text-muted-foreground">Project Currency (VXC)</div>
-                  <div className="text-2xl font-bold text-primary" data-testid="text-balance-vxc">
-                    {safeNumber(selectedUserOverview?.projectWallet?.totalBalance ?? 0).toFixed(2)}
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs text-muted-foreground">Games W / P</div>
-                  <div className="text-2xl font-bold text-yellow-500">
-                    {selectedUser.gamesWon ?? 0} / {selectedUser.gamesPlayed ?? 0}
-                  </div>
-                </Card>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Financial Summary
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Total Deposited</div>
-                    <div className="font-semibold text-green-500">
-                      {formatCurrency(selectedUser.totalDeposited)}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Total Withdrawn</div>
-                    <div className="font-semibold text-red-500">
-                      {formatCurrency(selectedUser.totalWithdrawn)}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Total Wagered</div>
-                    <div className="font-semibold">
-                      {formatCurrency(selectedUser.totalWagered)}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Total Won</div>
-                    <div className="font-semibold text-yellow-500">
-                      {formatCurrency(selectedUser.totalWon)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Real Currency Net (credits - debits)</div>
-                    <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.fiatNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
-                      {formatCurrency(selectedUserOverview?.metrics?.fiatNet || 0)}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Project Currency Net (credits - debits)</div>
-                    <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.projectNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
-                      {safeNumber(selectedUserOverview?.metrics?.projectNet).toFixed(2)} VEX
-                    </div>
-                  </div>
-                </div>
-
-                {selectedUserOverview?.projectWallet && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 bg-muted rounded-lg">
-                      <div className="text-xs text-muted-foreground">Project Wallet Total</div>
-                      <div className="font-semibold text-primary">{safeNumber(selectedUserOverview.projectWallet.totalBalance).toFixed(2)} VEX</div>
-                    </div>
-                    <div className="p-3 bg-muted rounded-lg">
-                      <div className="text-xs text-muted-foreground">Purchased Balance</div>
-                      <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.purchasedBalance).toFixed(2)} VEX</div>
-                    </div>
-                    <div className="p-3 bg-muted rounded-lg">
-                      <div className="text-xs text-muted-foreground">Earned Balance</div>
-                      <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.earnedBalance).toFixed(2)} VEX</div>
-                    </div>
+                    <Card className="p-4">
+                      <div className="text-xs text-muted-foreground">Primary Balance (USD)</div>
+                      <div className="text-2xl font-bold text-primary" data-testid="text-balance-usd">
+                        {formatCurrency(selectedUserOverview?.metrics?.fiatBalance ?? selectedUser.balance)}
+                      </div>
+                    </Card>
+                    <Card className="p-4">
+                      <div className="text-xs text-muted-foreground">Project Currency (VXC)</div>
+                      <div className="text-2xl font-bold text-primary" data-testid="text-balance-vxc">
+                        {safeNumber(selectedUserOverview?.projectWallet?.totalBalance ?? 0).toFixed(2)}
+                      </div>
+                    </Card>
+                    <Card className="p-4">
+                      <div className="text-xs text-muted-foreground">Games W / P</div>
+                      <div className="text-2xl font-bold text-yellow-500">
+                        {selectedUser.gamesWon ?? 0} / {selectedUser.gamesPlayed ?? 0}
+                      </div>
+                    </Card>
                   </div>
-                )}
-              </div>
 
-              {/* Multi-currency wallet management */}
-              <div className="space-y-4 border-t pt-6">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <ArrowLeftRight className="h-4 w-4" />
-                    Multi-Currency Wallets
-                  </h4>
-                  <Badge variant={multiCurrencyEnabled ? "default" : "outline"}>
-                    {multiCurrencyEnabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-
-                <div className="rounded-lg border p-4 space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-sm">Allow this user to hold multiple currencies</div>
-                      <div className="text-xs text-muted-foreground">
-                        Primary currency: <span className="font-mono">{currencyWalletsData?.primaryCurrency || selectedUser.balanceCurrency || "USD"}</span>. Sub-wallets are credited only when admin-approved.
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Financial Summary
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Total Deposited</div>
+                        <div className="font-semibold text-green-500">
+                          {formatCurrency(selectedUser.totalDeposited)}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Total Withdrawn</div>
+                        <div className="font-semibold text-red-500">
+                          {formatCurrency(selectedUser.totalWithdrawn)}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Total Wagered</div>
+                        <div className="font-semibold">
+                          {formatCurrency(selectedUser.totalWagered)}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Total Won</div>
+                        <div className="font-semibold text-yellow-500">
+                          {formatCurrency(selectedUser.totalWon)}
+                        </div>
                       </div>
                     </div>
-                    <Switch
-                      data-testid="switch-multi-currency"
-                      checked={multiCurrencyEnabled}
-                      onCheckedChange={(value) => setMultiCurrencyEnabled(value)}
-                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Real Currency Net (credits - debits)</div>
+                        <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.fiatNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          {formatCurrency(selectedUserOverview?.metrics?.fiatNet || 0)}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Project Currency Net (credits - debits)</div>
+                        <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.projectNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          {safeNumber(selectedUserOverview?.metrics?.projectNet).toFixed(2)} VEX
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedUserOverview?.projectWallet && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-3 bg-muted rounded-lg">
+                          <div className="text-xs text-muted-foreground">Project Wallet Total</div>
+                          <div className="font-semibold text-primary">{safeNumber(selectedUserOverview.projectWallet.totalBalance).toFixed(2)} VEX</div>
+                        </div>
+                        <div className="p-3 bg-muted rounded-lg">
+                          <div className="text-xs text-muted-foreground">Purchased Balance</div>
+                          <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.purchasedBalance).toFixed(2)} VEX</div>
+                        </div>
+                        <div className="p-3 bg-muted rounded-lg">
+                          <div className="text-xs text-muted-foreground">Earned Balance</div>
+                          <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.earnedBalance).toFixed(2)} VEX</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {multiCurrencyEnabled && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Allowed currencies (besides primary)</Label>
-                      <Input
-                        placeholder="Filter currencies (e.g. EGP, EUR)..."
-                        value={multiCurrencySearch}
-                        onChange={(e) => setMultiCurrencySearch(e.target.value)}
-                        className="h-9"
-                        data-testid="input-currency-filter"
-                      />
-                      <div className="max-h-40 overflow-y-auto rounded border bg-muted/40 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
-                        {WORLD_CURRENCIES
-                          .filter((c) => c.code !== (currencyWalletsData?.primaryCurrency || "USD"))
-                          .filter((c) => {
-                            const q = multiCurrencySearch.trim().toUpperCase();
-                            if (!q) return true;
-                            return c.code.includes(q) || c.name.toUpperCase().includes(q);
-                          })
-                          .map((c) => {
-                            const checked = multiCurrencyAllowList.includes(c.code);
-                            return (
-                              <label
-                                key={c.code}
-                                className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded hover:bg-muted ${checked ? "bg-primary/10" : ""}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  data-testid={`checkbox-currency-${c.code}`}
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    setMultiCurrencyAllowList((prev) =>
-                                      e.target.checked
-                                        ? [...prev, c.code]
-                                        : prev.filter((x) => x !== c.code),
-                                    );
-                                  }}
-                                />
-                                <span className="font-mono">{c.code}</span>
-                                <span className="text-muted-foreground truncate">{c.name}</span>
-                              </label>
-                            );
+                  {/* Multi-currency wallet management */}
+                  <div className="space-y-4 border-t pt-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <ArrowLeftRight className="h-4 w-4" />
+                        Multi-Currency Wallets
+                      </h4>
+                      <Badge variant={multiCurrencyEnabled ? "default" : "outline"}>
+                        {multiCurrencyEnabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium text-sm">Allow this user to hold multiple currencies</div>
+                          <div className="text-xs text-muted-foreground">
+                            Primary currency: <span className="font-mono">{currencyWalletsData?.primaryCurrency || selectedUser.balanceCurrency || "USD"}</span>. Sub-wallets are credited only when admin-approved.
+                          </div>
+                        </div>
+                        <Switch
+                          data-testid="switch-multi-currency"
+                          checked={multiCurrencyEnabled}
+                          onCheckedChange={(value) => setMultiCurrencyEnabled(value)}
+                        />
+                      </div>
+
+                      {multiCurrencyEnabled && (
+                        <div className="space-y-2">
+                          <Label className="text-xs">Allowed currencies (besides primary)</Label>
+                          <Input
+                            placeholder="Filter currencies (e.g. EGP, EUR)..."
+                            value={multiCurrencySearch}
+                            onChange={(e) => setMultiCurrencySearch(e.target.value)}
+                            className="h-9"
+                            data-testid="input-currency-filter"
+                          />
+                          <div className="max-h-40 overflow-y-auto rounded border bg-muted/40 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
+                            {WORLD_CURRENCIES
+                              .filter((c) => c.code !== (currencyWalletsData?.primaryCurrency || "USD"))
+                              .filter((c) => {
+                                const q = multiCurrencySearch.trim().toUpperCase();
+                                if (!q) return true;
+                                return c.code.includes(q) || c.name.toUpperCase().includes(q);
+                              })
+                              .map((c) => {
+                                const checked = multiCurrencyAllowList.includes(c.code);
+                                return (
+                                  <label
+                                    key={c.code}
+                                    className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded hover:bg-muted ${checked ? "bg-primary/10" : ""}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      data-testid={`checkbox-currency-${c.code}`}
+                                      checked={checked}
+                                      onChange={(e) => {
+                                        setMultiCurrencyAllowList((prev) =>
+                                          e.target.checked
+                                            ? [...prev, c.code]
+                                            : prev.filter((x) => x !== c.code),
+                                        );
+                                      }}
+                                    />
+                                    <span className="font-mono">{c.code}</span>
+                                    <span className="text-muted-foreground truncate">{c.name}</span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (currencyWalletsData) {
+                              setMultiCurrencyEnabled(currencyWalletsData.multiCurrencyEnabled);
+                              setMultiCurrencyAllowList(
+                                (currencyWalletsData.allowedCurrencies || []).filter((c) => c !== currencyWalletsData.primaryCurrency),
+                              );
+                            }
+                          }}
+                          data-testid="button-reset-multi-currency"
+                        >
+                          Reset
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => multiCurrencyMutation.mutate({
+                            id: selectedUser.id,
+                            enabled: multiCurrencyEnabled,
+                            allowedCurrencies: multiCurrencyAllowList,
                           })}
+                          disabled={multiCurrencyMutation.isPending}
+                          data-testid="button-save-multi-currency"
+                        >
+                          {multiCurrencyMutation.isPending ? "Saving..." : "Save Settings"}
+                        </Button>
                       </div>
                     </div>
-                  )}
 
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (currencyWalletsData) {
-                          setMultiCurrencyEnabled(currencyWalletsData.multiCurrencyEnabled);
-                          setMultiCurrencyAllowList(
-                            (currencyWalletsData.allowedCurrencies || []).filter((c) => c !== currencyWalletsData.primaryCurrency),
-                          );
-                        }
-                      }}
-                      data-testid="button-reset-multi-currency"
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => multiCurrencyMutation.mutate({
-                        id: selectedUser.id,
-                        enabled: multiCurrencyEnabled,
-                        allowedCurrencies: multiCurrencyAllowList,
-                      })}
-                      disabled={multiCurrencyMutation.isPending}
-                      data-testid="button-save-multi-currency"
-                    >
-                      {multiCurrencyMutation.isPending ? "Saving..." : "Save Settings"}
-                    </Button>
+                    {currencyWalletsData?.wallets && currencyWalletsData.wallets.length > 0 && (
+                      <PerCurrencyWalletsTable
+                        wallets={currencyWalletsData.wallets}
+                        onAdjust={(currency) => {
+                          setPendingAdjustCurrency(currency);
+                          setActionDialog("balance");
+                        }}
+                      />
+                    )}
                   </div>
-                </div>
-
-                {currencyWalletsData?.wallets && currencyWalletsData.wallets.length > 0 && (
-                  <PerCurrencyWalletsTable
-                    wallets={currencyWalletsData.wallets}
-                    onAdjust={(currency) => {
-                      setPendingAdjustCurrency(currency);
-                      setActionDialog("balance");
-                    }}
-                  />
-                )}
-              </div>
 
                 </TabsContent>
 
                 <TabsContent value="activity" className="mt-4 space-y-6">
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <Wallet className="h-4 w-4" />
-                  Financial Movement Log
-                </h4>
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Wallet className="h-4 w-4" />
+                      Financial Movement Log
+                    </h4>
 
-                {selectedUserOverviewLoading ? (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading financial movement log...</div>
-                ) : !selectedUserOverview?.financialTimeline?.length ? (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial movements found for this user/filter.</div>
-                ) : (
-                  <div className="space-y-2 max-h-[340px] overflow-y-auto">
-                    {selectedUserOverview.financialTimeline.map((entry) => (
-                      <div key={entry.id} className="rounded-lg border p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={entry.signedAmount >= 0 ? "default" : "destructive"}>
-                              {entry.signedAmount >= 0 ? "credit" : "debit"}
-                            </Badge>
-                            <Badge variant="outline">{entry.source === "project" ? "project currency" : "real currency"}</Badge>
-                            <Badge variant="outline">{entry.type}</Badge>
+                    {selectedUserOverviewLoading ? (
+                      <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading financial movement log...</div>
+                    ) : !selectedUserOverview?.financialTimeline?.length ? (
+                      <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial movements found for this user/filter.</div>
+                    ) : (
+                      <div className="space-y-2 max-h-[340px] overflow-y-auto">
+                        {selectedUserOverview.financialTimeline.map((entry) => (
+                          <div key={entry.id} className="rounded-lg border p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant={entry.signedAmount >= 0 ? "default" : "destructive"}>
+                                  {entry.signedAmount >= 0 ? "credit" : "debit"}
+                                </Badge>
+                                <Badge variant="outline">{entry.source === "project" ? "project currency" : "real currency"}</Badge>
+                                <Badge variant="outline">{entry.type}</Badge>
+                              </div>
+                              <div className={`font-semibold ${entry.signedAmount >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                {entry.signedAmount >= 0 ? "+" : "-"}
+                                {entry.absoluteAmount.toFixed(2)} {entry.currencyCode}
+                              </div>
+                            </div>
+
+                            <div className="mt-2 text-sm text-muted-foreground">
+                              {entry.description || "No description"}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>Before: {entry.balanceBefore.toFixed(2)}</span>
+                              <span>After: {entry.balanceAfter.toFixed(2)}</span>
+                              <span>Status: {entry.status}</span>
+                              <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[11px]"
+                                onClick={() => openUserSection(entry.link || "/transactions")}
+                              >
+                                Open Section
+                              </Button>
+                            </div>
+
+                            <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+                              <span className="font-medium text-primary">Ref:</span>
+                              <span className="font-mono">{entry.reference}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={() => copyReference(entry.reference)}
+                                data-testid={`button-copy-financial-ref-${entry.id}`}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className={`font-semibold ${entry.signedAmount >= 0 ? "text-green-500" : "text-red-500"}`}>
-                            {entry.signedAmount >= 0 ? "+" : "-"}
-                            {entry.absoluteAmount.toFixed(2)} {entry.currencyCode}
-                          </div>
-                        </div>
-
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          {entry.description || "No description"}
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span>Before: {entry.balanceBefore.toFixed(2)}</span>
-                          <span>After: {entry.balanceAfter.toFixed(2)}</span>
-                          <span>Status: {entry.status}</span>
-                          <span>{new Date(entry.createdAt).toLocaleString()}</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-[11px]"
-                            onClick={() => openUserSection(entry.link || "/transactions")}
-                          >
-                            Open Section
-                          </Button>
-                        </div>
-
-                        <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
-                          <span className="font-medium text-primary">Ref:</span>
-                          <span className="font-mono">{entry.reference}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                            onClick={() => copyReference(entry.reference)}
-                            data-testid={`button-copy-financial-ref-${entry.id}`}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <Gift className="h-4 w-4" />
-                  Financial Notifications
-                </h4>
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Gift className="h-4 w-4" />
+                      Financial Notifications
+                    </h4>
 
-                {selectedUserOverviewLoading ? (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading transaction notifications...</div>
-                ) : !selectedUserOverview?.transactionNotifications?.length ? (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial notifications found for this user/filter.</div>
-                ) : (
-                  <div className="space-y-2 max-h-[260px] overflow-y-auto">
-                    {selectedUserOverview.transactionNotifications.map((item) => (
-                      <div key={item.id} className="rounded-lg border p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold">{item.title}</p>
-                            <p className="text-xs text-muted-foreground">{item.message}</p>
+                    {selectedUserOverviewLoading ? (
+                      <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading transaction notifications...</div>
+                    ) : !selectedUserOverview?.transactionNotifications?.length ? (
+                      <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial notifications found for this user/filter.</div>
+                    ) : (
+                      <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                        {selectedUserOverview.transactionNotifications.map((item) => (
+                          <div key={item.id} className="rounded-lg border p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold">{item.title}</p>
+                                <p className="text-xs text-muted-foreground">{item.message}</p>
+                              </div>
+                              <Badge variant={item.isRead ? "outline" : "default"}>{item.isRead ? "read" : "unread"}</Badge>
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>Priority: {item.priority}</span>
+                              <span>{new Date(item.createdAt).toLocaleString()}</span>
+                              <span>Link: {item.link || "/transactions"}</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[11px]"
+                                onClick={() => openUserSection(item.link || "/transactions")}
+                              >
+                                Open Section
+                              </Button>
+                            </div>
+
+                            <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+                              <span className="font-medium text-primary">Ref:</span>
+                              <span className="font-mono">{item.reference}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={() => copyReference(item.reference)}
+                                data-testid={`button-copy-notification-ref-${item.id}`}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <Badge variant={item.isRead ? "outline" : "default"}>{item.isRead ? "read" : "unread"}</Badge>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span>Priority: {item.priority}</span>
-                          <span>{new Date(item.createdAt).toLocaleString()}</span>
-                          <span>Link: {item.link || "/transactions"}</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-[11px]"
-                            onClick={() => openUserSection(item.link || "/transactions")}
-                          >
-                            Open Section
-                          </Button>
-                        </div>
-
-                        <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
-                          <span className="font-medium text-primary">Ref:</span>
-                          <span className="font-mono">{item.reference}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                            onClick={() => copyReference(item.reference)}
-                            data-testid={`button-copy-notification-ref-${item.id}`}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
                 </TabsContent>
 
                 <TabsContent value="account" className="mt-4 space-y-6">
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Account Info
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Joined</div>
-                    <div className="font-semibold">{formatDate(selectedUser.createdAt)}</div>
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Account Info
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Joined</div>
+                        <div className="font-semibold">{formatDate(selectedUser.createdAt)}</div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-xs text-muted-foreground">Last Login</div>
+                        <div className="font-semibold">{formatDate(selectedUser.lastLoginAt)}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-xs text-muted-foreground">Last Login</div>
-                    <div className="font-semibold">{formatDate(selectedUser.lastLoginAt)}</div>
-                  </div>
-                </div>
-              </div>
 
-              {selectedUser.p2pBanned && (
-                <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                  <div className="flex items-center gap-2 text-orange-500 font-semibold">
-                    <ArrowLeftRight className="h-4 w-4" />
-                    P2P Trading Banned
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedUser.p2pBanReason || "No reason specified"}
-                  </p>
-                  {selectedUser.p2pBannedAt && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Banned on {formatDate(selectedUser.p2pBannedAt)}
-                    </p>
+                  {selectedUser.p2pBanned && (
+                    <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-orange-500 font-semibold">
+                        <ArrowLeftRight className="h-4 w-4" />
+                        P2P Trading Banned
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {selectedUser.p2pBanReason || "No reason specified"}
+                      </p>
+                      {selectedUser.p2pBannedAt && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Banned on {formatDate(selectedUser.p2pBannedAt)}
+                        </p>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
                 </TabsContent>
               </Tabs>
             </div>
@@ -1480,19 +1493,19 @@ export default function AdminUsersPage() {
         selectedUser={
           selectedUser
             ? {
-                id: selectedUser.id,
-                username: selectedUser.username,
-                profilePicture: selectedUser.profilePicture ?? undefined,
-                balance: selectedUser.balance,
-              }
+              id: selectedUser.id,
+              username: selectedUser.username,
+              profilePicture: selectedUser.profilePicture ?? undefined,
+              balance: selectedUser.balance,
+            }
             : null
         }
         currencyWalletsData={
           currencyWalletsData
             ? {
-                primaryCurrency: currencyWalletsData.primaryCurrency,
-                allowedCurrencies: currencyWalletsData.allowedCurrencies,
-              }
+              primaryCurrency: currencyWalletsData.primaryCurrency,
+              allowedCurrencies: currencyWalletsData.allowedCurrencies,
+            }
             : null
         }
         initialCurrency={pendingAdjustCurrency}

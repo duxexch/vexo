@@ -77,7 +77,10 @@ export function registerUserCrudRoutes(app: Express) {
   // List users with optional role/status filtering
   app.get("/api/admin/users", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { role, status, limit = "1000", offset = "0" } = req.query;
+      const { role, status, limit = "100", offset = "0" } = req.query;
+
+      const parsedLimit = Math.min(500, Math.max(1, Number.parseInt(String(limit), 10) || 100));
+      const parsedOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
 
       let query = db.select().from(users);
       const conditions = [];
@@ -89,12 +92,21 @@ export function registerUserCrudRoutes(app: Express) {
         query = query.where(and(...conditions)) as typeof query;
       }
 
-      const result = await query
-        .orderBy(desc(users.createdAt))
-        .limit(Number(limit))
-        .offset(Number(offset));
+      const [result, totalRows] = await Promise.all([
+        query
+          .orderBy(desc(users.createdAt))
+          .limit(parsedLimit)
+          .offset(parsedOffset),
+        db.select({ count: db.sql<number>`count(*)` }).from(users),
+      ]);
 
-      res.json(toSafeUsers(result));
+      res.json({
+        users: toSafeUsers(result),
+        total: totalRows[0]?.count ?? 0,
+        limit: parsedLimit,
+        offset: parsedOffset,
+        hasMore: parsedOffset + result.length < (totalRows[0]?.count ?? 0),
+      });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
