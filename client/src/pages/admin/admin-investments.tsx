@@ -658,7 +658,23 @@ export default function AdminInvestmentsPage() {
                                         <FormItem><FormLabel>Title AR</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={paymentForm.control} name="type" render={({ field }) => (
-                                        <FormItem><FormLabel>Type</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem>
+                                            <FormLabel>Type</FormLabel>
+                                            <FormControl>
+                                                <select
+                                                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                >
+                                                    <option value="bank_transfer">Bank transfer</option>
+                                                    <option value="e_wallet">E-wallet</option>
+                                                    <option value="crypto">Crypto</option>
+                                                    <option value="card">Card</option>
+                                                    <option value="manual">Manual</option>
+                                                </select>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
                                     )} />
                                     <FormField control={paymentForm.control} name="currency" render={({ field }) => (
                                         <FormItem><FormLabel>Currency</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>

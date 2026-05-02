@@ -1010,9 +1010,14 @@ function AdminRouter() {
                             <AdminChallengeSettingsPage />
                         </AdminLayout>
                     </Route>
-                    <Route path="/admin/challenges">
+                    <Route path="/admin/investments">
                         <AdminLayout>
-                            <AdminChallengesPage />
+                            <AdminInvestmentsPage />
+                        </AdminLayout>
+                    </Route>
+                    <Route path="/admin/payment-security">
+                        <AdminLayout>
+                            <AdminPaymentSecurityPage />
                         </AdminLayout>
                     </Route>
                     <Route path="/admin/chat-management">
