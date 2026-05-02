@@ -24,6 +24,7 @@ import {
   SAM9_OPPONENT_CONTRACT,
   getSam9SoloSettingsFromRows,
   isSam9ChallengeGameType,
+  normalizeSam9FixedFee,
   type Sam9SoloSettings,
 } from "../../../shared/sam9-contract";
 

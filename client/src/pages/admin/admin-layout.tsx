@@ -1,4 +1,5 @@
 import { useEffect, lazy, Suspense, useCallback, useState } from "react";
+import { ADMIN_ROUTE_REGISTRY, type AdminRouteEntry } from "@/shared/admin-routing";
 import { useLocation } from "wouter";
 import {
   Sidebar,
@@ -89,32 +90,39 @@ function AdminSidebar() {
     setLocation("/admin");
   };
 
-  const menuItems = [
-    { id: "dashboard", titleKey: "admin.layout.menu.dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
-    { id: "users", titleKey: "admin.layout.menu.users", url: "/admin/users", icon: Users, hasBadge: true },
-    { id: "transactions", titleKey: "admin.layout.menu.transactions", url: "/admin/transactions", icon: DollarSign, hasBadge: true },
-    { id: "games", titleKey: "admin.layout.menu.games", url: "/admin/games", icon: Gamepad2 },
-    { id: "game-sections", titleKey: "admin.layout.menu.gameSections", url: "/admin/game-sections", icon: LayoutGrid },
-    { id: "challenges", titleKey: "admin.layout.menu.challenges", url: "/admin/challenges", icon: Swords },
-    { id: "challenge-settings", titleKey: "admin.layout.menu.challengeSettings", url: "/admin/challenge-settings", icon: Settings },
-    { id: "p2p", titleKey: "admin.layout.menu.p2pManagement", url: "/admin/p2p", icon: ArrowLeftRight, hasBadge: true },
-    { id: "support-settings", titleKey: "admin.layout.menu.supportSettings", url: "/admin/support-settings", icon: Heart, hasBadge: true },
-    { id: "id-verification", titleKey: "admin.layout.menu.idVerification", url: "/admin/id-verification", icon: IdCard, hasBadge: true },
-    { id: "support", titleKey: "admin.layout.menu.supportContacts", url: "/admin/support", icon: Headset },
-    { id: "anti-cheat", titleKey: "admin.layout.menu.antiCheat", url: "/admin/anti-cheat", icon: Shield },
-    { id: "payment-security", titleKey: "admin.layout.menu.paymentSecurity", url: "/admin/payment-security", icon: ShieldAlert, hasBadge: true },
-    { id: "chat-management", titleKey: "admin.layout.menu.chatManagement", url: "/admin/chat-management", icon: MessageCircle },
-    { id: "sam9", titleKey: "admin.layout.menu.sam9Control", url: "/admin/sam9", icon: Bot },
-    { id: "analytics", titleKey: "admin.layout.menu.analytics", url: "/admin/analytics", icon: BarChart3 },
-    { id: "disputes", titleKey: "admin.layout.menu.disputes", url: "/admin/disputes", icon: AlertTriangle, hasBadge: true },
-    { id: "free-play", titleKey: "admin.layout.menu.freePlay", url: "/admin/free-play", icon: Gift },
-    { id: "marketers", titleKey: "admin.layout.menu.marketers", url: "/admin/marketers", icon: Crown },
-    { id: "gifts", titleKey: "admin.layout.menu.giftCatalog", url: "/admin/gifts", icon: Gift },
-    { id: "investments", titleKey: "admin.layout.menu.investments", url: "/admin/finance", icon: Building2 },
-    { id: "agents", titleKey: "admin.layout.menu.agents", url: "/admin/agents", icon: Headset, hasBadge: true },
-    { id: "tournaments", titleKey: "admin.layout.menu.tournaments", url: "/admin/tournaments", icon: Trophy },
-    { id: "audit-logs", titleKey: "admin.layout.menu.auditLogs", url: "/admin/audit-logs", icon: FileText },
-  ];
+  const menuItems = ADMIN_ROUTE_REGISTRY.map((route: AdminRouteEntry) => ({
+    id: route.key,
+    titleKey: `admin.layout.menu.${route.key}` as const,
+    url: route.path,
+    icon:
+      route.key === "dashboard" ? LayoutDashboard :
+        route.key === "users" ? Users :
+          route.key === "transactions" ? DollarSign :
+            route.key === "games" ? Gamepad2 :
+              route.key === "game-sections" ? LayoutGrid :
+                route.key === "challenges" ? Swords :
+                  route.key === "challenge-settings" ? Settings :
+                    route.key === "p2p" ? ArrowLeftRight :
+                      route.key === "support-settings" ? Heart :
+                        route.key === "id-verification" ? IdCard :
+                          route.key === "support" ? Headset :
+                            route.key === "anti-cheat" ? Shield :
+                              route.key === "payment-security" ? ShieldAlert :
+                                route.key === "chat-management" ? MessageCircle :
+                                  route.key === "sam9" ? Bot :
+                                    route.key === "analytics" ? BarChart3 :
+                                      route.key === "disputes" ? AlertTriangle :
+                                        route.key === "free-play" ? Gift :
+                                          route.key === "marketers" ? Crown :
+                                            route.key === "gifts" ? Gift :
+                                              route.key === "investments" ? Building2 :
+                                                route.key === "finance" ? DollarSign :
+                                                  route.key === "agents" ? Headset :
+                                                    route.key === "tournaments" ? Trophy :
+                                                      route.key === "audit-logs" ? FileText :
+                                                        LayoutDashboard,
+    hasBadge: ["users", "transactions", "p2p", "support-settings", "id-verification", "payment-security", "disputes", "agents"].includes(route.key),
+  }));
 
   const settingsItems = [
     { id: "app-settings", titleKey: "admin.layout.settings.appSettings", url: "/admin/app-settings", icon: Cog },
@@ -176,7 +184,7 @@ function AdminSidebar() {
           <SidebarGroupLabel>{t("admin.layout.group.settings")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsItems.map((item) => (
+              {settingsItems.map((item: { id: string; titleKey: string; url: string; icon: React.ComponentType<{ className?: string }> }) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     isActive={location === item.url}
