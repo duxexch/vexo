@@ -1715,7 +1715,8 @@ function AccountSummaryCard({ user }: { user: User | undefined }) {
         <div className="flex gap-2">
           <Button className="flex-1" size="sm" data-testid="button-deposit">
             <ArrowDownCircle className="w-4 h-4 me-2" />
-            {t('play.deposit')}
+            <span>{t('play.deposit')}</span>
+            <span className="ms-1 text-xs font-normal opacity-90">ايداع</span>
           </Button>
           <Button variant="outline" className="flex-1" size="sm" data-testid="button-withdraw">
             <ArrowUpCircle className="w-4 h-4 me-2" />
