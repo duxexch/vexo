@@ -20,48 +20,25 @@ import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 import { getGameEngine } from "../../game-engines";
 import { getBadgeEntitlementForUser } from "../../lib/user-badge-entitlements";
-
-const SAM9_BOT_USER_ID = "bot-sam9";
-const SAM9_BOT_USERNAME = "bot_sam9_challenge_ai";
-const SAM9_MIN_BANKROLL = 1_000_000;
-const SAM9_SUPPORTED_GAME_TYPES = new Set(["domino", "backgammon", "tarneeb", "baloot"]);
-const SAM9_SOLO_MODE_KEY = "sam9_solo_mode";
-const SAM9_SOLO_FIXED_FEE_KEY = "sam9_solo_fixed_fee";
-
-type Sam9SoloMode = "competitive" | "friendly_fixed_fee";
-
-interface Sam9SoloSettings {
-  mode: Sam9SoloMode;
-  fixedFee: number;
-}
-
-function normalizeSam9SoloMode(value: unknown): Sam9SoloMode {
-  return value === "friendly_fixed_fee" ? "friendly_fixed_fee" : "competitive";
-}
-
-function normalizeSam9FixedFee(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0;
-  }
-  return Number(parsed.toFixed(2));
-}
+import {
+  SAM9_OPPONENT_CONTRACT,
+  getSam9SoloSettingsFromRows,
+  isSam9ChallengeGameType,
+  type Sam9SoloSettings,
+} from "../../../shared/sam9-contract";
 
 async function getSam9SoloSettings(): Promise<Sam9SoloSettings> {
   const [modeSetting] = await db.select({ value: gameplaySettings.value })
     .from(gameplaySettings)
-    .where(eq(gameplaySettings.key, SAM9_SOLO_MODE_KEY))
+    .where(eq(gameplaySettings.key, SAM9_OPPONENT_CONTRACT.soloModeSettingKey))
     .limit(1);
 
   const [fixedFeeSetting] = await db.select({ value: gameplaySettings.value })
     .from(gameplaySettings)
-    .where(eq(gameplaySettings.key, SAM9_SOLO_FIXED_FEE_KEY))
+    .where(eq(gameplaySettings.key, SAM9_OPPONENT_CONTRACT.soloFixedFeeSettingKey))
     .limit(1);
 
-  return {
-    mode: normalizeSam9SoloMode(modeSetting?.value),
-    fixedFee: normalizeSam9FixedFee(fixedFeeSetting?.value),
-  };
+  return getSam9SoloSettingsFromRows(modeSetting?.value, fixedFeeSetting?.value);
 }
 
 type ChallengeSessionSeed = Pick<
@@ -87,15 +64,15 @@ async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
   const [existingById] = await db
     .select({ id: users.id, username: users.username })
     .from(users)
-    .where(eq(users.id, SAM9_BOT_USER_ID))
+    .where(eq(users.id, SAM9_OPPONENT_CONTRACT.botUserId))
     .limit(1);
 
   if (existingById) {
     await db.insert(projectCurrencyWallets).values({
       userId: existingById.id,
-      purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+      purchasedBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
       earnedBalance: "0.00",
-      totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+      totalBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
       totalConverted: "0.00",
       totalSpent: "0.00",
       totalEarned: "0.00",
@@ -107,13 +84,13 @@ async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
   const password = `sam9-bot-${Date.now()}-${crypto.randomBytes(16).toString("hex")}`;
 
   const [created] = await db.insert(users).values({
-    id: SAM9_BOT_USER_ID,
-    username: SAM9_BOT_USERNAME,
+    id: SAM9_OPPONENT_CONTRACT.botUserId,
+    username: SAM9_OPPONENT_CONTRACT.botUsername,
     accountId: "SAM9-GAME-BOT",
     password,
     role: "player",
     status: "active",
-    balance: SAM9_MIN_BANKROLL.toFixed(2),
+    balance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
   }).returning({
     id: users.id,
     username: users.username,
@@ -125,9 +102,9 @@ async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
 
   await db.insert(projectCurrencyWallets).values({
     userId: created.id,
-    purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+    purchasedBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
     earnedBalance: "0.00",
-    totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+    totalBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
     totalConverted: "0.00",
     totalSpent: "0.00",
     totalEarned: "0.00",
@@ -230,7 +207,7 @@ export function registerCreateRoute(app: Express) {
       const settings = await getSam9SoloSettings();
       res.json({
         ...settings,
-        supportedGames: Array.from(SAM9_SUPPORTED_GAME_TYPES),
+        supportedGames: Array.from(SAM9_OPPONENT_CONTRACT.supportedChallengeGameTypes),
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -297,7 +274,7 @@ export function registerCreateRoute(app: Express) {
         return res.status(400).json({ error: "Invalid opponent type" });
       }
 
-      if (isSam9Challenge && !SAM9_SUPPORTED_GAME_TYPES.has(normalizedGameType)) {
+      if (isSam9Challenge && !isSam9ChallengeGameType(normalizedGameType)) {
         return res.status(400).json({
           error: "SAM9 solo mode is currently available for Domino, Backgammon, Tarneeb, and Baloot only",
         });
@@ -559,9 +536,9 @@ export function registerCreateRoute(app: Express) {
             if (!sam9Wallet) {
               const [createdWallet] = await tx.insert(projectCurrencyWallets).values({
                 userId: sam9BotUser.id,
-                purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+                purchasedBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
                 earnedBalance: '0.00',
-                totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+                totalBalance: SAM9_OPPONENT_CONTRACT.minBankroll.toFixed(2),
                 totalConverted: '0.00',
                 totalSpent: '0.00',
                 totalEarned: '0.00',
@@ -575,7 +552,7 @@ export function registerCreateRoute(app: Express) {
             let sam9TotalBalance = sam9EarnedBalance + sam9PurchasedBalance;
 
             if (sam9TotalBalance < stakeChargeAmount) {
-              sam9PurchasedBalance = SAM9_MIN_BANKROLL;
+              sam9PurchasedBalance = SAM9_OPPONENT_CONTRACT.minBankroll;
               sam9EarnedBalance = 0;
               sam9TotalBalance = sam9PurchasedBalance;
             }
@@ -649,7 +626,7 @@ export function registerCreateRoute(app: Express) {
 
             let sam9Balance = parseFloat(sam9Record.balance);
             if (sam9Balance < stakeChargeAmount) {
-              sam9Balance = SAM9_MIN_BANKROLL;
+              sam9Balance = SAM9_OPPONENT_CONTRACT.minBankroll;
             }
 
             await tx.update(users)

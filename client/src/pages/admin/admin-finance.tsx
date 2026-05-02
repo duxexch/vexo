@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { adminFetch } from "@/lib/admin-api";
@@ -22,6 +22,12 @@ import {
     BadgeCheck,
     AlertTriangle,
     BarChart3,
+    Landmark,
+    Globe2,
+    Activity,
+    ReceiptText,
+    HandCoins,
+    Package,
 } from "lucide-react";
 
 type InvestmentStock = {
@@ -121,7 +127,7 @@ function StatCard({
     title: string;
     value: string;
     description: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: ComponentType<{ className?: string }>;
 }) {
     return (
         <Card>
@@ -138,6 +144,24 @@ function StatCard({
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+function MiniMetric({
+    label,
+    value,
+    hint,
+}: {
+    label: string;
+    value: string;
+    hint: string;
+}) {
+    return (
+        <div className="rounded-xl border p-3">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+        </div>
     );
 }
 
@@ -182,13 +206,16 @@ export default function AdminFinancePage() {
     const totals = useMemo(() => {
         const totalShares = stocks.reduce((sum, stock) => sum + Number(stock.totalShares || 0), 0);
         const availableShares = stocks.reduce((sum, stock) => sum + Number(stock.availableShares || 0), 0);
+        const soldShares = totalShares - availableShares;
         const investedValue = stocks.reduce((sum, stock) => {
-            const soldShares = Number(stock.totalShares || 0) - Number(stock.availableShares || 0);
-            return sum + soldShares * Number(stock.pricePerShare || 0);
+            const sold = Number(stock.totalShares || 0) - Number(stock.availableShares || 0);
+            return sum + sold * Number(stock.pricePerShare || 0);
         }, 0);
         const pendingOrders = orders.filter((order) => order.status === "pending").length;
         const approvedOrders = orders.filter((order) => order.status === "approved" || order.status === "completed").length;
-        return { totalShares, availableShares, investedValue, pendingOrders, approvedOrders };
+        const activeStocks = stocks.filter((stock) => stock.isActive).length;
+        const featuredStocks = stocks.filter((stock) => stock.isFeatured).length;
+        return { totalShares, availableShares, soldShares, investedValue, pendingOrders, approvedOrders, activeStocks, featuredStocks };
     }, [stocks, orders]);
 
     const totalMarketers = Number(summary?.total_marketers || 0);
@@ -198,12 +225,13 @@ export default function AdminFinancePage() {
 
     const topMarketer = overviewData?.topMarketers?.[0] || null;
     const recentOrders = [...orders].slice(0, 5);
-    const activeStocks = stocks.filter((stock) => stock.isActive).length;
-    const featuredStocks = stocks.filter((stock) => stock.isFeatured).length;
 
     const refreshAll = async () => {
         await Promise.all([refetchInvestments(), refetchMarketers(), refetchOverview()]);
     };
+
+    const economyHealth =
+        totals.pendingOrders > 0 || pendingMarketers > 0 ? "Needs review" : "Stable";
 
     return (
         <div className="min-h-[100svh] space-y-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
@@ -220,13 +248,17 @@ export default function AdminFinancePage() {
                                     <PieChart className="h-3.5 w-3.5" />
                                     Economy overview
                                 </Badge>
+                                <Badge variant="outline" className="gap-1">
+                                    <Globe2 className="h-3.5 w-3.5" />
+                                    One control center
+                                </Badge>
                             </div>
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Building2 className="h-6 w-6 text-sky-500" />
                                 اللوحة المالية الموحدة
                             </CardTitle>
                             <CardDescription className="max-w-3xl">
-                                شاشة واحدة لمتابعة الاستثمار، طلبات الشراء، طرق الدفع، المسوقين، والعمولات التشغيلية بدون التنقّل بين صفحات متعددة.
+                                شاشة واحدة لمراقبة الاستثمار، الطلبات، طرق الدفع، المسوقين، والعمولات التشغيلية — مع روابط مباشرة للتشغيل السريع.
                             </CardDescription>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -246,22 +278,108 @@ export default function AdminFinancePage() {
             </Card>
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-                <StatCard title="إجمالي الأسهم" value={investmentsLoading ? "..." : String(totals.totalShares)} description="كل الوحدات المعرّفة" icon={Wallet} />
-                <StatCard title="المتاح" value={investmentsLoading ? "..." : String(totals.availableShares)} description="جاهز للشراء" icon={Coins} />
-                <StatCard title="قيمة الاستثمار" value={investmentsLoading ? "..." : `$${formatMoney(totals.investedValue)}`} description="محسوبة من الأسهم المباعة" icon={TrendingUp} />
-                <StatCard title="المتاجرون" value={marketersLoading || overviewLoading ? "..." : String(totalMarketers)} description="الحسابات المسوقة" icon={Users} />
-                <StatCard title="المعتمدون" value={overviewLoading ? "..." : String(approvedMarketers)} description="مسوقون معتمدون" icon={BadgeCheck} />
-                <StatCard title="طلبات قيد المراجعة" value={investmentsLoading ? "..." : String(totals.pendingOrders)} description="تحتاج قرار إداري" icon={Clock3} />
+                <StatCard
+                    title="إجمالي الأسهم"
+                    value={investmentsLoading ? "..." : String(totals.totalShares)}
+                    description="كل الوحدات المعرّفة"
+                    icon={Wallet}
+                />
+                <StatCard
+                    title="المتاح"
+                    value={investmentsLoading ? "..." : String(totals.availableShares)}
+                    description="جاهز للشراء"
+                    icon={Coins}
+                />
+                <StatCard
+                    title="قيمة الاستثمار"
+                    value={investmentsLoading ? "..." : `$${formatMoney(totals.investedValue)}`}
+                    description="محسوبة من الأسهم المباعة"
+                    icon={TrendingUp}
+                />
+                <StatCard
+                    title="المسوّقون"
+                    value={marketersLoading || overviewLoading ? "..." : String(totalMarketers)}
+                    description="الحسابات المسوقة"
+                    icon={Users}
+                />
+                <StatCard
+                    title="المعتمدون"
+                    value={overviewLoading ? "..." : String(approvedMarketers)}
+                    description="مسوقون معتمدون"
+                    icon={BadgeCheck}
+                />
+                <StatCard
+                    title="قيد المراجعة"
+                    value={investmentsLoading ? "..." : String(totals.pendingOrders)}
+                    description="طلبات تحتاج قراراً"
+                    icon={Clock3}
+                />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-3">
                 <Card className="xl:col-span-2">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
-                            <Building2 className="h-4 w-4 text-sky-500" />
+                            <Landmark className="h-4 w-4 text-sky-500" />
+                            Snapshot of the economy
+                        </CardTitle>
+                        <CardDescription>مؤشرات تشغيلية سريعة توضح صحة الاقتصاد في اللحظة الحالية.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-3">
+                        <MiniMetric
+                            label="الصورة العامة"
+                            value={economyHealth}
+                            hint={`${totals.activeStocks} active stocks · ${totals.featuredStocks} featured`}
+                        />
+                        <MiniMetric
+                            label="Shares sold"
+                            value={String(totals.soldShares)}
+                            hint="الوحدات الخارجة من المخزون"
+                        />
+                        <MiniMetric
+                            label="Payment rails"
+                            value={String(paymentMethods.length)}
+                            hint="القنوات المالية المفعلة أو المعدة"
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <Activity className="h-4 w-4 text-amber-500" />
+                            Health snapshot
+                        </CardTitle>
+                        <CardDescription>إشارات سريعة للمراجعة اليومية.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <div className="rounded-xl border p-3">
+                            <div className="text-xs text-muted-foreground">Order flow</div>
+                            <div className="mt-1 font-semibold">{totals.pendingOrders > 0 ? "Needs review" : "Clear"}</div>
+                            <div className="text-xs text-muted-foreground">{totals.pendingOrders} pending orders</div>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                            <div className="text-xs text-muted-foreground">Marketer pipeline</div>
+                            <div className="mt-1 font-semibold">{pendingMarketers > 0 ? "Backlog" : "Healthy"}</div>
+                            <div className="text-xs text-muted-foreground">{pendingMarketers} pending marketers</div>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                            <div className="text-xs text-muted-foreground">Auto refresh</div>
+                            <div className="mt-1 font-semibold">30s</div>
+                            <div className="text-xs text-muted-foreground">Live dashboard updates</div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <Package className="h-4 w-4 text-sky-500" />
                             الاستثمار والطلبات
                         </CardTitle>
-                        <CardDescription>ملخص عملي للstock portfolio وطلبات المستثمرين الحالية.</CardDescription>
+                        <CardDescription>الأسهم، طرق الدفع، وحالة الطلبات الحالية.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {investmentsLoading ? (
@@ -269,26 +387,10 @@ export default function AdminFinancePage() {
                         ) : (
                             <>
                                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Stocks</div>
-                                        <div className="mt-1 text-2xl font-bold">{stocks.length}</div>
-                                        <div className="text-xs text-muted-foreground">{activeStocks} active · {featuredStocks} featured</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Payment methods</div>
-                                        <div className="mt-1 text-2xl font-bold">{paymentMethods.length}</div>
-                                        <div className="text-xs text-muted-foreground">Configured channels</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Approved orders</div>
-                                        <div className="mt-1 text-2xl font-bold">{totals.approvedOrders}</div>
-                                        <div className="text-xs text-muted-foreground">Approved or completed</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Pending orders</div>
-                                        <div className="mt-1 text-2xl font-bold text-amber-500">{totals.pendingOrders}</div>
-                                        <div className="text-xs text-muted-foreground">Needs review</div>
-                                    </div>
+                                    <MiniMetric label="Stocks" value={String(stocks.length)} hint={`${totals.activeStocks} active`} />
+                                    <MiniMetric label="Payment methods" value={String(paymentMethods.length)} hint="Configured channels" />
+                                    <MiniMetric label="Approved orders" value={String(totals.approvedOrders)} hint="Approved or completed" />
+                                    <MiniMetric label="Pending orders" value={String(totals.pendingOrders)} hint="Needs review" />
                                 </div>
 
                                 <div className="space-y-2">
@@ -324,7 +426,7 @@ export default function AdminFinancePage() {
                             <Crown className="h-4 w-4 text-amber-500" />
                             المسوقون والعمولات
                         </CardTitle>
-                        <CardDescription>مؤشرات سريعة للبرنامج التسويقي.</CardDescription>
+                        <CardDescription>الرؤية المالية الخاصة بالمسوقين والبرنامج التشغيلي.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {overviewLoading ? (
@@ -332,22 +434,10 @@ export default function AdminFinancePage() {
                         ) : (
                             <>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Approved</div>
-                                        <div className="mt-1 text-2xl font-bold">{approvedMarketers}</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Pending</div>
-                                        <div className="mt-1 text-2xl font-bold text-amber-500">{pendingMarketers}</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Revoked</div>
-                                        <div className="mt-1 text-2xl font-bold text-rose-500">{revokedMarketers}</div>
-                                    </div>
-                                    <div className="rounded-xl border p-3">
-                                        <div className="text-xs text-muted-foreground">Paid</div>
-                                        <div className="mt-1 text-2xl font-bold">{formatMoney(summary?.total_paid)}</div>
-                                    </div>
+                                    <MiniMetric label="Approved" value={String(approvedMarketers)} hint="مسوقون معتمدون" />
+                                    <MiniMetric label="Pending" value={String(pendingMarketers)} hint="قيد المراجعة" />
+                                    <MiniMetric label="Revoked" value={String(revokedMarketers)} hint="سحب صلاحية" />
+                                    <MiniMetric label="Paid" value={formatMoney(summary?.total_paid)} hint="مدفوعات منفذة" />
                                 </div>
 
                                 <div className="rounded-xl border bg-muted/20 p-3">
@@ -414,29 +504,72 @@ export default function AdminFinancePage() {
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
-                            Health snapshot
+                            Risk & compliance snapshot
                         </CardTitle>
-                        <CardDescription>إشارات سريعة تساعد في مراجعة الاقتصاد ككل.</CardDescription>
+                        <CardDescription>مؤشرات مختصرة للمراجعة المالية اليومية.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 md:grid-cols-3">
                         <div className="rounded-xl border p-3">
-                            <div className="text-xs text-muted-foreground">Investment ops</div>
-                            <div className="mt-1 font-semibold">{stocks.length > 0 ? "Ready" : "Empty"}</div>
-                            <div className="text-xs text-muted-foreground">{stocks.length} stocks configured</div>
+                            <div className="text-xs text-muted-foreground">RevShare coverage</div>
+                            <div className="mt-1 flex items-center gap-2">
+                                <span className="font-semibold">{approvedMarketers}</span>
+                                <span className="text-xs text-muted-foreground">approved accounts</span>
+                            </div>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                                RevShare-enabled approvals: dynamic operational pool.
+                            </div>
                         </div>
                         <div className="rounded-xl border p-3">
-                            <div className="text-xs text-muted-foreground">Marketer ops</div>
-                            <div className="mt-1 font-semibold">{marketers.length > 0 ? "Ready" : "Empty"}</div>
-                            <div className="text-xs text-muted-foreground">{totalMarketers} total marketers</div>
+                            <div className="text-xs text-muted-foreground">Pending backlog</div>
+                            <div className="mt-1 text-2xl font-bold text-amber-500">{pendingMarketers}</div>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                                Requires human review and faster badge decisions.
+                            </div>
                         </div>
                         <div className="rounded-xl border p-3">
-                            <div className="text-xs text-muted-foreground">Live refresh</div>
-                            <div className="mt-1 font-semibold">30s</div>
-                            <div className="text-xs text-muted-foreground">Auto-updating dashboard</div>
+                            <div className="text-xs text-muted-foreground">Top operation</div>
+                            <div className="mt-1 text-lg font-semibold truncate">
+                                {topMarketer?.nickname || topMarketer?.username || "No data"}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                                {topMarketer ? `${Number(topMarketer.total_referrals || 0)} referrals` : "No marketer data yet"}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <ReceiptText className="h-4 w-4 text-sky-500" />
+                        Unified finance summary
+                    </CardTitle>
+                    <CardDescription>ملخص نهائي يربط الاستثمار، العمولة، والطلب التشغيلي في شاشة واحدة.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-4">
+                    <MiniMetric
+                        label="Investment value"
+                        value={`$${formatMoney(totals.investedValue)}`}
+                        hint="قيمة الأسهم المباعة"
+                    />
+                    <MiniMetric
+                        label="Commission pool"
+                        value={formatMoney(summary?.total_commissions)}
+                        hint="إجمالي العمولات"
+                    />
+                    <MiniMetric
+                        label="Withdrawable"
+                        value={formatMoney(summary?.total_withdrawable)}
+                        hint="متاح للسحب"
+                    />
+                    <MiniMetric
+                        label="Pending operations"
+                        value={String(totals.pendingOrders + pendingMarketers)}
+                        hint="طلبات واستثناءات تحتاج متابعة"
+                    />
+                </CardContent>
+            </Card>
         </div>
     );
 }

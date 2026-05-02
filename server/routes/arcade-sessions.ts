@@ -11,12 +11,12 @@ import { z } from "zod";
 import { db } from "../db";
 import { arcadeSessions, users, gameMatches } from "@shared/schema";
 import { ARCADE_GAME_KEYS, getArcadeGame } from "@shared/arcade-games";
+import { SAM9_ARCADE_CONTRACT } from "@shared/sam9-contract";
 import { authMiddleware } from "./middleware";
 import { logger } from "../lib/logger";
 import { chooseArcadeBanter, sam9KnowsArcadeGame, arcadeGameLabel } from "../lib/sam9-arcade-banter";
 import {
     decideArcadeReward,
-    ARCADE_ENTRY_COST_VEX,
     type PlayerArcadeState,
 } from "../lib/sam9-arcade-economy";
 
@@ -148,7 +148,7 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                 .where(eq(arcadeSessions.userId, userId));
             const totalLifetimeRuns = Number(lifetime?.totalRuns ?? 0);
             const lifetimeWon = Number(lifetime?.lifetimeWon ?? 0);
-            const lifetimeWagered = totalLifetimeRuns * ARCADE_ENTRY_COST_VEX;
+            const lifetimeWagered = totalLifetimeRuns * SAM9_ARCADE_CONTRACT.entryCostVex;
 
             const recentRows = await db
                 .select({
@@ -179,7 +179,7 @@ export function registerArcadeSessionsRoutes(app: Express): void {
             // Free-play guard: if the player can't even afford the entry cost
             // we run the game in "free mode" (no debit, no reward). This keeps
             // the game playable for broke users without giving them free VEX.
-            const canAffordEntry = balance >= ARCADE_ENTRY_COST_VEX;
+            const canAffordEntry = balance >= SAM9_ARCADE_CONTRACT.entryCostVex;
 
             let decision = decideArcadeReward(playerState, score, gameKey);
             if (!canAffordEntry) {
@@ -268,7 +268,7 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                             rarity: txDecision.rarity,
                             psychologyMode: txDecision.psychologyMode,
                             rewardReason: txDecision.reason,
-                            entryCostVex: canAffordEntry ? ARCADE_ENTRY_COST_VEX : 0,
+                            entryCostVex: canAffordEntry ? SAM9_ARCADE_CONTRACT.entryCostVex : 0,
                         } as Record<string, unknown>,
                     })
                     .returning();
@@ -313,7 +313,7 @@ export function registerArcadeSessionsRoutes(app: Express): void {
                     rarity: decision.rarity,
                     psychologyMode: decision.psychologyMode,
                     reason: decision.reason,
-                    entryCostVex: canAffordEntry ? ARCADE_ENTRY_COST_VEX : 0,
+                    entryCostVex: canAffordEntry ? SAM9_ARCADE_CONTRACT.entryCostVex : 0,
                     freePlay: !canAffordEntry,
                     balanceBefore: balance,
                     balanceAfter: newBalance,
