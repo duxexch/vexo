@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, type MutableRefObject } from "react";
-import type { IceServersResponse } from "@shared/socketio-events";
+import type { IceServersResponse as SharedIceServersResponse } from "@shared/socketio-events";
 import { apiRequest } from "@/lib/queryClient";
+
+type IceServersResponse = SharedIceServersResponse & {
+  iceTransportPolicy?: "all" | "relay";
+};
 
 const DEFAULT_FALLBACK: IceServersResponse = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -59,10 +63,17 @@ export function useIceServers(): UseIceServersResult {
   const iceServersRef = useRef<RTCIceServer[]>(iceServers);
   iceServersRef.current = iceServers;
 
-  const rtcConfiguration = useMemo<RTCConfiguration>(
-    () => ({ iceServers, iceTransportPolicy: "all" }),
-    [iceServers],
-  );
+  const rtcConfiguration = useMemo<RTCConfiguration>(() => {
+    const configuration: RTCConfiguration = {
+      iceServers,
+    };
+
+    if (effective.iceTransportPolicy === "relay" || effective.iceTransportPolicy === "all") {
+      configuration.iceTransportPolicy = effective.iceTransportPolicy;
+    }
+
+    return configuration;
+  }, [effective.iceTransportPolicy, iceServers]);
 
   return {
     rtcConfiguration,

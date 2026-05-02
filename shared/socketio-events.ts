@@ -29,6 +29,8 @@ export interface IceServersResponse {
   ttlSeconds: number;
   /** Whether a TURN relay is actually available (false → only public STUN) */
   hasRelay: boolean;
+  /** Preferred ICE policy from the server; relay helps restrictive NATs */
+  iceTransportPolicy?: "all" | "relay";
 }
 
 /* ============================================================================

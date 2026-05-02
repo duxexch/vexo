@@ -239,8 +239,8 @@ function normalizeGameState(rawState: unknown): GameState {
 
   const boardTiles: { tile: DominoTile; rotation: number }[] = [];
   const seenBoardTiles = new Set<string>();
-  for (const entry of boardTilesRaw) {
-    const key = tileSignature(entry.tile);
+  for (const [index, entry] of boardTilesRaw.entries()) {
+    const key = entry.tile.id ? `id:${entry.tile.id}` : `idx:${index}:${tileSignature(entry.tile)}`;
     if (seenBoardTiles.has(key)) {
       continue;
     }
@@ -260,8 +260,8 @@ function normalizeGameState(rawState: unknown): GameState {
       if (current.right !== next.left) {
         console.warn(
           `[DominoBoard] Chain invariant violated at index ${i}: ` +
-            `board[${i}].right=${current.right} but board[${i + 1}].left=${next.left}. ` +
-            `Server should flip tiles to maintain board[i].right === board[i+1].left.`,
+          `board[${i}].right=${current.right} but board[${i + 1}].left=${next.left}. ` +
+          `Server should flip tiles to maintain board[i].right === board[i+1].left.`,
         );
         break; // Single warning per render is enough; no point spamming.
       }
@@ -2277,13 +2277,13 @@ export function DominoBoard({
         style={
           isLastActionTile
             ? {
-                transition: `transform ${placeTransitionMs}ms ease-out`,
-                filter:
-                  "drop-shadow(0 0 6px rgba(255, 184, 92, 0.85)) drop-shadow(0 0 14px rgba(255, 138, 32, 0.55))",
-                animation: lastPlayedGlowMs > 0
-                  ? `domino-last-played-glow ${lastPlayedGlowMs}ms ease-out 1`
-                  : undefined,
-              }
+              transition: `transform ${placeTransitionMs}ms ease-out`,
+              filter:
+                "drop-shadow(0 0 6px rgba(255, 184, 92, 0.85)) drop-shadow(0 0 14px rgba(255, 138, 32, 0.55))",
+              animation: lastPlayedGlowMs > 0
+                ? `domino-last-played-glow ${lastPlayedGlowMs}ms ease-out 1`
+                : undefined,
+            }
             : { transition: `transform ${placeTransitionMs}ms ease-out` }
         }
       >
