@@ -6,6 +6,7 @@ import { tarneebEngine } from './tarneeb';
 import { balootEngine } from './baloot';
 import { languageDuelEngine } from './languageduel';
 import { aimTrainerEngine } from './aim-trainer';
+import { ludoEngine } from './ludo/engine';
 import { ArcadeScoreEngine } from './arcade-score';
 
 const engines: Map<string, GameEngine> = new Map();
@@ -26,6 +27,7 @@ engines.set('tarneeb', tarneebEngine);
 engines.set('baloot', balootEngine);
 engines.set('languageduel', languageDuelEngine);
 engines.set('aim_trainer', aimTrainerEngine);
+engines.set('ludo', ludoEngine);
 for (const [gameType, minPlayers, maxPlayers] of arcadeScoreGames) {
   engines.set(gameType, new ArcadeScoreEngine(gameType, minPlayers, maxPlayers));
 }
@@ -50,4 +52,5 @@ export { tarneebEngine } from './tarneeb';
 export { balootEngine } from './baloot';
 export { languageDuelEngine } from './languageduel';
 export { aimTrainerEngine } from './aim-trainer';
+export { ludoEngine } from './ludo/engine';
 export { ArcadeScoreEngine } from './arcade-score';

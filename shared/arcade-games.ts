@@ -158,6 +158,19 @@ export const ARCADE_GAMES = [
     iconEmoji: "🎲",
     aliases: ["dice-battle"],
   },
+  {
+    key: "ludo",
+    slug: "ludo",
+    titleAr: "لودو الرهان",
+    titleEn: "Ludo Stakes",
+    color: "#f97316",
+    kind: "party",
+    minPlayers: 2,
+    maxPlayers: 4,
+    scoringDirection: "higher_better",
+    iconEmoji: "🎯",
+    aliases: ["ludo-game", "ludo-stakes", "ludo_battle"],
+  },
 ] as const satisfies readonly ArcadeGameMeta[];
 
 const BY_KEY = new Map<string, ArcadeGameMeta>(ARCADE_GAMES.map((g) => [g.key, g]));
