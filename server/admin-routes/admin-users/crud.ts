@@ -77,7 +77,7 @@ export function registerUserCrudRoutes(app: Express) {
   // List users with optional role/status filtering
   app.get("/api/admin/users", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { role, status, limit = "50", offset = "0" } = req.query;
+      const { role, status, limit = "1000", offset = "0" } = req.query;
 
       let query = db.select().from(users);
       const conditions = [];
