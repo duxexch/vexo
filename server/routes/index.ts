@@ -30,6 +30,7 @@ import { registerArcadeSessionsRoutes } from "./arcade-sessions";
 import { registerRtcRoutes } from "./rtc";
 import { registerSeoRoutes } from "./seo";
 import { registerVoipTokenRoutes } from "./devices/voip-tokens";
+import { registerInvestmentRoutes } from "./investments";
 import { authMiddleware } from "./middleware";
 
 export function registerModularRoutes(app: Express): void {
@@ -66,4 +67,5 @@ export function registerModularRoutes(app: Express): void {
   registerRtcRoutes(app);
   registerSeoRoutes(app);
   registerVoipTokenRoutes(app);
+  registerInvestmentRoutes(app);
 }

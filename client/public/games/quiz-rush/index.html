@@ -10,71 +10,92 @@
   <link rel="stylesheet" href="/games/_shared/vex-game.css">
   <style>
     :root {
-      --qr-primary: #1e88ff;
-      --qr-primary-deep: #0a3a78;
-      --qr-accent: #8b5cf6;
-      --qr-good: #22c55e;
-      --qr-bad: #ef4444;
-      --qr-panel: rgba(8, 12, 28, 0.96);
+      --qr-blue: #1e88ff;
+      --qr-blue-deep: #0a4d9c;
+      --qr-violet: #8b5cf6;
+      --qr-green: #22c55e;
+      --qr-red: #ef4444;
+      --qr-border: rgba(255, 255, 255, .10);
+      --qr-panel: rgba(8, 12, 28, .96);
+      --qr-text-dim: var(--vex-text-dim);
     }
 
-    .qr-stage {
+    * {
+      box-sizing: border-box;
+    }
+
+    body.vex-game {
+      background:
+        radial-gradient(circle at 20% 0%, rgba(30, 136, 255, .12), transparent 28%),
+        radial-gradient(circle at 100% 20%, rgba(139, 92, 246, .12), transparent 24%),
+        linear-gradient(180deg, #050812 0%, #070b14 44%, #02040a 100%);
+      color: #fff;
+    }
+
+    .qr-shell {
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
       margin: 0 auto;
-      min-height: 560px;
       display: flex;
       flex-direction: column;
       gap: 12px;
-      position: relative;
     }
 
     .qr-hero {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: 16px;
-      background: linear-gradient(180deg, rgba(30, 136, 255, 0.14), rgba(255, 255, 255, 0.04));
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(30, 136, 255, .14), rgba(255, 255, 255, .04));
+      border: 1px solid var(--qr-border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
     }
 
-    .qr-hero-title {
+    .qr-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .qr-title-wrap {
       display: flex;
       align-items: center;
       gap: 10px;
       min-width: 0;
     }
 
-    .qr-hero-title h1 {
-      font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.08em;
-      font-size: 1.8rem;
-      line-height: 1;
+    .qr-title-wrap h1 {
       margin: 0;
-      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.85rem;
+      letter-spacing: .08em;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .qr-hero-title p {
+    .qr-title-wrap p {
       margin: 4px 0 0;
-      color: var(--vex-text-dim);
-      font-size: 0.82rem;
+      color: var(--qr-text-dim);
+      font-size: .82rem;
       line-height: 1.4;
     }
 
-    .qr-mode-pill {
-      min-width: 82px;
+    .qr-pill {
+      min-width: 78px;
       text-align: center;
       padding: 8px 10px;
       border-radius: 12px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22));
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(0, 0, 0, .20));
+      border: 1px solid rgba(255, 255, 255, .10);
       color: var(--vex-text);
       font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.12em;
-      font-size: 0.95rem;
+      letter-spacing: .12em;
+      font-size: .95rem;
+      flex: none;
     }
 
     .qr-board {
@@ -83,22 +104,21 @@
       min-height: 420px;
       border-radius: 18px;
       background:
-        radial-gradient(ellipse 90% 80% at 50% 20%, rgba(139, 92, 246, 0.16), transparent 70%),
-        radial-gradient(ellipse 80% 70% at 50% 50%, rgba(30, 136, 255, 0.15), transparent 70%),
+        radial-gradient(ellipse 90% 80% at 50% 20%, rgba(139, 92, 246, .16), transparent 70%),
+        radial-gradient(ellipse 80% 70% at 50% 50%, rgba(30, 136, 255, .16), transparent 72%),
         linear-gradient(180deg, #0b1326 0%, #050812 100%);
-      border: 1px solid rgba(30, 136, 255, 0.35);
+      border: 1px solid rgba(30, 136, 255, .35);
       box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.10),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.55),
-        0 16px 34px -14px rgba(0, 0, 0, 0.85);
-      flex: 1;
+        inset 0 1px 0 rgba(255, 255, 255, .10),
+        inset 0 -2px 0 rgba(0, 0, 0, .55),
+        0 16px 34px -14px rgba(0, 0, 0, .85);
     }
 
     .qr-grid {
       position: absolute;
       inset: 12px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
     }
 
@@ -107,21 +127,22 @@
       display: grid;
       place-items: center;
       border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, .10);
       box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.24),
-        inset 0 -3px 0 rgba(0, 0, 0, 0.45),
-        0 8px 20px -6px rgba(0, 0, 0, 0.60);
+        inset 0 1px 0 rgba(255, 255, 255, .24),
+        inset 0 -3px 0 rgba(0, 0, 0, .45),
+        0 8px 20px -6px rgba(0, 0, 0, .60);
       user-select: none;
       overflow: hidden;
-      transition: transform 0.12s ease, filter 0.16s ease, opacity 0.16s ease;
+      transition: transform .12s ease, filter .16s ease, opacity .16s ease;
+      touch-action: manipulation;
     }
 
     .qr-buzzer::before {
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06) 36%, transparent 55%);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .24), rgba(255, 255, 255, .06) 36%, transparent 55%);
       pointer-events: none;
     }
 
@@ -130,8 +151,8 @@
       position: absolute;
       inset: 10px;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.24);
+      border: 1px solid rgba(255, 255, 255, .18);
+      box-shadow: inset 0 0 24px rgba(0, 0, 0, .24);
       pointer-events: none;
     }
 
@@ -166,12 +187,11 @@
     .qr-buzzer-name {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 1.08rem;
-      letter-spacing: 0.12em;
-      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+      letter-spacing: .12em;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, .45);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 100%;
     }
 
     .qr-buzzer-score {
@@ -179,36 +199,36 @@
       font-size: 2.5rem;
       line-height: 1;
       margin-top: 6px;
-      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 16px currentColor;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 16px currentColor;
     }
 
     .qr-buzzer.active {
       transform: translateY(-3px) scale(1.02);
-      filter: brightness(1.1);
+      filter: brightness(1.08);
     }
 
     .qr-buzzer.locked {
-      opacity: 0.42;
-      transform: translateY(2px) scale(0.985);
-      filter: grayscale(0.4);
+      opacity: .42;
+      transform: translateY(2px) scale(.985);
+      filter: grayscale(.4);
     }
 
     .qr-buzzer.correct::before {
-      background: radial-gradient(circle at 50% 32%, rgba(34, 197, 94, 0.90), rgba(34, 197, 94, 0.0) 70%);
-      animation: qrFlashGood 0.58s ease;
+      background: radial-gradient(circle at 50% 32%, rgba(34, 197, 94, .90), rgba(34, 197, 94, 0) 70%);
+      animation: flashGood .58s ease;
     }
 
     .qr-buzzer.wrong::before {
-      background: radial-gradient(circle at 50% 32%, rgba(239, 68, 68, 0.90), rgba(239, 68, 68, 0.0) 70%);
-      animation: qrFlashBad 0.58s ease;
+      background: radial-gradient(circle at 50% 32%, rgba(239, 68, 68, .90), rgba(239, 68, 68, 0) 70%);
+      animation: flashBad .58s ease;
     }
 
     .qr-buzzer.correct,
     .qr-buzzer.wrong {
-      animation: qrPop 0.58s ease;
+      animation: pop .58s ease;
     }
 
-    @keyframes qrFlashGood {
+    @keyframes flashGood {
 
       0%,
       100% {
@@ -221,7 +241,7 @@
       }
     }
 
-    @keyframes qrFlashBad {
+    @keyframes flashBad {
 
       0%,
       100% {
@@ -234,7 +254,7 @@
       }
     }
 
-    @keyframes qrPop {
+    @keyframes pop {
 
       0%,
       100% {
@@ -255,7 +275,7 @@
       align-items: center;
       justify-content: center;
       padding: 16px;
-      background: rgba(3, 6, 18, 0.34);
+      background: rgba(3, 6, 18, .34);
       backdrop-filter: blur(4px);
     }
 
@@ -263,11 +283,9 @@
       width: 100%;
       max-width: 340px;
       border-radius: 18px;
-      border: 1px solid rgba(30, 136, 255, 0.45);
-      background: linear-gradient(180deg, rgba(10, 17, 36, 0.98), rgba(6, 10, 18, 0.98));
-      box-shadow:
-        0 0 36px rgba(30, 136, 255, 0.28),
-        0 18px 30px -12px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(30, 136, 255, .45);
+      background: linear-gradient(180deg, rgba(10, 17, 36, .98), rgba(6, 10, 18, .98));
+      box-shadow: 0 0 36px rgba(30, 136, 255, .28), 0 18px 30px -12px rgba(0, 0, 0, .85);
       padding: 16px;
       text-align: center;
     }
@@ -289,14 +307,14 @@
       background: linear-gradient(180deg, #4a9eff, #1e88ff);
       color: #fff;
       font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.14em;
-      font-size: 0.95rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 10px rgba(30, 136, 255, 0.30);
+      letter-spacing: .14em;
+      font-size: .95rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 4px 10px rgba(30, 136, 255, .30);
     }
 
     .qr-question-hint {
-      font-size: 0.72rem;
-      color: var(--vex-text-muted);
+      font-size: .72rem;
+      color: var(--qr-text-dim);
       text-align: end;
     }
 
@@ -306,7 +324,7 @@
       line-height: 1.45;
       color: var(--vex-text);
       margin-bottom: 14px;
-      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, .35);
     }
 
     .qr-answers {
@@ -320,17 +338,14 @@
       padding: 12px 10px;
       border-radius: 12px;
       background: linear-gradient(180deg, #2a3550, #131b30);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, .08);
       color: var(--vex-text);
       font-family: inherit;
       font-weight: 700;
-      font-size: 0.92rem;
+      font-size: .92rem;
       cursor: pointer;
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.15),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.40),
-        0 3px 0 #050912;
-      transition: transform 0.08s ease, background 0.16s ease, opacity 0.16s ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15), inset 0 -2px 0 rgba(0, 0, 0, .40), 0 3px 0 #050912;
+      transition: transform .08s ease, background .16s ease, opacity .16s ease;
     }
 
     .qr-answer:hover {
@@ -343,29 +358,29 @@
 
     .qr-answer:disabled {
       cursor: not-allowed;
-      opacity: 0.54;
+      opacity: .54;
     }
 
     .qr-answer.correct {
       background: linear-gradient(180deg, #34d57c, #14532d);
       color: #f0fdf4;
       border-color: #22c55e;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), 0 3px 0 #052010, 0 0 14px rgba(34, 197, 94, 0.48);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .40), 0 3px 0 #052010, 0 0 14px rgba(34, 197, 94, .48);
     }
 
     .qr-answer.wrong {
       background: linear-gradient(180deg, #f87171, #7f1d1d);
       color: #fee2e2;
       border-color: #ef4444;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36), 0 3px 0 #4a0a0a, 0 0 14px rgba(239, 68, 68, 0.48);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .36), 0 3px 0 #4a0a0a, 0 0 14px rgba(239, 68, 68, .48);
     }
 
     .qr-status {
       min-height: 26px;
       margin-top: 12px;
       font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.12em;
-      color: rgba(255, 255, 255, 0.58);
+      letter-spacing: .12em;
+      color: rgba(255, 255, 255, .58);
       text-align: center;
       font-size: 1rem;
     }
@@ -386,15 +401,15 @@
       align-items: center;
       justify-content: center;
       padding: 16px;
-      background: linear-gradient(180deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 14, 0.98));
+      background: linear-gradient(180deg, rgba(8, 12, 28, .98), rgba(4, 6, 14, .98));
     }
 
     .qr-setup-card {
       width: 100%;
       border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.20));
-      box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.82);
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(0, 0, 0, .20));
+      box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .82);
       padding: 18px 16px;
       display: flex;
       flex-direction: column;
@@ -404,16 +419,16 @@
     .qr-setup-title {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 1.7rem;
-      letter-spacing: 0.12em;
+      letter-spacing: .12em;
       text-align: center;
       color: #93c5fd;
-      text-shadow: 0 0 14px rgba(30, 136, 255, 0.40);
+      text-shadow: 0 0 14px rgba(30, 136, 255, .40);
     }
 
     .qr-setup-subtitle {
       text-align: center;
-      color: var(--vex-text-dim);
-      font-size: 0.84rem;
+      color: var(--qr-text-dim);
+      font-size: .84rem;
       line-height: 1.45;
     }
 
@@ -427,27 +442,20 @@
       min-height: 44px;
       border-radius: 12px;
       background: linear-gradient(180deg, #1a2540, #0a1224);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, .08);
       color: var(--vex-text);
       font-family: 'Bebas Neue', sans-serif;
       font-size: 1.45rem;
-      letter-spacing: 0.08em;
+      letter-spacing: .08em;
       cursor: pointer;
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.40),
-        0 3px 0 #050912;
-      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.16s ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 -2px 0 rgba(0, 0, 0, .40), 0 3px 0 #050912;
     }
 
     .qr-count-btn.active {
       background: linear-gradient(180deg, #4a9eff, #1e88ff);
       color: #fff;
-      border-color: rgba(255, 255, 255, 0.22);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.42),
-        0 3px 0 #0a3a78,
-        0 5px 14px -2px rgba(30, 136, 255, 0.55);
+      border-color: rgba(255, 255, 255, .22);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 3px 0 #0a3a78, 0 5px 14px -2px rgba(30, 136, 255, .55);
     }
 
     .qr-count-btn:active {
@@ -475,11 +483,11 @@
       padding: 10px 12px;
       border-radius: 12px;
       background: linear-gradient(180deg, #1a2540, #0a1224);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, .10);
       color: var(--vex-text);
       font-family: inherit;
-      font-size: 0.92rem;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.42);
+      font-size: .92rem;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, .42);
     }
 
     .qr-start-btn {
@@ -488,21 +496,17 @@
       border-radius: 14px;
       background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a3a78 100%);
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.20);
+      border: 1px solid rgba(255, 255, 255, .20);
       font-family: 'Bebas Neue', sans-serif;
       font-size: 1.45rem;
-      letter-spacing: 0.18em;
+      letter-spacing: .18em;
       cursor: pointer;
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.40),
-        0 5px 0 #082a52,
-        0 10px 22px -6px rgba(30, 136, 255, 0.55);
-      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .40), 0 5px 0 #082a52, 0 10px 22px -6px rgba(30, 136, 255, .55);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, .28);
     }
 
     .qr-start-btn:active {
       transform: translateY(4px);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 1px 0 #082a52;
     }
 
     .qr-bottom {
@@ -517,8 +521,8 @@
     .qr-hint {
       flex: 1;
       min-width: 180px;
-      font-size: 0.74rem;
-      color: var(--vex-text-muted);
+      font-size: .74rem;
+      color: var(--vex-text-dim);
       line-height: 1.45;
     }
 
@@ -532,12 +536,12 @@
     .qr-badge {
       padding: 7px 10px;
       border-radius: 999px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.14));
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(0, 0, 0, .14));
+      border: 1px solid rgba(255, 255, 255, .08);
       color: var(--vex-text);
       font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.10em;
-      font-size: 0.85rem;
+      letter-spacing: .10em;
+      font-size: .85rem;
       white-space: nowrap;
     }
 
@@ -551,6 +555,87 @@
 
     .qr-badge.purple {
       color: #c084fc;
+    }
+
+    .qr-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(3, 7, 18, .72);
+      backdrop-filter: blur(10px);
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+
+    .qr-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .qr-overlay-card {
+      width: min(100%, 440px);
+      background: linear-gradient(180deg, #10172a, #070b14);
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 24px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55);
+    }
+
+    .qr-overlay-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      margin: 0 auto 12px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #4a9eff, #1e88ff);
+      color: #fff;
+    }
+
+    .qr-overlay-title {
+      font-size: 1.4rem;
+      font-weight: 900;
+      margin: 0 0 8px;
+    }
+
+    .qr-overlay-sub {
+      color: #cbd5e1;
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .qr-economy {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .08);
+      text-align: right;
+    }
+
+    .qr-econ-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .qr-econ-main {
+      font-size: 1.35rem;
+      font-weight: 900;
+    }
+
+    .qr-econ-sub {
+      margin-top: 6px;
+      color: #cbd5e1;
+      font-size: .85rem;
+      line-height: 1.5;
     }
 
     @media (max-width: 420px) {
@@ -579,16 +664,16 @@
 </head>
 
 <body class="vex-game">
-  <div class="vex-shell">
-    <div class="qr-stage">
-      <div class="qr-hero">
-        <div class="qr-hero-title">
+  <div class="vex-shell qr-shell">
+    <div class="qr-hero">
+      <div class="qr-head">
+        <div class="qr-title-wrap">
           <div class="vex-title-badge violet">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
               stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </div>
           <div style="min-width:0;">
@@ -596,49 +681,49 @@
             <p id="subtitle">أول لاعب يضغط الزر يجاوب. السرعة + الذكاء = الفائز.</p>
           </div>
         </div>
-        <div class="qr-mode-pill" id="modePill">2-4</div>
+        <div class="qr-pill" id="modePill">4</div>
       </div>
+    </div>
 
-      <div class="qr-board vex-3d-card">
-        <div class="qr-grid" id="arena"></div>
+    <div class="qr-board vex-3d-card">
+      <div class="qr-grid" id="arena"></div>
 
-        <div class="qr-question" id="qOverlay" aria-hidden="true">
-          <div class="qr-question-card">
-            <div class="qr-question-top">
-              <div class="qr-question-num" id="qNum">سؤال 1 / 10</div>
-              <div class="qr-question-hint" id="buzzState">اضغط زرك للإجابة</div>
-            </div>
-            <div class="qr-question-text" id="qText">—</div>
-            <div class="qr-answers" id="qAnswers"></div>
-            <div class="qr-status" id="qStatus"></div>
+      <div class="qr-question" id="qOverlay" aria-hidden="true">
+        <div class="qr-question-card">
+          <div class="qr-question-top">
+            <div class="qr-question-num" id="qNum">سؤال 1 / 10</div>
+            <div class="qr-question-hint" id="buzzState">بانتظار أول ضغطة…</div>
           </div>
-        </div>
-
-        <div class="qr-setup" id="setupOverlay">
-          <div class="qr-setup-card">
-            <div class="qr-setup-title" id="setupTitle">إعداد اللاعبين</div>
-            <div class="qr-setup-subtitle" id="setupSubtitle">اختر عدد اللاعبين وأدخل أسماءهم. 10 أسئلة سريعة، وكل إجابة
-              صحيحة +10 وخطأ −5.</div>
-            <div class="qr-count-row" id="countRow">
-              <button class="qr-count-btn" data-c="2">2</button>
-              <button class="qr-count-btn" data-c="3">3</button>
-              <button class="qr-count-btn active" data-c="4">4</button>
-              <button class="qr-count-btn" data-c="8">8</button>
-            </div>
-            <div id="namesArea"></div>
-            <button class="qr-start-btn" id="setupStart">ابدأ</button>
-          </div>
+          <div class="qr-question-text" id="qText">—</div>
+          <div class="qr-answers" id="qAnswers"></div>
+          <div class="qr-status" id="qStatus"></div>
         </div>
       </div>
 
-      <div class="qr-bottom">
-        <div class="qr-hint" id="hint">السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5. عند الخطأ يمكن لخصمك أن
-          يخطف السؤال.</div>
-        <div class="qr-mini-badges">
-          <div class="qr-badge good" id="badgeCorrect">+10</div>
-          <div class="qr-badge warn" id="badgeWrong">−5</div>
-          <div class="qr-badge purple" id="badgeRounds">10 Questions</div>
+      <div class="qr-setup" id="setupOverlay">
+        <div class="qr-setup-card">
+          <div class="qr-setup-title" id="setupTitle">إعداد اللاعبين</div>
+          <div class="qr-setup-subtitle" id="setupSubtitle">اختر عدد اللاعبين وأدخل أسماءهم. 10 أسئلة سريعة، وكل إجابة
+            صحيحة +10 وخطأ −5.</div>
+          <div class="qr-count-row" id="countRow">
+            <button class="qr-count-btn" data-c="2">2</button>
+            <button class="qr-count-btn" data-c="3">3</button>
+            <button class="qr-count-btn active" data-c="4">4</button>
+            <button class="qr-count-btn" data-c="8">8</button>
+          </div>
+          <div id="namesArea"></div>
+          <button class="qr-start-btn" id="setupStart">ابدأ</button>
         </div>
+      </div>
+    </div>
+
+    <div class="qr-bottom">
+      <div class="qr-hint" id="hint">السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5. عند الخطأ يمكن لخصمك أن
+        يخطف السؤال.</div>
+      <div class="qr-mini-badges">
+        <div class="qr-badge good" id="badgeCorrect">+10</div>
+        <div class="qr-badge warn" id="badgeWrong">−5</div>
+        <div class="qr-badge purple" id="badgeRounds">10 Questions</div>
       </div>
     </div>
   </div>
@@ -648,7 +733,7 @@
       <div class="vex-overlay-icon violet">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
           stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+          <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"></polygon>
         </svg>
       </div>
       <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
@@ -664,7 +749,7 @@
   <script src="/games/vex-sdk.js"></script>
   <script src="/games/_shared/vex-game.js"></script>
   <script>
-    (function () {
+    (() => {
       'use strict';
 
       const STRINGS = {
@@ -674,46 +759,52 @@
           setupTitle: 'إعداد اللاعبين',
           setupSubtitle: 'اختر عدد اللاعبين وأدخل أسماءهم. 10 أسئلة سريعة، وكل إجابة صحيحة +10 وخطأ −5.',
           start: 'ابدأ',
-          reset: 'إعادة',
           defaultName: 'لاعب',
           question: (i, n) => `سؤال ${i} / ${n}`,
-          buzz: 'اضغط زرك للإجابة',
-          waiting: 'بانتظار أول ضغطة…',
+          buzz: 'بانتظار أول ضغطة…',
           answering: (name) => `${name} يجيب الآن…`,
           correct: (name) => `+10 ${name}`,
           wrong: (name) => `−5 ${name}`,
-          end: 'انتهت اللعبة!',
+          end: 'انتهت الجولة!',
           winner: (name) => `الفائز: ${name}`,
           hint: 'السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5. عند الخطأ يمكن لخصمك أن يخطف السؤال.',
-          gameOver: 'جولة جديدة',
+          playAgain: 'جولة جديدة',
           close: 'إغلاق',
           players: 'لاعبين',
           rounds: '10 أسئلة',
           questionSet: 'مجموعة الأسئلة',
+          statsAnswering: 'الردود',
+          best: 'الأفضل',
+          speed: 'السرعة',
+          accuracy: 'الدقة',
+          scoreRate: 'العائد',
         },
         en: {
           title: 'Quiz Rush',
           subtitle: 'Buzz first, answer smart. Speed + knowledge wins.',
-          setupTitle: 'Setup Players',
-          setupSubtitle: 'Choose the player count and names. 10 fast questions, each correct answer gives +10 and a wrong one gives −5.',
+          setupTitle: 'Setup players',
+          setupSubtitle: 'Choose player count and names. 10 fast questions, each correct answer +10 and wrong answer −5.',
           start: 'Start',
-          reset: 'Reset',
           defaultName: 'Player',
           question: (i, n) => `Question ${i} / ${n}`,
-          buzz: 'Tap your buzzer to answer',
-          waiting: 'Waiting for the first buzz…',
+          buzz: 'Waiting for the first buzz…',
           answering: (name) => `${name} is answering…`,
           correct: (name) => `+10 ${name}`,
           wrong: (name) => `−5 ${name}`,
-          end: 'Game over!',
+          end: 'Round complete!',
           winner: (name) => `Winner: ${name}`,
           hint: 'When a question appears, the first buzz gets the turn. Correct +10, wrong −5. On a miss, an opponent can steal the question.',
-          gameOver: 'Play again',
+          playAgain: 'Play again',
           close: 'Close',
           players: 'Players',
           rounds: '10 Questions',
           questionSet: 'Question bank',
-        }
+          statsAnswering: 'Answers',
+          best: 'Best',
+          speed: 'Speed',
+          accuracy: 'Accuracy',
+          scoreRate: 'Payout',
+        },
       };
 
       const QUESTIONS = [
@@ -739,427 +830,448 @@
       const SCORE_CORRECT = 10;
       const SCORE_WRONG = 5;
 
-      let lang = 'ar';
-      let playerCount = 4;
-      let players = [];
-      let questionPool = [];
-      let roundIndex = 0;
-      let activeBuzzer = null;
-      let buzzLocked = false;
-      let currentQuestion = null;
-      let currentAnswerButtons = [];
-      let pendingTimers = [];
-      let gameStartedAt = Date.now();
-      let resultSubmitted = false;
+      const state = {
+        lang: 'ar',
+        playerCount: 4,
+        players: [],
+        questionPool: [],
+        roundIndex: 0,
+        currentQuestion: null,
+        activeBuzzer: null,
+        questionLocked: false,
+        pendingTimers: [],
+        gameStartedAt: Date.now(),
+        submitted: false,
+      };
 
       const $ = (id) => document.getElementById(id);
       const arena = $('arena');
 
-      function playerColor(i) {
-        return ['#22c55e', '#ef4444', '#ffb627', '#a855f7', '#22d3ee', '#f97316', '#10b981', '#e879f9'][i % MAX_PLAYERS];
-      }
-
-      function t() {
-        return STRINGS[lang];
-      }
+      function t() { return STRINGS[state.lang]; }
+      function playerColor(i) { return ['#22c55e', '#ef4444', '#ffb627', '#a855f7', '#22d3ee', '#f97316', '#10b981', '#e879f9'][i % MAX_PLAYERS]; }
 
       function later(fn, ms) {
-        const id = setTimeout(() => {
-          pendingTimers = pendingTimers.filter((x) => x !== id);
+        const id = window.setTimeout(() => {
+          state.pendingTimers = state.pendingTimers.filter((x) => x !== id);
           fn();
         }, ms);
-        pendingTimers.push(id);
+        state.pendingTimers.push(id);
         return id;
       }
 
       function clearPending() {
-        pendingTimers.forEach(clearTimeout);
-        pendingTimers = [];
+        state.pendingTimers.forEach(clearTimeout);
+        state.pendingTimers = [];
       }
 
-      function escapeHtml(value) {
-        return String(value).replace(/[&<>"']/g, (c) => ({
-          '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c]));
-  }
+      function shuffle(arr) {
+        const out = arr.slice();
+        for (let i = out.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+      }
 
-  function shuffle(arr) {
-            const out = arr.slice();
-            for (let i = out.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [out[i], out[j]] = [out[j], out[i]];
-            }
-            return out;
+      function safeText(value) {
+        return String(value);
+      }
+
+      function applyLanguage() {
+        const s = t();
+        document.documentElement.lang = state.lang;
+        document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+        $('title').textContent = s.title;
+        $('subtitle').textContent = s.subtitle;
+        $('setupTitle').textContent = s.setupTitle;
+        $('setupSubtitle').textContent = s.setupSubtitle;
+        $('setupStart').textContent = s.start;
+        $('hint').textContent = s.hint;
+        $('badgeWrong').textContent = `−${SCORE_WRONG}`;
+        $('badgeCorrect').textContent = `+${SCORE_CORRECT}`;
+        $('badgeRounds').textContent = s.rounds;
+        $('endTitle').textContent = s.end;
+        $('endRestart').textContent = s.playAgain;
+        $('endClose').textContent = s.close;
+        renderModePill();
+        renderSetupNames();
+      }
+
+      function renderModePill() {
+        $('modePill').textContent = String(state.playerCount);
+        $('modePill').title = `${state.playerCount} ${t().players}`;
+      }
+
+      function renderSetupNames() {
+        const area = $('namesArea');
+        area.innerHTML = '';
+        const s = t();
+        for (let i = 0; i < state.playerCount; i++) {
+          const row = document.createElement('div');
+          row.className = 'qr-name-row';
+
+          const dot = document.createElement('div');
+          dot.className = 'qr-name-dot';
+          dot.style.background = playerColor(i);
+          dot.style.color = playerColor(i);
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.maxLength = 18;
+          input.placeholder = `${s.defaultName} ${i + 1}`;
+          input.value = `${s.defaultName} ${i + 1}`;
+
+          row.appendChild(dot);
+          row.appendChild(input);
+          area.appendChild(row);
+        }
+      }
+
+      function resetBuzzersUI() {
+        arena.querySelectorAll('.qr-buzzer').forEach((el) => el.classList.remove('active', 'locked', 'correct', 'wrong'));
+      }
+
+      function resetGame() {
+        clearPending();
+        state.roundIndex = 0;
+        state.currentQuestion = null;
+        state.activeBuzzer = null;
+        state.questionLocked = false;
+        state.submitted = false;
+        $('setupOverlay').style.display = 'flex';
+        $('qOverlay').style.display = 'none';
+        $('qAnswers').innerHTML = '';
+        $('qStatus').textContent = '';
+        arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
+        renderModePill();
+        renderSetupNames();
+      }
+
+      function initPlayers() {
+        const inputs = $('namesArea').querySelectorAll('input');
+        state.players = Array.from(inputs).map((input, i) => ({
+          name: input.value.trim() || `${t().defaultName} ${i + 1}`,
+          score: 0,
+          correct: 0,
+          wrong: 0,
+          buzzes: 0,
+          color: playerColor(i),
+        }));
+      }
+
+      function renderBuzzers() {
+        arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
+        for (let i = 0; i < MAX_PLAYERS; i++) {
+          const el = document.createElement('div');
+          el.className = 'qr-buzzer';
+          el.dataset.i = String(i);
+          if (i < state.players.length) {
+            const p = state.players[i];
+            el.innerHTML = `
+              <div class="qr-buzzer-content">
+                <div class="qr-buzzer-name">${safeText(p.name)}</div>
+                <div class="qr-buzzer-score">${p.score}</div>
+              </div>
+            `;
+            el.addEventListener('click', () => buzz(i));
+          } else {
+            el.style.opacity = '0.10';
+            el.style.pointerEvents = 'none';
           }
+          arena.appendChild(el);
+        }
+      }
 
-  function applyLanguage() {
-            const s = t();
-            document.documentElement.lang = lang;
-            document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-            $('title').textContent = s.title;
-            $('subtitle').textContent = s.subtitle;
-            $('setupTitle').textContent = s.setupTitle;
-            $('setupSubtitle').textContent = s.setupSubtitle;
-            $('setupStart').textContent = s.start;
-            $('hint').textContent = s.hint;
-            $('badgeWrong').textContent = `−${SCORE_WRONG}`;
-            $('badgeCorrect').textContent = `+${SCORE_CORRECT}`;
-            $('badgeRounds').textContent = s.rounds;
-            $('endTitle').textContent = s.end;
-            $('endRestart').textContent = s.gameOver;
-            $('endClose').textContent = s.close;
-            updateModePill();
-            rebuildSetupNames();
-          }
-
-  function updateModePill() {
-            $('modePill').textContent = `${playerCount}${t().players ? '' : ''}`;
-            $('modePill').title = `${playerCount} ${t().players}`;
-          }
-
-  function rebuildSetupNames() {
-            const area = $('namesArea');
-            area.innerHTML = '';
-            const s = t();
-            for (let i = 0; i < playerCount; i++) {
-              const row = document.createElement('div');
-              row.className = 'qr-name-row';
-              const dot = document.createElement('div');
-              dot.className = 'qr-name-dot';
-              dot.style.color = playerColor(i);
-              dot.style.background = playerColor(i);
-              const input = document.createElement('input');
-              input.type = 'text';
-              input.maxLength = 18;
-              input.placeholder = `${s.defaultName} ${i + 1}`;
-              input.value = `${s.defaultName} ${i + 1}`;
-              row.appendChild(dot);
-              row.appendChild(input);
-              area.appendChild(row);
-            }
-          }
-
-  function startSetup() {
-            clearPending();
-            resultSubmitted = false;
-            roundIndex = 0;
-            activeBuzzer = null;
-            buzzLocked = false;
-            currentQuestion = null;
-            currentAnswerButtons = [];
-            $('setupOverlay').style.display = 'flex';
-            $('qOverlay').style.display = 'none';
-            $('qStatus').textContent = '';
-            $('qAnswers').innerHTML = '';
-            arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
-          }
-
-  function initPlayers() {
-            const s = t();
-            const inputs = $('namesArea').querySelectorAll('input');
-            players = Array.from(inputs).map((input, i) => ({
-              name: input.value.trim() || `${s.defaultName} ${i + 1}`,
-              score: 0,
-              color: playerColor(i),
-              correct: 0,
-              wrong: 0,
-              buzzes: 0,
-            }));
-          }
-
-  function renderBuzzers() {
-            arena.querySelectorAll('.qr-buzzer').forEach((n) => n.remove());
-            for (let i = 0; i < MAX_PLAYERS; i++) {
-              const el = document.createElement('div');
-              el.className = 'qr-buzzer';
-              el.dataset.i = i;
-              if (i < players.length) {
-                const p = players[i];
-                el.innerHTML = `
-          <div class="qr-buzzer-content">
-            <div class="qr-buzzer-name">${escapeHtml(p.name)}</div>
-            <div class="qr-buzzer-score">${p.score}</div>
-          </div>
-        `;
-                el.addEventListener('click', () => buzz(i));
-              } else {
-                el.style.opacity = '0.10';
-                el.style.pointerEvents = 'none';
-              }
-              arena.appendChild(el);
-            }
-          }
-
-  function refreshScores() {
-            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
-              const idx = parseInt(el.dataset.i, 10);
-              if (!Number.isFinite(idx) || idx >= players.length) return;
-              const scoreEl = el.querySelector('.qr-buzzer-score');
-              if (scoreEl) scoreEl.textContent = players[idx].score;
-            });
-          }
-
-  function resetBuzzersUI() {
-            arena.querySelectorAll('.qr-buzzer').forEach((el) => el.classList.remove('active', 'locked', 'correct', 'wrong'));
-          }
-
-  function startGame() {
-            initPlayers();
-            questionPool = shuffle(Array.from({ length: QUESTIONS.length }, (_, i) => i)).slice(0, MAX_ROUNDS);
-            roundIndex = 0;
-            activeBuzzer = null;
-            buzzLocked = false;
-            resultSubmitted = false;
-            gameStartedAt = Date.now();
-            $('setupOverlay').style.display = 'none';
-            renderBuzzers();
-            nextQuestion();
-          }
-
-  function nextQuestion() {
-            if (roundIndex >= MAX_ROUNDS) {
-              endGame();
-              return;
-            }
-
-            buzzLocked = false;
-            activeBuzzer = null;
-            currentQuestion = QUESTIONS[questionPool[roundIndex]];
-            const q = currentQuestion[lang];
-            const s = t();
-
-            $('qNum').textContent = s.question(roundIndex + 1, MAX_ROUNDS);
-            $('qText').textContent = q.q;
-            $('buzzState').textContent = s.waiting;
-            $('qStatus').textContent = '';
-            $('qStatus').className = 'qr-status';
-
-            const answerArea = $('qAnswers');
-            answerArea.innerHTML = '';
-            currentAnswerButtons = q.a.map((answer, ai) => {
-              const btn = document.createElement('button');
-              btn.className = 'qr-answer';
-              btn.textContent = answer;
-              btn.disabled = true;
-              btn.addEventListener('click', () => answerQuestion(ai));
-              answerArea.appendChild(btn);
-              return btn;
-            });
-
-            $('qOverlay').style.display = 'flex';
-            $('qOverlay').setAttribute('aria-hidden', 'false');
-          }
-
-  function buzz(index) {
-            if (currentQuestion === null || buzzLocked || activeBuzzer !== null) return;
-            activeBuzzer = index;
-            players[index].buzzes += 1;
-            $('buzzState').textContent = t().answering(players[index].name);
-            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
-              const idx = parseInt(el.dataset.i, 10);
-              el.classList.toggle('active', idx === index);
-              if (idx !== index && idx < players.length) el.classList.add('locked');
-            });
-            currentAnswerButtons.forEach((btn) => {
-              btn.disabled = false;
-              btn.style.opacity = '1';
-            });
-          }
-
-  function unlockForSteal() {
-            currentAnswerButtons.forEach((btn) => {
-              btn.disabled = true;
-              btn.style.opacity = '0.56';
-              btn.classList.remove('correct', 'wrong');
-            });
-            arena.querySelectorAll('.qr-buzzer').forEach((el) => {
-              const idx = parseInt(el.dataset.i, 10);
-              el.classList.remove('active', 'wrong');
-              if (idx < players.length && players[idx].wrong > 0 && idx !== activeBuzzer) {
-                el.classList.add('locked');
-              } else if (idx < players.length) {
-                el.classList.remove('locked');
-              }
-            });
-            activeBuzzer = null;
-            $('buzzState').textContent = t().buzz;
-          }
-
-  function answerQuestion(answerIndex) {
-            if (activeBuzzer === null || currentQuestion === null) return;
-
-            const q = currentQuestion[lang];
-            const player = players[activeBuzzer];
-            const buzzerEl = arena.querySelector(`.qr-buzzer[data-i="${activeBuzzer}"]`);
-
-            currentAnswerButtons.forEach((btn) => btn.disabled = true);
-
-            if (answerIndex === q.c) {
-              player.score += SCORE_CORRECT;
-              player.correct += 1;
-              $('qStatus').textContent = t().correct(player.name);
-              $('qStatus').className = 'qr-status good';
-              currentAnswerButtons[answerIndex].classList.add('correct');
-              if (buzzerEl) buzzerEl.classList.add('correct');
-              refreshScores();
-              if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`+10 ${player.name}`, 'success');
-              later(() => {
-                $('qOverlay').style.display = 'none';
-                roundIndex += 1;
-                resetBuzzersUI();
-                nextQuestion();
-              }, 1000);
-              return;
-            }
-
-            player.score = Math.max(0, player.score - SCORE_WRONG);
-            player.wrong += 1;
-            $('qStatus').textContent = t().wrong(player.name);
-            $('qStatus').className = 'qr-status bad';
-            currentAnswerButtons[answerIndex].classList.add('wrong');
-            currentAnswerButtons[q.c].classList.add('correct');
-            if (buzzerEl) buzzerEl.classList.add('wrong');
-            refreshScores();
-            if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`−5 ${player.name}`, 'error');
-
-            const triedPlayer = activeBuzzer;
-            activeBuzzer = null;
-
-            const remainingPlayers = players.length - (players.filter((p, idx) => idx !== triedPlayer && p.wrongThisRound).length);
-            void remainingPlayers;
-
-            buzzLocked = true;
-            later(() => {
-              currentAnswerButtons.forEach((btn) => {
-                btn.classList.remove('wrong', 'correct');
-                btn.disabled = true;
-                btn.style.opacity = '0.56';
-              });
-              if (buzzerEl) buzzerEl.classList.remove('wrong');
-              if (activeBuzzer === null) unlockForSteal();
-              const stillAvailable = players.some((_, idx) => idx !== triedPlayer);
-              if (!stillAvailable) {
-                roundIndex += 1;
-                $('qOverlay').style.display = 'none';
-                resetBuzzersUI();
-                nextQuestion();
-                return;
-              }
-              buzzLocked = false;
-            }, 900);
-          }
-
-  function buildStatsRows() {
-            const totalCorrect = players.reduce((sum, p) => sum + p.correct, 0);
-            const totalWrong = players.reduce((sum, p) => sum + p.wrong, 0);
-            const bestScore = Math.max(...players.map((p) => p.score));
-            const topPlayers = players.filter((p) => p.score === bestScore).map((p) => p.name).join('، ');
-            const stats = [
-              { label: t().players, value: String(players.length) },
-              { label: t().questionSet, value: String(MAX_ROUNDS) },
-              { label: t().buzz, value: String(totalCorrect + totalWrong) },
-              { label: t().winner('—'), value: topPlayers || '—' },
-            ];
-
-            const container = $('endStats');
-            container.innerHTML = '';
-            stats.forEach((item) => {
-              const cell = document.createElement('div');
-              cell.className = 'vex-overlay-stat';
-              cell.innerHTML = `<div class="vex-overlay-stat-label">${escapeHtml(item.label)}</div><div class="vex-overlay-stat-value">${escapeHtml(item.value)}</div>`;
-              container.appendChild(cell);
-            });
-          }
-
-  function submitSession(winner) {
-            if (resultSubmitted) return;
-            resultSubmitted = true;
-            if (typeof VexGame === 'undefined' || !VexGame.endSession) return;
-
-            const durationMs = Math.max(0, Date.now() - gameStartedAt);
-            const payload = {
-              score: winner.score,
-              result: 'win',
-              metadata: {
-                mode: 'multiplayer',
-                game: 'quiz_rush',
-                winner: winner.name,
-                players: players.map((p) => ({
-                  name: p.name,
-                  score: p.score,
-                  correct: p.correct,
-                  wrong: p.wrong,
-                  buzzes: p.buzzes,
-                })),
-                durationMs,
-                rounds: MAX_ROUNDS,
-              },
-            };
-            VexGame.endSession(payload);
-          }
-
-  function endGame() {
-            clearPending();
-            $('qOverlay').style.display = 'none';
-            $('qOverlay').setAttribute('aria-hidden', 'true');
-            resetBuzzersUI();
-
-            const sorted = players.slice().sort((a, b) => b.score - a.score);
-            const topScore = sorted[0].score;
-            const winners = sorted.filter((p) => p.score === topScore);
-            const winner = winners[0];
-
-            $('endTitle').textContent = t().end;
-            $('endSub').textContent = winners.length > 1 ? `${winners.map((p) => p.name).join('، ')} (${topScore})` : t().winner(winner.name) + ` (${topScore})`;
-            buildStatsRows();
-            later(() => $('endOverlay').classList.add('show'), 380);
-
-            if (typeof VexGame !== 'undefined') {
-              if (VexGame.confetti) VexGame.confetti(1000);
-              submitSession(winner);
-            }
-          }
-
-  function closeResult() {
-            $('endOverlay').classList.remove('show');
-          }
-
-  document.querySelectorAll('.qr-count-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              playerCount = parseInt(btn.dataset.c, 10);
-              document.querySelectorAll('.qr-count-btn').forEach((el) => el.classList.toggle('active', el === btn));
-              updateModePill();
-              rebuildSetupNames();
-            });
-          });
-
-        $('setupStart').addEventListener('click', startGame);
-        $('endRestart').addEventListener('click', () => {
-          closeResult();
-          startSetup();
+      function refreshScores() {
+        arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+          const idx = Number(el.dataset.i);
+          if (!Number.isFinite(idx) || idx >= state.players.length) return;
+          const scoreEl = el.querySelector('.qr-buzzer-score');
+          if (scoreEl) scoreEl.textContent = String(state.players[idx].score);
         });
-        $('endClose').addEventListener('click', () => {
-          closeResult();
-          startSetup();
-        });
+      }
 
-        if (typeof VexGame !== 'undefined' && VexGame.boot) {
-          VexGame.boot({
-            slug: 'quiz-rush',
-            onReady: function (player) {
-              if (player && player.language) {
-                lang = player.language === 'en' ? 'en' : 'ar';
-                if (VexGame.setLang) VexGame.setLang(lang);
-              }
-              applyLanguage();
-            }
-          });
-        } else {
-          applyLanguage();
+      function startGame() {
+        initPlayers();
+        state.questionPool = shuffle(Array.from({ length: QUESTIONS.length }, (_, i) => i)).slice(0, MAX_ROUNDS);
+        state.roundIndex = 0;
+        state.activeBuzzer = null;
+        state.questionLocked = false;
+        state.submitted = false;
+        state.gameStartedAt = Date.now();
+        $('setupOverlay').style.display = 'none';
+        renderBuzzers();
+        nextQuestion();
+      }
+
+      function currentQuestionData() {
+        return QUESTIONS[state.questionPool[state.roundIndex]];
+      }
+
+      function nextQuestion() {
+        if (state.roundIndex >= MAX_ROUNDS) {
+          endGame();
+          return;
         }
 
+        state.currentQuestion = currentQuestionData();
+        state.activeBuzzer = null;
+        state.questionLocked = false;
+
+        const q = state.currentQuestion[state.lang];
+        $('qNum').textContent = t().question(state.roundIndex + 1, MAX_ROUNDS);
+        $('qText').textContent = q.q;
+        $('buzzState').textContent = t().buzz;
+        $('qStatus').textContent = '';
+        $('qStatus').className = 'qr-status';
+
+        const answerArea = $('qAnswers');
+        answerArea.innerHTML = '';
+        q.a.forEach((answer, ai) => {
+          const btn = document.createElement('button');
+          btn.className = 'qr-answer';
+          btn.textContent = answer;
+          btn.disabled = true;
+          btn.addEventListener('click', () => answerQuestion(ai));
+          answerArea.appendChild(btn);
+        });
+
+        $('qOverlay').style.display = 'flex';
+        $('qOverlay').setAttribute('aria-hidden', 'false');
+      }
+
+      function buzz(index) {
+        if (!state.currentQuestion || state.activeBuzzer !== null || state.questionLocked) return;
+        state.activeBuzzer = index;
+        state.players[index].buzzes += 1;
+        $('buzzState').textContent = t().answering(state.players[index].name);
+
+        arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+          const idx = Number(el.dataset.i);
+          el.classList.toggle('active', idx === index);
+          if (idx !== index && idx < state.players.length) el.classList.add('locked');
+        });
+
+        $('qAnswers').querySelectorAll('.qr-answer').forEach((btn) => {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+        });
+      }
+
+      function openStealWindow() {
+        state.questionLocked = false;
+        state.activeBuzzer = null;
+        $('buzzState').textContent = state.lang === 'ar' ? 'يمكن للخصم أن يخطف السؤال…' : 'Opponent can steal the question…';
+
+        $('qAnswers').querySelectorAll('.qr-answer').forEach((btn) => {
+          btn.disabled = true;
+          btn.style.opacity = '.56';
+          btn.classList.remove('correct', 'wrong');
+        });
+
+        arena.querySelectorAll('.qr-buzzer').forEach((el) => {
+          const idx = Number(el.dataset.i);
+          el.classList.remove('active', 'wrong');
+          if (idx < state.players.length) el.classList.remove('locked');
+        });
+      }
+
+      function answerQuestion(answerIndex) {
+        if (state.activeBuzzer === null || !state.currentQuestion || state.questionLocked) return;
+
+        state.questionLocked = true;
+        const q = state.currentQuestion[state.lang];
+        const player = state.players[state.activeBuzzer];
+        const buzzerEl = arena.querySelector(`.qr-buzzer[data-i="${state.activeBuzzer}"]`);
+        const answerButtons = Array.from($('qAnswers').querySelectorAll('.qr-answer'));
+        answerButtons.forEach((btn) => btn.disabled = true);
+
+        if (answerIndex === q.c) {
+          player.score += SCORE_CORRECT;
+          player.correct += 1;
+          $('qStatus').textContent = t().correct(player.name);
+          $('qStatus').className = 'qr-status good';
+          answerButtons[answerIndex]?.classList.add('correct');
+          if (buzzerEl) buzzerEl.classList.add('correct');
+          refreshScores();
+          if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`+10 ${player.name}`);
+          later(() => {
+            $('qOverlay').style.display = 'none';
+            state.roundIndex += 1;
+            resetBuzzersUI();
+            nextQuestion();
+          }, 900);
+          return;
+        }
+
+        player.score = Math.max(0, player.score - SCORE_WRONG);
+        player.wrong += 1;
+        $('qStatus').textContent = t().wrong(player.name);
+        $('qStatus').className = 'qr-status bad';
+        answerButtons[answerIndex]?.classList.add('wrong');
+        answerButtons[q.c]?.classList.add('correct');
+        if (buzzerEl) buzzerEl.classList.add('wrong');
+        refreshScores();
+        if (typeof VexGame !== 'undefined' && VexGame.toast) VexGame.toast(`−5 ${player.name}`);
+
+        const failedBuzzer = state.activeBuzzer;
+        state.activeBuzzer = null;
+
+        later(() => {
+          if (buzzerEl) buzzerEl.classList.remove('wrong');
+          openStealWindow();
+          const canSteal = state.players.some((_, idx) => idx !== failedBuzzer);
+          if (!canSteal) {
+            $('qOverlay').style.display = 'none';
+            state.roundIndex += 1;
+            resetBuzzersUI();
+            nextQuestion();
+          }
+        }, 850);
+      }
+
+      function buildStatsRows() {
+        const totalAnswers = state.players.reduce((sum, p) => sum + p.correct + p.wrong, 0);
+        const bestScore = Math.max(...state.players.map((p) => p.score), 0);
+        const winners = state.players.filter((p) => p.score === bestScore).map((p) => p.name).join('، ');
+        const stats = [
+          { label: t().players, value: String(state.players.length) },
+          { label: t().questionSet, value: String(MAX_ROUNDS) },
+          { label: t().statsAnswering, value: String(totalAnswers) },
+          { label: t().best, value: winners || '—' },
+        ];
+
+        const container = $('endStats');
+        container.innerHTML = '';
+        stats.forEach((item) => {
+          const cell = document.createElement('div');
+          cell.className = 'vex-overlay-stat';
+          cell.innerHTML = `<div class="vex-overlay-stat-label">${safeText(item.label)}</div><div class="vex-overlay-stat-value">${safeText(item.value)}</div>`;
+          container.appendChild(cell);
+        });
+      }
+
+      function buildEconomy(score, durationMs, playersCount) {
+        const seconds = Math.max(1, durationMs / 1000);
+        const accuracy = state.players.reduce((sum, p) => sum + p.correct, 0) / Math.max(1, state.players.reduce((sum, p) => sum + p.correct + p.wrong, 0));
+        const speedFactor = Math.max(0.75, Math.min(1.6, 130 / seconds));
+        const accuracyFactor = 0.7 + Math.max(0, Math.min(0.3, accuracy * 0.3));
+        const partyFactor = 1 + Math.min(0.18, (playersCount - 2) * 0.03);
+        const rewardVex = Math.max(0.5, (score / 18) * speedFactor * accuracyFactor * partyFactor);
+        const netVex = rewardVex;
+        return { rewardVex: Number(rewardVex.toFixed(2)), netVex: Number(netVex.toFixed(2)) };
+      }
+
+      function submitSession(winner, elapsed) {
+        if (state.submitted) return;
+        state.submitted = true;
+        if (typeof VexGame === 'undefined' || !VexGame.endSession) return;
+
+        const econ = buildEconomy(winner.score, elapsed, state.players.length);
+        VexGame.endSession({
+          score: winner.score,
+          result: 'win',
+          metadata: {
+            mode: 'multiplayer',
+            game: 'quiz_rush',
+            winner: winner.name,
+            players: state.players.map((p) => ({
+              name: p.name,
+              score: p.score,
+              correct: p.correct,
+              wrong: p.wrong,
+              buzzes: p.buzzes,
+            })),
+            durationMs: elapsed,
+            rounds: MAX_ROUNDS,
+            rewardVex: econ.rewardVex,
+            netVex: econ.netVex,
+            economyMode: 'shared_arcade',
+          },
+        });
+      }
+
+      function endGame() {
+        clearPending();
+        $('qOverlay').style.display = 'none';
+        $('qOverlay').setAttribute('aria-hidden', 'true');
+        resetBuzzersUI();
+
+        const sorted = state.players.slice().sort((a, b) => b.score - a.score);
+        const topScore = sorted[0]?.score ?? 0;
+        const winners = sorted.filter((p) => p.score === topScore);
+        const winner = winners[0] || sorted[0];
+        const elapsed = Math.max(0, Date.now() - state.gameStartedAt);
+        const econ = buildEconomy(winner.score, elapsed, state.players.length);
+
+        $('endTitle').textContent = t().end;
+        $('endSub').textContent = winners.length > 1
+          ? `${winners.map((p) => p.name).join('، ')} (${topScore})`
+          : `${t().winner(winner.name)} (${topScore})`;
+
+        buildStatsRows();
+        $('endOverlay').classList.add('show');
+        $('endStats').insertAdjacentHTML('beforeend', `
+          <div class="vex-overlay-stat">
+            <div class="vex-overlay-stat-label">${safeText(state.lang === 'ar' ? 'المكافأة' : 'Reward')}</div>
+            <div class="vex-overlay-stat-value">${safeText(econ.rewardVex.toFixed(2))} VEX</div>
+          </div>
+        `);
+
+        const econBox = document.createElement('div');
+        econBox.className = 'qr-economy';
+        econBox.innerHTML = `
+          <div class="qr-econ-top">
+            <div>${safeText(state.lang === 'ar' ? 'اقتصاد الجولة' : 'Round economy')}</div>
+            <div class="qr-econ-main">${econ.rewardVex.toFixed(2)} VEX</div>
+          </div>
+          <div class="qr-econ-sub">${safeText(state.lang === 'ar'
+          ? 'تزداد المكافأة مع الإجابات الصحيحة، السرعة، وعدد اللاعبين.'
+          : 'Reward increases with correct answers, speed, and number of players.')}</div>
+        `;
+        $('endOverlay').querySelector('.qr-overlay-card').appendChild(econBox);
+
+        if (typeof VexGame !== 'undefined') {
+          if (typeof VexGame.confetti === 'function') VexGame.confetti(1000);
+          submitSession(winner, elapsed);
+        }
+      }
+
+      function closeResult() {
+        $('endOverlay').classList.remove('show');
+      }
+
+      document.querySelectorAll('.qr-count-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.playerCount = Number(btn.dataset.c);
+          document.querySelectorAll('.qr-count-btn').forEach((el) => el.classList.toggle('active', el === btn));
+          renderModePill();
+          renderSetupNames();
+        });
+      });
+
+      $('setupStart').addEventListener('click', startGame);
+      $('endRestart').addEventListener('click', () => { closeResult(); resetGame(); });
+      $('endClose').addEventListener('click', () => { closeResult(); resetGame(); });
+
+      if (typeof VexGame !== 'undefined' && VexGame.boot) {
+        VexGame.boot({
+          slug: 'quiz-rush',
+          onReady: (player) => {
+            if (player && player.language) {
+              state.lang = player.language === 'en' ? 'en' : 'ar';
+              if (VexGame.setLang) VexGame.setLang(state.lang);
+            }
+            applyLanguage();
+          },
+        });
+      } else {
         applyLanguage();
-        startSetup();
-      }) ();
+      }
+
+      applyLanguage();
+      resetGame();
+    })();
   </script>
 </body>
 

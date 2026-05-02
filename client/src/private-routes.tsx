@@ -149,6 +149,7 @@ const AdminGiftsPage = lazy(() => import("@/pages/admin/admin-gifts"));
 const AdminAgentsPage = lazy(() => import("@/pages/admin/admin-agents"));
 const AdminAuditLogsPage = lazy(() => import("@/pages/admin/admin-audit-logs"));
 const AdminPaymentSecurityPage = lazy(() => import("@/pages/admin/admin-payment-security"));
+const AdminInvestmentsPage = lazy(() => import("@/pages/admin/admin-investments"));
 const AdminChallengeSettingsPage = lazy(() => import("@/pages/admin/admin-challenge-settings"));
 const AdminChallengesPage = lazy(() => import("@/pages/admin/admin-challenges"));
 const AdminChatPage = lazy(() => import("@/pages/admin/admin-chat"));

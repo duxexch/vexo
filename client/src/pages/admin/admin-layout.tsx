@@ -52,6 +52,7 @@ import {
   Swords,
   MessageCircle,
   Bot,
+  Building2,
 } from "lucide-react";
 import { AdminAlertsDropdown } from "@/components/admin/AdminAlertsDropdown";
 import { useAdminAlertCountsBySection } from "@/hooks/use-admin-alert-counts";
@@ -109,6 +110,7 @@ function AdminSidebar() {
     { id: "free-play", titleKey: "admin.layout.menu.freePlay", url: "/admin/free-play", icon: Gift },
     { id: "marketers", titleKey: "admin.layout.menu.marketers", url: "/admin/marketers", icon: Crown },
     { id: "gifts", titleKey: "admin.layout.menu.giftCatalog", url: "/admin/gifts", icon: Gift },
+    { id: "investments", titleKey: "admin.layout.menu.investments", url: "/admin/investments", icon: Building2 },
     { id: "agents", titleKey: "admin.layout.menu.agents", url: "/admin/agents", icon: Headset, hasBadge: true },
     { id: "tournaments", titleKey: "admin.layout.menu.tournaments", url: "/admin/tournaments", icon: Trophy },
     { id: "audit-logs", titleKey: "admin.layout.menu.auditLogs", url: "/admin/audit-logs", icon: FileText },

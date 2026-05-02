@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+    <meta name="theme-color" content="#070b14">
+    <title>VEX Puzzle Challenge</title>
+    <link rel="stylesheet" href="/games/_shared/vex-game.css">
+    <style>
+        :root {
+            --pc-bg: #070b14;
+            --pc-panel: rgba(10, 16, 32, 0.94);
+            --pc-border: rgba(255, 255, 255, 0.09);
+            --pc-blue: #1e88ff;
+            --pc-blue-deep: #0a4d9c;
+            --pc-gold: #ffb627;
+            --pc-gold-deep: #8a5a00;
+            --pc-green: #22c55e;
+            --pc-red: #ef4444;
+            --pc-violet: #8b5cf6;
+        }
+
+        body.vex-game {
+            background:
+                radial-gradient(circle at top right, rgba(139, 92, 246, 0.16), transparent 28%),
+                radial-gradient(circle at top left, rgba(30, 136, 255, 0.13), transparent 26%),
+                linear-gradient(180deg, #050812 0%, #070b14 48%, #02040a 100%);
+            color: #fff;
+        }
+
+        .pc-shell {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 14px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .pc-hero {
+            background: linear-gradient(180deg, rgba(12, 18, 34, 0.95), rgba(6, 10, 20, 0.98));
+            border: 1px solid var(--pc-border);
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+        }
+
+        .pc-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--pc-border);
+            background: linear-gradient(90deg, rgba(30, 136, 255, 0.12), transparent 35%, rgba(139, 92, 246, 0.08));
+            flex-wrap: wrap;
+        }
+
+        .pc-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .pc-logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            flex: none;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #4a9eff, #1e88ff 55%, #0a4d9c);
+            box-shadow: 0 0 24px rgba(30, 136, 255, 0.28);
+            color: #fff;
+        }
+
+        .pc-title h1 {
+            margin: 0;
+            font-size: 1.15rem;
+            line-height: 1.1;
+        }
+
+        .pc-title p {
+            margin: 4px 0 0;
+            color: #cbd5e1;
+            font-size: 0.84rem;
+        }
+
+        .pc-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .pc-pill {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+        }
+
+        .pc-btn {
+            min-height: 44px;
+            padding: 11px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: linear-gradient(180deg, #1c2442, #0b1020);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+        }
+
+        .pc-btn-primary {
+            background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a4d9c 100%);
+            color: #fff;
+        }
+
+        .pc-btn-ghost {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .pc-layout {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .pc-card {
+            background: var(--pc-panel);
+            border: 1px solid var(--pc-border);
+            border-radius: 22px;
+            padding: 16px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .pc-arena {
+            position: relative;
+            overflow: hidden;
+            min-height: 560px;
+            background:
+                radial-gradient(circle at 50% 36%, rgba(30, 136, 255, 0.18), transparent 33%),
+                radial-gradient(circle at 50% 100%, rgba(139, 92, 246, 0.12), transparent 65%),
+                linear-gradient(180deg, #081525 0%, #03070d 100%);
+        }
+
+        .pc-grid {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.45;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 28px 28px;
+            mask-image: linear-gradient(180deg, transparent 0%, transparent 58%, #000 100%);
+            -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 58%, #000 100%);
+        }
+
+        .pc-board {
+            position: absolute;
+            inset: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(30, 136, 255, 0.34);
+            background:
+                radial-gradient(ellipse 85% 60% at 50% 20%, rgba(30, 136, 255, 0.12), transparent 70%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.18));
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .pc-piece {
+            position: absolute;
+            border-radius: 14px;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            box-shadow:
+                0 16px 28px -14px rgba(0, 0, 0, 0.8),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-size: cover;
+            background-repeat: no-repeat;
+            transition: box-shadow 0.16s ease, transform 0.16s ease;
+        }
+
+        .pc-piece:active {
+            cursor: grabbing;
+            z-index: 20 !important;
+            transform: scale(1.02);
+        }
+
+        .pc-piece.locked {
+            cursor: default;
+            box-shadow:
+                0 6px 16px -10px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border-color: rgba(34, 197, 94, 0.35);
+        }
+
+        .pc-piece.hint {
+            animation: hintPulse 0.85s ease-in-out 2;
+        }
+
+        @keyframes hintPulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(30, 136, 255, 0.0);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(30, 136, 255, 0.24);
+            }
+        }
+
+        .pc-preview {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            background-size: cover;
+            transition: opacity 0.2s ease;
+        }
+
+        .pc-preview.on {
+            opacity: 0.42;
+        }
+
+        .pc-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 0 2px;
+            flex-wrap: wrap;
+        }
+
+        .pc-hint {
+            flex: 1;
+            min-width: 180px;
+            font-size: 0.74rem;
+            color: var(--vex-text-dim);
+            line-height: 1.45;
+        }
+
+        .pc-mini-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .pc-badge {
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.14));
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--vex-text);
+            font-family: 'Bebas Neue', sans-serif;
+            letter-spacing: 0.10em;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .pc-badge.good {
+            color: #86efac;
+        }
+
+        .pc-badge.warn {
+            color: #fbbf24;
+        }
+
+        .pc-badge.purple {
+            color: #c084fc;
+        }
+
+        .pc-setup {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: linear-gradient(180deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 14, 0.98));
+        }
+
+        .pc-setup-card {
+            width: 100%;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.20));
+            box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.82);
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .pc-setup-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.7rem;
+            letter-spacing: 0.12em;
+            text-align: center;
+            color: #93c5fd;
+            text-shadow: 0 0 14px rgba(30, 136, 255, 0.40);
+        }
+
+        .pc-setup-subtitle {
+            text-align: center;
+            color: var(--vex-text-dim);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        .pc-count-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .pc-count-btn {
+            min-height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #1a2540, #0a1224);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--vex-text);
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.45rem;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.40), 0 3px 0 #050912;
+        }
+
+        .pc-count-btn.active {
+            background: linear-gradient(180deg, #4a9eff, #1e88ff);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.22);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 3px 0 #0a3a78, 0 5px 14px -2px rgba(30, 136, 255, 0.55);
+        }
+
+        .pc-count-btn:active {
+            transform: translateY(2px);
+        }
+
+        .pc-name-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .pc-name-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: none;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .pc-name-row input {
+            flex: 1;
+            min-width: 0;
+            min-height: 44px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #1a2540, #0a1224);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            color: var(--vex-text);
+            font-family: inherit;
+            font-size: 0.92rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.42);
+        }
+
+        .pc-start-btn {
+            min-height: 48px;
+            margin-top: 6px;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a3a78 100%);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.45rem;
+            letter-spacing: 0.18em;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), 0 5px 0 #082a52, 0 10px 22px -6px rgba(30, 136, 255, 0.55);
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+        }
+
+        .pc-start-btn:active {
+            transform: translateY(4px);
+        }
+
+        .pc-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 30;
+            display: grid;
+            place-items: center;
+            background: rgba(3, 7, 18, 0.72);
+            backdrop-filter: blur(10px);
+            padding: 16px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+
+        .pc-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .pc-overlay-card {
+            width: min(100%, 440px);
+            background: linear-gradient(180deg, #10172a, #070b14);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 24px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+        }
+
+        .pc-overlay-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            margin: 0 auto 12px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #4a9eff, #1e88ff);
+            color: #fff;
+        }
+
+        .pc-overlay-title {
+            font-size: 1.4rem;
+            font-weight: 900;
+            margin: 0 0 8px;
+        }
+
+        .pc-overlay-sub {
+            color: #cbd5e1;
+            line-height: 1.55;
+            margin-bottom: 14px;
+        }
+
+        .pc-economy {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            text-align: right;
+        }
+
+        .pc-econ-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .pc-econ-main {
+            font-size: 1.35rem;
+            font-weight: 900;
+        }
+
+        .pc-econ-sub {
+            margin-top: 6px;
+            color: #cbd5e1;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 900px) {
+            .pc-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .pc-arena {
+                min-height: 500px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .pc-shell {
+                padding: 10px;
+            }
+
+            .pc-topbar,
+            .pc-layout,
+            .pc-card {
+                padding: 12px;
+            }
+
+            .pc-count-row {
+                grid-template-columns: 1fr;
+            }
+
+            .pc-title h1 {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body class="vex-game">
+    <div class="pc-shell">
+        <div class="pc-hero">
+            <div class="pc-topbar">
+                <div class="pc-title-wrap">
+                    <div class="pc-logo">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="4" />
+                            <path d="M8 8l8 0" />
+                            <path d="M8 12l5 0" />
+                            <path d="M8 16l10 0" />
+                        </svg>
+                    </div>
+                    <div class="pc-title">
+                        <h1 id="title">تحدي الألغاز</h1>
+                        <p id="subtitle">أعد القطع، أكمل الصورة، واربح جلسة سريعة قابلة للإعادة.</p>
+                    </div>
+                </div>
+                <div class="pc-toolbar">
+                    <div class="pc-pill" id="modePill">Puzzle</div>
+                    <div class="pc-pill" id="progressPill">0%</div>
+                    <button class="pc-btn pc-btn-ghost" id="langBtn">EN</button>
+                    <button class="pc-btn pc-btn-ghost" id="resetBtn">إعادة</button>
+                </div>
+            </div>
+
+            <div class="pc-layout">
+                <div class="pc-card">
+                    <div class="pc-board pc-3d-card" id="board">
+                        <div class="pc-grid"></div>
+                        <div class="pc-preview" id="preview"></div>
+                        <div class="pc-setup" id="setupOverlay">
+                            <div class="pc-setup-card">
+                                <div class="pc-setup-title" id="setupTitle">إعداد الجولة</div>
+                                <div class="pc-setup-subtitle" id="setupSub">اختر عدد القطع ثم ابدأ. النقاط تعتمد على
+                                    السرعة، عدد الحركات، واللعب الدقيق.</div>
+                                <div class="pc-count-row" id="countRow">
+                                    <button class="pc-count-btn active" data-c="3">3×3</button>
+                                    <button class="pc-count-btn" data-c="4">4×4</button>
+                                    <button class="pc-count-btn" data-c="5">5×5</button>
+                                    <button class="pc-count-btn" data-c="7">7×7</button>
+                                </div>
+                                <div id="namesArea"></div>
+                                <button class="pc-start-btn" id="setupStart">ابدأ</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pc-card">
+                    <div class="vex-stats" style="margin-bottom:12px">
+                        <div class="vex-stat">
+                            <div class="vex-stat-label" id="lblTime">الوقت</div>
+                            <div class="vex-stat-value gold" id="timer">00:00</div>
+                        </div>
+                        <div class="vex-stat">
+                            <div class="vex-stat-label" id="lblMoves">الحركات</div>
+                            <div class="vex-stat-value rose" id="moves">0</div>
+                        </div>
+                        <div class="vex-stat">
+                            <div class="vex-stat-label" id="lblScore">النقاط</div>
+                            <div class="vex-stat-value emerald" id="score">0</div>
+                        </div>
+                    </div>
+
+                    <div class="vex-stats" style="grid-template-columns: repeat(2, 1fr);">
+                        <div class="vex-stat">
+                            <div class="vex-stat-label" id="lblBest">أفضل</div>
+                            <div class="vex-stat-value" id="best">—</div>
+                        </div>
+                        <div class="vex-stat">
+                            <div class="vex-stat-label" id="lblProgress">تقدم</div>
+                            <div class="vex-stat-value blue" id="progress">0/0</div>
+                        </div>
+                    </div>
+
+                    <div class="pc-mini-badges" style="margin-top:12px">
+                        <div class="pc-badge good" id="badgeSpeed">Speed</div>
+                        <div class="pc-badge warn" id="badgePrecision">Precision</div>
+                        <div class="pc-badge purple" id="badgeReward">VEX</div>
+                    </div>
+
+                    <div class="pc-economy">
+                        <div class="pc-econ-top">
+                            <div id="economyLabel">اقتصاد الجولة</div>
+                            <div class="pc-econ-main" id="finalVex">0.00 VEX</div>
+                        </div>
+                        <div class="pc-econ-sub" id="econSub">تزداد المكافأة مع السرعة والدقة والصعوبة.</div>
+                    </div>
+
+                    <div class="pc-footer" style="margin-top:12px">
+                        <div class="pc-hint" id="hint">اسحب القطع إلى أماكنها الصحيحة. التلميح يكشف الصورة لفترة قصيرة،
+                            والمعاينة تضبط القطعة قبل الإسقاط.</div>
+                        <div class="pc-mini-badges">
+                            <div class="pc-badge" id="badgeRotate">Rotate OFF</div>
+                            <div class="pc-badge" id="badgeGrid">Grid OFF</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pc-overlay" id="endOverlay">
+        <div class="pc-overlay-card">
+            <div class="pc-overlay-icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2" />
+                </svg>
+            </div>
+            <div class="pc-overlay-title" id="endTitle">أحسنت!</div>
+            <div class="pc-overlay-sub" id="endSub"></div>
+            <div class="pc-economy">
+                <div class="pc-econ-top">
+                    <div id="econLabel">نتيجة الجلسة</div>
+                    <div class="pc-econ-main" id="sessionVex">0.00 VEX</div>
+                </div>
+                <div class="pc-econ-sub" id="sessionSub">تم حفظ النتيجة وإرسالها للسيرفر.</div>
+            </div>
+            <div class="vex-btn-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+                <button class="pc-btn pc-btn-primary" id="endRestart">جولة جديدة</button>
+                <button class="pc-btn pc-btn-ghost" id="endClose">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="pc-overlay" id="galleryOverlay">
+        <div class="pc-overlay-card" style="max-width:550px">
+            <div class="pc-overlay-title" id="galleryTitle">اختر صورة</div>
+            <div class="pc-overlay-sub" id="gallerySub">اختر صورة جديدة للجولة القادمة أو ارفع صورة من جهازك.</div>
+            <div class="gallery" id="galleryGrid"></div>
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                <label class="pc-btn pc-btn-ghost" style="cursor:pointer">📁 رفع صورة <input type="file"
+                        accept="image/*" id="imgUpload" style="display:none"></label>
+                <button class="pc-btn pc-btn-ghost" id="galleryClose">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/games/vex-sdk.js"></script>
+    <script src="/games/_shared/vex-game.js"></script>
+    <script>
+        (function () {
+            'use strict';
+
+            const STRINGS = {
+                ar: {
+                    title: 'تحدي الألغاز',
+                    subtitle: 'أعد القطع، أكمل الصورة، واربح جلسة سريعة قابلة للإعادة.',
+                    setupTitle: 'إعداد الجولة',
+                    setupSub: 'اختر عدد القطع ثم ابدأ. النقاط تعتمد على السرعة، عدد الحركات، واللعب الدقيق.',
+                    start: 'ابدأ',
+                    reset: 'إعادة',
+                    langToggle: 'EN',
+                    time: 'الوقت',
+                    moves: 'الحركات',
+                    score: 'النقاط',
+                    best: 'أفضل',
+                    progress: 'تقدم',
+                    economy: 'اقتصاد الجولة',
+                    economySub: 'تزداد المكافأة مع السرعة والدقة والصعوبة.',
+                    hint: 'اسحب القطع إلى أماكنها الصحيحة. التلميح يكشف الصورة لفترة قصيرة، والمعاينة تضبط القطعة قبل الإسقاط.',
+                    end: 'أحسنت!',
+                    endSub: 'أكملت الصورة بنجاح',
+                    newRound: 'جولة جديدة',
+                    close: 'إغلاق',
+                    session: 'نتيجة الجلسة',
+                    sessionSaved: 'تم حفظ النتيجة وإرسالها للسيرفر.',
+                    rotateOff: 'Rotate OFF',
+                    rotateOn: 'Rotate ON',
+                    gridOff: 'Grid OFF',
+                    gridOn: 'Grid ON',
+                    speed: 'سرعة جيدة',
+                    precision: 'دقة عالية',
+                    reward: 'مكافأة VEX',
+                    setupPlayers: 'لاعب واحد',
+                    rewardDesc: 'ترتبط المكافأة بسرعة الإنهاء وعدد الحركات ومستوى الصعوبة.',
+                },
+                en: {
+                    title: 'Puzzle Challenge',
+                    subtitle: 'Reassemble the image, solve fast, and earn a replayable session.',
+                    setupTitle: 'Round setup',
+                    setupSub: 'Choose the piece count and start. Score depends on speed, moves, and precision.',
+                    start: 'Start',
+                    reset: 'Reset',
+                    langToggle: 'AR',
+                    time: 'Time',
+                    moves: 'Moves',
+                    score: 'Score',
+                    best: 'Best',
+                    progress: 'Progress',
+                    economy: 'Round economy',
+                    economySub: 'Reward increases with speed, precision, and difficulty.',
+                    hint: 'Drag pieces to their correct locations. Hint reveals the image briefly, preview helps before dropping.',
+                    end: 'Great job!',
+                    endSub: 'You completed the image',
+                    newRound: 'New round',
+                    close: 'Close',
+                    session: 'Session result',
+                    sessionSaved: 'Result saved and sent to the server.',
+                    rotateOff: 'Rotate OFF',
+                    rotateOn: 'Rotate ON',
+                    gridOff: 'Grid OFF',
+                    gridOn: 'Grid ON',
+                    speed: 'Good pace',
+                    precision: 'High precision',
+                    reward: 'VEX reward',
+                    setupPlayers: 'Solo run',
+                    rewardDesc: 'Reward is tied to finish speed, move count, and difficulty.',
+                },
+            };
+
+            const IMAGES = [
+                'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&q=80',
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80',
+                'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&q=80',
+                'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1200&q=80'
+            ];
+
+            const DIFFICULTIES = {
+                3: { cols: 3, rows: 3 },
+                4: { cols: 4, rows: 4 },
+                5: { cols: 5, rows: 5 },
+                7: { cols: 7, rows: 7 },
+            };
+
+            const $ = (id) => document.getElementById(id);
+            const board = $('board');
+            const setupOverlay = $('setupOverlay');
+            const preview = $('preview');
+            const endOverlay = $('endOverlay');
+            const timerEl = $('timer');
+            const movesEl = $('moves');
+            const scoreEl = $('score');
+            const bestEl = $('best');
+            const progressEl = $('progress');
+            const progressPill = $('progressPill');
+
+            const state = {
+                lang: 'ar',
+                cols: 4,
+                rows: 4,
+                imageUrl: '',
+                pieces: [],
+                total: 0,
+                placed: 0,
+                moveCount: 0,
+                score: 0,
+                startAt: 0,
+                elapsedMs: 0,
+                timer: null,
+                paused: false,
+                rotate: false,
+                grid: false,
+                sound: true,
+                dragging: null,
+                best: 0,
+                previewOn: false,
+                sessionSubmitted: false,
+                pending: [],
+            };
+
+            function t() {
+                return STRINGS[state.lang];
+            }
+
+            function randomImage() {
+                return IMAGES[Math.floor(Math.random() * IMAGES.length)];
+            }
+
+            function later(fn, ms) {
+                const id = setTimeout(() => {
+                    state.pending = state.pending.filter((x) => x !== id);
+                    fn();
+                }, ms);
+                state.pending.push(id);
+                return id;
+            }
+
+            function clearPending() {
+                state.pending.forEach(clearTimeout);
+                state.pending = [];
+            }
+
+            function applyLang() {
+                const s = t();
+                document.documentElement.lang = state.lang;
+                document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+                $('title').textContent = s.title;
+                $('subtitle').textContent = s.subtitle;
+                $('setupTitle').textContent = s.setupTitle;
+                $('setupSub').textContent = s.setupSub;
+                $('setupStart').textContent = s.start;
+                $('resetBtn').textContent = s.reset;
+                $('langBtn').textContent = s.langToggle;
+                $('lblTime').textContent = s.time;
+                $('lblMoves').textContent = s.moves;
+                $('lblScore').textContent = s.score;
+                $('lblBest').textContent = s.best;
+                $('lblProgress').textContent = s.progress;
+                $('badgeSpeed').textContent = s.speed;
+                $('badgePrecision').textContent = s.precision;
+                $('badgeReward').textContent = s.reward;
+                $('economyLabel').textContent = s.economy;
+                $('econSub').textContent = s.economySub;
+                $('hint').textContent = s.hint;
+                $('endTitle').textContent = s.end;
+                $('endSub').textContent = s.endSub;
+                $('endRestart').textContent = s.newRound;
+                $('endClose').textContent = s.close;
+                $('econLabel').textContent = s.session;
+                $('sessionSub').textContent = s.sessionSaved;
+                $('badgeRotate').textContent = state.rotate ? s.rotateOn : s.rotateOff;
+                $('badgeGrid').textContent = state.grid ? s.gridOn : s.gridOff;
+            }
+
+            function formatTime(ms) {
+                const sec = Math.floor(ms / 1000);
+                const min = Math.floor(sec / 60);
+                return `${String(min).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+            }
+
+            function bestKey() {
+                return `vex-puzzle-best-${state.cols}x${state.rows}${state.rotate ? '-r' : ''}`;
+            }
+
+            function loadBest() {
+                try {
+                    const raw = localStorage.getItem(bestKey());
+                    return raw ? JSON.parse(raw) : null;
+                } catch {
+                    return null;
+                }
+            }
+
+            function saveBest(ms) {
+                try {
+                    localStorage.setItem(bestKey(), JSON.stringify({ ms }));
+                } catch { }
+            }
+
+            function showBest() {
+                const b = loadBest();
+                bestEl.textContent = b && b.ms ? formatTime(b.ms) : '—';
+            }
+
+            function updateStats() {
+                const now = performance.now();
+                const elapsed = state.startAt ? (state.elapsedMs + (state.paused ? 0 : now - state.startAt)) : state.elapsedMs;
+                timerEl.textContent = formatTime(elapsed);
+                movesEl.textContent = String(state.moveCount);
+                scoreEl.textContent = String(state.score);
+                progressEl.textContent = `${state.placed}/${state.total}`;
+                progressPill.textContent = `${Math.round(state.total ? (state.placed / state.total) * 100 : 0)}%`;
+            }
+
+            function calcScore() {
+                const elapsed = state.elapsedMs + (state.paused ? 0 : performance.now() - state.startAt);
+                const ratio = state.total ? state.placed / state.total : 0;
+                const timePenalty = Math.floor(elapsed / 1000);
+                const movePenalty = Math.max(0, state.moveCount - state.total);
+                const difficultyBonus = Math.floor(state.cols * state.rows * 12);
+                state.score = Math.max(0, Math.floor(ratio * 1000) + difficultyBonus - timePenalty - movePenalty);
+            }
+
+            function rebuildPieces() {
+                board.querySelectorAll('.pc-piece').forEach((node) => node.remove());
+                state.pieces = [];
+                state.placed = 0;
+                state.total = state.cols * state.rows;
+            }
+
+            function resizeBoard() {
+                const rect = board.getBoundingClientRect();
+                const pieceW = rect.width / state.cols;
+                const pieceH = rect.height / state.rows;
+                state.pieces.forEach((piece) => {
+                    piece.el.style.width = `${pieceW}px`;
+                    piece.el.style.height = `${pieceH}px`;
+                    piece.el.style.backgroundSize = `${rect.width}px ${rect.height}px`;
+                    piece.el.style.backgroundPosition = `-${piece.col * pieceW}px -${piece.row * pieceH}px`;
+                    if (piece.locked) {
+                        piece.el.style.left = `${piece.col * pieceW}px`;
+                        piece.el.style.top = `${piece.row * pieceH}px`;
+                    }
+                });
+                preview.style.backgroundImage = `url('${state.imageUrl}')`;
+            }
+
+            function makePiece(row, col, imgUrl) {
+                const el = document.createElement('div');
+                el.className = 'pc-piece';
+                el.style.backgroundImage = `url('${imgUrl}')`;
+                board.appendChild(el);
+                const piece = { row, col, el, locked: false, rot: 0 };
+                state.pieces.push(piece);
+                attachDrag(piece);
+                return piece;
+            }
+
+            function buildPuzzle(imgUrl) {
+                rebuildPieces();
+                const rect = board.getBoundingClientRect();
+                const pieceW = rect.width / state.cols;
+                const pieceH = rect.height / state.rows;
+
+                for (let r = 0; r < state.rows; r++) {
+                    for (let c = 0; c < state.cols; c++) {
+                        const piece = makePiece(r, c, imgUrl);
+                        piece.el.style.width = `${pieceW}px`;
+                        piece.el.style.height = `${pieceH}px`;
+                        piece.el.style.backgroundSize = `${rect.width}px ${rect.height}px`;
+                        piece.el.style.backgroundPosition = `-${c * pieceW}px -${r * pieceH}px`;
+                    }
+                }
+
+                scatterPieces();
+                updateStats();
+            }
+
+            function scatterPieces() {
+                const rect = board.getBoundingClientRect();
+                const pieceW = rect.width / state.cols;
+                const pieceH = rect.height / state.rows;
+                state.pieces.forEach((piece) => {
+                    const x = Math.random() * Math.max(0, rect.width - pieceW);
+                    const y = Math.random() * Math.max(0, rect.height - pieceH);
+                    piece.el.style.left = `${x}px`;
+                    piece.el.style.top = `${y}px`;
+                    piece.el.classList.remove('locked');
+                    piece.el.classList.remove('hint');
+                    piece.locked = false;
+                    piece.rot = 0;
+                    piece.el.style.transform = '';
+                    if (state.rotate) {
+                        piece.rot = [0, 90, 180, 270][Math.floor(Math.random() * 4)];
+                        piece.el.style.transform = `rotate(${piece.rot}deg)`;
+                    }
+                });
+            }
+
+            function startTimer() {
+                clearInterval(state.timer);
+                state.startAt = performance.now();
+                state.timer = setInterval(() => {
+                    updateStats();
+                }, 200);
+            }
+
+            function resetTimer() {
+                clearInterval(state.timer);
+                state.timer = null;
+                state.startAt = 0;
+                state.elapsedMs = 0;
+            }
+
+            function updatePausedState(isPaused) {
+                state.paused = isPaused;
+                if (isPaused) {
+                    if (state.startAt) {
+                        state.elapsedMs += performance.now() - state.startAt;
+                        state.startAt = 0;
+                    }
+                    clearInterval(state.timer);
+                    state.timer = null;
+                } else {
+                    state.startAt = performance.now();
+                    clearInterval(state.timer);
+                    state.timer = setInterval(updateStats, 200);
+                }
+                updateStats();
+            }
+
+            function snapRect(piece) {
+                const rect = board.getBoundingClientRect();
+                return {
+                    x: piece.col * (rect.width / state.cols),
+                    y: piece.row * (rect.height / state.rows),
+                    w: rect.width / state.cols,
+                    h: rect.height / state.rows,
+                };
+            }
+
+            function maybeComplete(piece) {
+                const snap = snapRect(piece);
+                const left = parseFloat(piece.el.style.left) || 0;
+                const top = parseFloat(piece.el.style.top) || 0;
+                const closeX = Math.abs(left - snap.x) < Math.max(14, snap.w * 0.1);
+                const closeY = Math.abs(top - snap.y) < Math.max(14, snap.h * 0.1);
+                const rotOk = !state.rotate || (piece.rot % 360 === 0);
+
+                if (closeX && closeY && rotOk) {
+                    piece.el.style.left = `${snap.x}px`;
+                    piece.el.style.top = `${snap.y}px`;
+                    piece.el.style.transform = 'rotate(0deg)';
+                    piece.el.classList.add('locked');
+                    piece.locked = true;
+                    state.placed = state.pieces.filter((p) => p.locked).length;
+                    calcScore();
+                    updateStats();
+                    if (state.placed === state.total) {
+                        onWin();
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            function attachDrag(piece) {
+                const el = piece.el;
+                let dragging = false;
+                let offsetX = 0;
+                let offsetY = 0;
+
+                const onMove = (evt) => {
+                    if (!dragging || state.paused || piece.locked) return;
+                    const pt = evt.touches ? evt.touches[0] : evt;
+                    const rect = board.getBoundingClientRect();
+                    const pieceRect = el.getBoundingClientRect();
+                    const maxX = rect.width - pieceRect.width;
+                    const maxY = rect.height - pieceRect.height;
+                    const x = clamp(pt.clientX - rect.left - offsetX, 0, Math.max(0, maxX));
+                    const y = clamp(pt.clientY - rect.top - offsetY, 0, Math.max(0, maxY));
+                    el.style.left = `${x}px`;
+                    el.style.top = `${y}px`;
+                };
+
+                const onUp = () => {
+                    if (!dragging) return;
+                    dragging = false;
+                    state.moveCount += 1;
+                    updateStats();
+                    calcScore();
+                    maybeComplete(piece);
+                };
+
+                const onDown = (evt) => {
+                    if (state.paused || piece.locked) return;
+                    initAudio();
+                    dragging = true;
+                    const pt = evt.touches ? evt.touches[0] : evt;
+                    const rect = el.getBoundingClientRect();
+                    offsetX = pt.clientX - rect.left;
+                    offsetY = pt.clientY - rect.top;
+                    el.style.zIndex = String(100 + Math.floor(Math.random() * 900));
+                    evt.preventDefault();
+                };
+
+                const wheelRotate = (evt) => {
+                    if (!state.rotate || state.paused || piece.locked) return;
+                    evt.preventDefault();
+                    piece.rot = (piece.rot + (evt.deltaY > 0 ? 90 : -90)) % 360;
+                    el.style.transform = `rotate(${piece.rot}deg)`;
+                    maybeComplete(piece);
+                };
+
+                const dblRotate = () => {
+                    if (!state.rotate || state.paused || piece.locked) return;
+                    piece.rot = (piece.rot + 90) % 360;
+                    el.style.transform = `rotate(${piece.rot}deg)`;
+                    maybeComplete(piece);
+                };
+
+                el.addEventListener('mousedown', onDown);
+                el.addEventListener('touchstart', onDown, { passive: false });
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('touchmove', onMove, { passive: false });
+                window.addEventListener('mouseup', onUp);
+                window.addEventListener('touchend', onUp);
+                el.addEventListener('wheel', wheelRotate, { passive: false });
+                el.addEventListener('dblclick', dblRotate);
+            }
+
+            function playSound(type) {
+                if (!state.sound) return;
+                try {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (!Ctx) return;
+                    if (!window.__puzzleAudio) window.__puzzleAudio = new Ctx();
+                    const actx = window.__puzzleAudio;
+                    const osc = actx.createOscillator();
+                    const gain = actx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = type === 'win' ? 660 : 880;
+                    gain.gain.value = type === 'win' ? 0.04 : 0.025;
+                    osc.connect(gain);
+                    gain.connect(actx.destination);
+                    osc.start();
+                    setTimeout(() => {
+                        osc.stop();
+                        osc.disconnect();
+                        gain.disconnect();
+                    }, type === 'win' ? 280 : 100);
+                } catch { }
+            }
+
+            function fireConfetti() {
+                if (typeof VexGame !== 'undefined' && typeof VexGame.confetti === 'function') {
+                    VexGame.confetti(1200);
+                }
+            }
+
+            function buildSessionPayload() {
+                const elapsed = state.elapsedMs + (state.startAt ? performance.now() - state.startAt : 0);
+                const ratio = state.total ? state.placed / state.total : 0;
+                const rewardVex = Math.max(0.5, (state.score / 220) + (state.cols * state.rows) * 0.08);
+                const netVex = rewardVex * (1 + ratio * 0.35);
+                return {
+                    score: state.score,
+                    result: 'win',
+                    metadata: {
+                        mode: 'solo-puzzle',
+                        game: 'puzzle-challenge',
+                        cols: state.cols,
+                        rows: state.rows,
+                        placed: state.placed,
+                        total: state.total,
+                        moveCount: state.moveCount,
+                        elapsedMs: Math.round(elapsed),
+                        elapsedSeconds: Math.round(elapsed / 1000),
+                        ratio,
+                        rotate: state.rotate,
+                        grid: state.grid,
+                        rewardVex: Number(rewardVex.toFixed(2)),
+                        netVex: Number(netVex.toFixed(2)),
+                        difficultyLabel: `${state.cols}x${state.rows}`,
+                    },
+                };
+            }
+
+            function onWin() {
+                if (state.sessionSubmitted) return;
+                state.sessionSubmitted = true;
+                const elapsed = state.elapsedMs + (state.startAt ? performance.now() - state.startAt : 0);
+                clearInterval(state.timer);
+                state.timer = null;
+                calcScore();
+                if (elapsed > 0 && (!loadBest() || elapsed < loadBest().ms)) {
+                    saveBest(Math.round(elapsed));
+                    showBest();
+                }
+                $('wTime').textContent = formatTime(elapsed);
+                $('wMoves').textContent = String(state.moveCount);
+                $('wScore').textContent = String(state.score);
+                $('sessionVex').textContent = `${buildSessionPayload().metadata.rewardVex.toFixed(2)} VEX`;
+                $('endSub').textContent = t().endSub;
+                endOverlay.classList.add('show');
+                playSound('win');
+                fireConfetti();
+
+                if (typeof VexGame !== 'undefined') {
+                    if (typeof VexGame.setBest === 'function') VexGame.setBest(state.score);
+                    VexGame.endSession(buildSessionPayload());
+                }
+            }
+
+            function doNewRound() {
+                state.sessionSubmitted = false;
+                state.moveCount = 0;
+                state.score = 0;
+                state.placed = 0;
+                state.paused = false;
+                state.dragging = null;
+                state.elapsedMs = 0;
+                state.startAt = 0;
+                updateStats();
+                startTimer();
+                buildPuzzle(state.imageUrl || randomImage());
+                updateStats();
+            }
+
+            function resetGame() {
+                clearPending();
+                endOverlay.classList.remove('show');
+                setupOverlay.classList.remove('show');
+                state.sessionSubmitted = false;
+                state.moveCount = 0;
+                state.score = 0;
+                state.placed = 0;
+                state.elapsedMs = 0;
+                state.startAt = 0;
+                state.paused = false;
+                state.imageUrl = state.imageUrl || randomImage();
+                preview.classList.remove('on');
+                updateStats();
+                showBest();
+                buildPuzzle(state.imageUrl);
+                startTimer();
+            }
+
+            function showHint() {
+                const remaining = state.pieces.filter((p) => !p.locked);
+                if (!remaining.length) return;
+                const piece = remaining[Math.floor(Math.random() * remaining.length)];
+                piece.el.classList.add('hint');
+                later(() => piece.el.classList.remove('hint'), 900);
+            }
+
+            function togglePreview() {
+                state.previewOn = !state.previewOn;
+                preview.classList.toggle('on', state.previewOn);
+            }
+
+            function toggleGrid() {
+                state.grid = !state.grid;
+                $('badgeGrid').textContent = state.grid ? t().gridOn : t().gridOff;
+                board.style.outline = state.grid ? '1px solid rgba(255,255,255,0.08)' : 'none';
+            }
+
+            function toggleRotate() {
+                state.rotate = !state.rotate;
+                $('badgeRotate').textContent = state.rotate ? t().rotateOn : t().rotateOff;
+                scatterPieces();
+            }
+
+            function togglePause() {
+                state.paused = !state.paused;
+                $('btnPause').textContent = state.paused ? (state.lang === 'ar' ? '▶ استئناف' : '▶ Resume') : (state.lang === 'ar' ? '⏸ إيقاف' : '⏸ Pause');
+                if (state.paused) {
+                    if (state.startAt) {
+                        state.elapsedMs += performance.now() - state.startAt;
+                        state.startAt = 0;
+                    }
+                    clearInterval(state.timer);
+                    state.timer = null;
+                } else {
+                    state.startAt = performance.now();
+                    clearInterval(state.timer);
+                    state.timer = setInterval(updateStats, 200);
+                }
+                updateStats();
+            }
+
+            function openGallery() {
+                const wrap = $('galleryGrid');
+                if (!wrap) return;
+                wrap.innerHTML = '';
+                IMAGES.forEach((url) => {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = state.lang === 'ar' ? 'صورة' : 'Image';
+                    img.addEventListener('click', () => {
+                        state.imageUrl = url;
+                        $('galleryOverlay').classList.remove('show');
+                        resetGame();
+                    });
+                    wrap.appendChild(img);
+                });
+                $('galleryOverlay').classList.add('show');
+            }
+
+            function setupPlayersFields() {
+                const area = $('namesArea');
+                if (!area) return;
+                area.innerHTML = '';
+                const s = t();
+                const row = document.createElement('div');
+                row.className = 'pc-name-row';
+                const dot = document.createElement('div');
+                dot.className = 'pc-name-dot';
+                dot.style.background = '#4a9eff';
+                dot.style.color = '#4a9eff';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.maxLength = 18;
+                input.placeholder = s.setupPlayers;
+                input.value = s.setupPlayers;
+                row.appendChild(dot);
+                row.appendChild(input);
+                area.appendChild(row);
+            }
+
+            function setDifficulty(nextCols) {
+                state.cols = nextCols;
+                state.rows = nextCols;
+                document.querySelectorAll('.pc-count-btn').forEach((b) => {
+                    b.classList.toggle('active', Number(b.dataset.c) === nextCols);
+                });
+                setupPlayersFields();
+            }
+
+            function startRoundFromSetup() {
+                state.imageUrl = randomImage();
+                state.sessionSubmitted = false;
+                setupOverlay.classList.add('show');
+                buildPuzzle(state.imageUrl);
+                state.elapsedMs = 0;
+                state.moveCount = 0;
+                state.score = 0;
+                state.placed = 0;
+                startTimer();
+                setupOverlay.classList.remove('show');
+                updateStats();
+            }
+
+            document.querySelectorAll('.pc-count-btn').forEach((btn) => {
+                btn.addEventListener('click', () => setDifficulty(Number(btn.dataset.c)));
+            });
+
+            $('setupStart').addEventListener('click', startRoundFromSetup);
+            $('resetBtn').addEventListener('click', resetGame);
+            $('endRestart').addEventListener('click', () => {
+                endOverlay.classList.remove('show');
+                resetGame();
+            });
+            $('endClose').addEventListener('click', () => {
+                endOverlay.classList.remove('show');
+            });
+            $('langBtn').addEventListener('click', () => {
+                state.lang = state.lang === 'ar' ? 'en' : 'ar';
+                if (typeof VexGame !== 'undefined' && VexGame.setLang) VexGame.setLang(state.lang);
+                applyLang();
+                updateStats();
+            });
+            $('btnReset').addEventListener('click', resetGame);
+            $('btnHint').addEventListener('click', showHint);
+            $('btnPreview').addEventListener('mousedown', togglePreview);
+            $('btnPreview').addEventListener('touchstart', togglePreview, { passive: true });
+            $('btnPreview').addEventListener('mouseup', togglePreview);
+            $('btnPreview').addEventListener('touchend', togglePreview);
+            $('btnPause').addEventListener('click', togglePause);
+            $('btnGallery').addEventListener('click', openGallery);
+            $('galleryClose').addEventListener('click', () => $('galleryOverlay').classList.remove('show'));
+            $('imgUpload').addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                state.imageUrl = url;
+                $('galleryOverlay').classList.remove('show');
+                resetGame();
+                later(() => URL.revokeObjectURL(url), 3000);
+            });
+            $('gridChk').addEventListener('change', (e) => {
+                state.grid = e.target.checked;
+                $('badgeGrid').textContent = state.grid ? t().gridOn : t().gridOff;
+                board.querySelector('.pc-grid').style.opacity = state.grid ? '0.85' : '0.45';
+            });
+            $('rotChk').addEventListener('change', (e) => {
+                state.rotate = e.target.checked;
+                $('badgeRotate').textContent = state.rotate ? t().rotateOn : t().rotateOff;
+                scatterPieces();
+            });
+            $('soundChk').addEventListener('change', (e) => {
+                state.sound = e.target.checked;
+            });
+            window.addEventListener('resize', () => {
+                resizeBoard();
+            });
+
+            if (typeof VexGame !== 'undefined') {
+                VexGame.boot({
+                    slug: 'puzzle-challenge',
+                    onReady: function (player) {
+                        if (player && player.language) {
+                            state.lang = player.language === 'en' ? 'en' : 'ar';
+                            if (VexGame.setLang) VexGame.setLang(state.lang);
+                        }
+                        applyLang();
+                        showBest();
+                    },
+                });
+            }
+
+            applyLang();
+            setupPlayersFields();
+            state.imageUrl = randomImage();
+            resetGame();
+            resizeBoard();
+            showBest();
+        })();
+    </script>
+</body>
+
+</html>
