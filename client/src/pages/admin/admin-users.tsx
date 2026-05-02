@@ -596,141 +596,143 @@ export default function AdminUsersPage() {
               ))}
             </div>
           ) : (
-            <div className="hidden overflow-x-auto sm:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[300px]">User</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Games</TableHead>
-                    <TableHead>VIP</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead className="text-end">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers?.map((user: UserType) => {
-                    const hasUnreadAlert = unreadEntityIds.has(String(user.id));
-                    return (
-                      <TableRow key={user.id} className={`hover-elevate cursor-pointer ${hasUnreadAlert ? 'bg-primary/5 border-s-2 border-s-primary/40' : ''}`} onClick={() => handleUserRowClick(user)}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 shrink-0">
-                              <AvatarImage src={user.profilePicture ?? undefined} />
-                              <AvatarFallback>
-                                {user.username.substring(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="font-medium flex items-center gap-2">
-                                <span className="truncate max-w-[180px] font-semibold" dir="auto" title={user.username}>
-                                  {user.username}
-                                </span>
-                                {user.p2pBanned && (
-                                  <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 shrink-0">
-                                    P2P
-                                  </Badge>
-                                )}
-                              </div>
-                              {user.nickname && user.nickname !== user.username && (
-                                <div className="text-xs text-muted-foreground truncate" dir="auto">
-                                  {user.nickname}
+            <>
+              <div className="hidden overflow-x-auto sm:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[300px]">User</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Balance</TableHead>
+                      <TableHead>Games</TableHead>
+                      <TableHead>VIP</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead className="text-end">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers?.map((user: UserType) => {
+                      const hasUnreadAlert = unreadEntityIds.has(String(user.id));
+                      return (
+                        <TableRow key={user.id} className={`hover-elevate cursor-pointer ${hasUnreadAlert ? 'bg-primary/5 border-s-2 border-s-primary/40' : ''}`} onClick={() => handleUserRowClick(user)}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 shrink-0">
+                                <AvatarImage src={user.profilePicture ?? undefined} />
+                                <AvatarFallback>
+                                  {user.username.substring(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="font-medium flex items-center gap-2">
+                                  <span className="truncate max-w-[180px] font-semibold" dir="auto" title={user.username}>
+                                    {user.username}
+                                  </span>
+                                  {user.p2pBanned && (
+                                    <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 shrink-0">
+                                      P2P
+                                    </Badge>
+                                  )}
                                 </div>
-                              )}
-                              <div className="text-xs text-muted-foreground truncate">
-                                {user.email || user.phone || user.id.slice(0, 8)}
+                                {user.nickname && user.nickname !== user.username && (
+                                  <div className="text-xs text-muted-foreground truncate" dir="auto">
+                                    {user.nickname}
+                                  </div>
+                                )}
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {user.email || user.phone || user.id.slice(0, 8)}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusColor(user.status)} className="capitalize">
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(user.balance)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm">
-                            <Gamepad2 className="h-3 w-3 text-muted-foreground" />
-                            {user.gamesPlayed ?? 0}
-                            <Trophy className="h-3 w-3 text-yellow-500 ms-2" />
-                            {user.gamesWon ?? 0}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
-                            VIP {user.vipLevel ?? 0}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(user.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-end">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" data-testid={`button-user-actions-${user.id}`}>
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openUserView(user); }}>
-                                <Eye className="h-4 w-4 me-2" />
-                                View Profile
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("reward"); }}>
-                                <Gift className="h-4 w-4 me-2" />
-                                Send Reward
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("balance"); }}>
-                                <DollarSign className="h-4 w-4 me-2" />
-                                Adjust Balance
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {(user.status === "banned" || user.status === "suspended") ? (
-                                <DropdownMenuItem
-                                  onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("unban"); }}
-                                  className="text-green-500"
-                                >
-                                  <Shield className="h-4 w-4 me-2" />
-                                  Activate User
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusColor(user.status)} className="capitalize">
+                              {user.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(user.balance)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm">
+                              <Gamepad2 className="h-3 w-3 text-muted-foreground" />
+                              {user.gamesPlayed ?? 0}
+                              <Trophy className="h-3 w-3 text-yellow-500 ms-2" />
+                              {user.gamesWon ?? 0}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
+                              VIP {user.vipLevel ?? 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(user.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-end">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" data-testid={`button-user-actions-${user.id}`}>
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openUserView(user); }}>
+                                  <Eye className="h-4 w-4 me-2" />
+                                  View Profile
                                 </DropdownMenuItem>
-                              ) : (
-                                <>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("suspend"); }}>
-                                    <Clock className="h-4 w-4 me-2" />
-                                    Suspend User
-                                  </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("reward"); }}>
+                                  <Gift className="h-4 w-4 me-2" />
+                                  Send Reward
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("balance"); }}>
+                                  <DollarSign className="h-4 w-4 me-2" />
+                                  Adjust Balance
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {(user.status === "banned" || user.status === "suspended") ? (
                                   <DropdownMenuItem
-                                    onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("ban"); }}
-                                    className="text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("unban"); }}
+                                    className="text-green-500"
                                   >
-                                    <Ban className="h-4 w-4 me-2" />
-                                    Ban User
+                                    <Shield className="h-4 w-4 me-2" />
+                                    Activate User
                                   </DropdownMenuItem>
-                                </>
-                              )}
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("p2pBan"); }}>
-                                <ArrowLeftRight className="h-4 w-4 me-2" />
-                                {user.p2pBanned ? "Unban P2P" : "Ban from P2P"}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                                ) : (
+                                  <>
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("suspend"); }}>
+                                      <Clock className="h-4 w-4 me-2" />
+                                      Suspend User
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("ban"); }}
+                                      className="text-destructive"
+                                    >
+                                      <Ban className="h-4 w-4 me-2" />
+                                      Ban User
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("p2pBan"); }}>
+                                  <ArrowLeftRight className="h-4 w-4 me-2" />
+                                  {user.p2pBanned ? "Unban P2P" : "Ban from P2P"}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
               <div className="space-y-3 p-3 sm:hidden">
                 {filteredUsers?.map((user: UserType) => {
@@ -788,7 +790,7 @@ export default function AdminUsersPage() {
                   No users found
                 </div>
               )}
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
