@@ -12,6 +12,25 @@ interface Props {
 const SDK_BLACKLIST = ["/games/vex-sdk.js", "/games/_shared/vex-game.js"];
 const BOOT_FALLBACK_MS = 2500;
 
+function unlockAudioContexts(): void {
+  const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+  if (!Ctx) return;
+
+  const contexts = (window as any).__VEX_AUDIO_CONTEXTS__ as Array<AudioContext> | undefined;
+  if (Array.isArray(contexts)) {
+    contexts.forEach((ctx) => {
+      if (ctx && ctx.state === "suspended") {
+        void ctx.resume().catch(() => { });
+      }
+    });
+  }
+
+  const existing = (window as any).__puzzleAudio as AudioContext | undefined;
+  if (existing && existing.state === "suspended") {
+    void existing.resume().catch(() => { });
+  }
+}
+
 function buildGameUrlCandidates(gameSlug: string): string[] {
   const normalized = gameSlug.trim();
   const underscored = normalized.replace(/-/g, "_");
@@ -43,6 +62,7 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const bootedRef = useRef(false);
+  const audioUnlockAttachedRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (cleanupRef.current) {
@@ -91,6 +111,20 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
       lockScroll: () => { document.body.style.overflow = "hidden"; },
       unlockScroll: () => { document.body.style.overflow = ""; },
     };
+
+    let audioCleanup = () => { };
+    if (!audioUnlockAttachedRef.current) {
+      audioUnlockAttachedRef.current = true;
+      const unlock = () => unlockAudioContexts();
+      window.addEventListener("pointerdown", unlock, { passive: true, capture: true });
+      window.addEventListener("touchstart", unlock, { passive: true, capture: true });
+      window.addEventListener("keydown", unlock, { passive: true, capture: true });
+      audioCleanup = () => {
+        window.removeEventListener("pointerdown", unlock, true);
+        window.removeEventListener("touchstart", unlock, true);
+        window.removeEventListener("keydown", unlock, true);
+      };
+    }
 
     const bootTimer = window.setTimeout(triggerBoot, BOOT_FALLBACK_MS);
     const gameUrls = buildGameUrlCandidates(gameSlug);
@@ -159,15 +193,18 @@ export default function ArcadeInlineLoader({ gameSlug, lang, onBoot, onEndSessio
       })
       .catch(e => { if (!aborted) onError?.(String(e)); });
 
+    const previousCleanup = cleanupRef.current;
     cleanupRef.current = () => {
       aborted = true;
       window.clearTimeout(bootTimer);
       delete (window as any).__ARCADE_BRIDGE__;
       delete (window as any).VEX;
       delete (window as any).VexGame;
-      injectedScripts.forEach(s => s.remove());
-      injectedStyles.forEach(s => s.remove());
+      injectedScripts.forEach((s) => s.remove());
+      injectedStyles.forEach((s) => s.remove());
       while (container.lastChild) container.removeChild(container.lastChild);
+      audioCleanup();
+      previousCleanup?.();
     };
 
     return cleanup;
