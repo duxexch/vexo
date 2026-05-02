@@ -2492,12 +2492,64 @@ export function DominoBoard({
             </p>
           ) : (
             <div ref={boardLaneRef} className="domino-board-lane relative h-full w-full max-w-full px-0 py-1 sm:px-0 sm:py-2">
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-0"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                <path
+                  d="M 88 18
+                     L 16 18
+                     C 11 18, 9 21, 9 26
+                     L 9 36
+                     C 9 41, 11 44, 16 44
+                     L 84 44
+                     C 89 44, 91 47, 91 52
+                     L 91 62
+                     C 91 67, 89 70, 84 70
+                     L 16 70
+                     C 11 70, 9 73, 9 78
+                     L 9 88
+                     C 9 92, 12 94, 17 94
+                     L 88 94"
+                  fill="none"
+                  stroke="rgba(24, 139, 255, 0.95)"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M 88 18
+                     L 16 18
+                     C 11 18, 9 21, 9 26
+                     L 9 36
+                     C 9 41, 11 44, 16 44
+                     L 84 44
+                     C 89 44, 91 47, 91 52
+                     L 91 62
+                     C 91 67, 89 70, 84 70
+                     L 16 70
+                     C 11 70, 9 73, 9 78
+                     L 9 88
+                     C 9 92, 12 94, 17 94
+                     L 88 94"
+                  fill="none"
+                  stroke="rgba(255, 255, 255, 0.18)"
+                  strokeWidth="4.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="0.01 7"
+                />
+              </svg>
+
               {anchorEntry && (
                 <>
                   {leftPlacements.map((placement) => (
                     <div
                       key={`left-${tileSignature(placement.item.tile)}`}
-                      className="domino-tile-on-table absolute left-1/2 top-1/2"
+                      className="domino-tile-on-table absolute left-1/2 top-1/2 z-10"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",
@@ -2508,7 +2560,7 @@ export function DominoBoard({
                   ))}
 
                   <div
-                    className="domino-tile-on-table absolute left-1/2 top-1/2"
+                    className="domino-tile-on-table absolute left-1/2 top-1/2 z-10"
                     style={{
                       transform: `translate(calc(-50% + ${effectiveOffsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardRenderScale})`,
                       transformOrigin: "center center",
@@ -2520,7 +2572,7 @@ export function DominoBoard({
                   {rightPlacements.map((placement) => (
                     <div
                       key={`right-${tileSignature(placement.item.tile)}`}
-                      className="domino-tile-on-table absolute left-1/2 top-1/2"
+                      className="domino-tile-on-table absolute left-1/2 top-1/2 z-10"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",
