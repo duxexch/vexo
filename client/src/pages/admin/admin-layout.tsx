@@ -90,9 +90,37 @@ function AdminSidebar() {
     setLocation("/admin");
   };
 
+  const menuTitleKeyByRoute: Record<string, string> = {
+    dashboard: "admin.layout.menu.dashboard",
+    users: "admin.layout.menu.users",
+    transactions: "admin.layout.menu.transactions",
+    games: "admin.layout.menu.games",
+    "game-sections": "admin.layout.menu.gameSections",
+    challenges: "admin.layout.menu.challenges",
+    "challenge-settings": "admin.layout.menu.challengeSettings",
+    p2p: "admin.layout.menu.p2pManagement",
+    "support-settings": "admin.layout.menu.supportSettings",
+    "id-verification": "admin.layout.menu.idVerification",
+    support: "admin.layout.menu.supportContacts",
+    "anti-cheat": "admin.layout.menu.antiCheat",
+    "payment-security": "admin.layout.menu.paymentSecurity",
+    "chat-management": "admin.layout.menu.chatManagement",
+    sam9: "admin.layout.menu.sam9Control",
+    analytics: "admin.layout.menu.analytics",
+    disputes: "admin.layout.menu.disputes",
+    "free-play": "admin.layout.menu.freePlay",
+    marketers: "admin.layout.menu.marketers",
+    gifts: "admin.layout.menu.giftCatalog",
+    investments: "admin.layout.menu.investments",
+    finance: "admin.layout.menu.finance",
+    agents: "admin.layout.menu.agents",
+    tournaments: "admin.layout.menu.tournaments",
+    "audit-logs": "admin.layout.menu.auditLogs",
+  };
+
   const menuItems = ADMIN_ROUTE_REGISTRY.map((route: AdminRouteEntry) => ({
     id: route.key,
-    titleKey: `admin.layout.menu.${route.key}` as const,
+    titleKey: menuTitleKeyByRoute[route.key] || `admin.layout.menu.${route.key}`,
     url: route.path,
     icon:
       route.key === "dashboard" ? LayoutDashboard :
