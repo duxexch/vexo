@@ -144,6 +144,41 @@ function formatDateTime(value?: string | null): string {
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
+function toStockFormValue(stock: InvestmentStock): StockForm {
+    return {
+        symbol: stock.symbol,
+        nameEn: stock.nameEn,
+        nameAr: stock.nameAr,
+        descriptionEn: stock.descriptionEn ?? "",
+        descriptionAr: stock.descriptionAr ?? "",
+        pricePerShare: stock.pricePerShare,
+        totalShares: stock.totalShares,
+        availableShares: stock.availableShares,
+        minPurchaseShares: stock.minPurchaseShares,
+        maxPurchaseShares: stock.maxPurchaseShares,
+        isActive: stock.isActive,
+        isFeatured: stock.isFeatured,
+        sortOrder: stock.sortOrder,
+        colorClass: stock.colorClass,
+        accentColor: stock.accentColor,
+    };
+}
+
+function toPaymentFormValue(payment: InvestmentPaymentMethod): PaymentForm {
+    return {
+        title: payment.title,
+        titleAr: payment.titleAr ?? "",
+        type: payment.type as PaymentForm["type"],
+        accountName: payment.accountName ?? "",
+        accountNumber: payment.accountNumber ?? "",
+        details: payment.details ?? "",
+        instructions: payment.instructions ?? "",
+        currency: payment.currency,
+        isActive: payment.isActive,
+        sortOrder: payment.sortOrder,
+    };
+}
+
 function StatCard({ title, value, icon: Icon, description }: { title: string; value: string; icon: typeof Building2; description: string; }) {
     return (
         <Card>
@@ -235,13 +270,13 @@ export default function AdminInvestmentsPage() {
 
     useEffect(() => {
         if (editingStock) {
-            stockForm.reset(editingStock);
+            stockForm.reset(toStockFormValue(editingStock));
         }
     }, [editingStock, stockForm]);
 
     useEffect(() => {
         if (editingPayment) {
-            paymentForm.reset(editingPayment);
+            paymentForm.reset(toPaymentFormValue(editingPayment));
         }
     }, [editingPayment, paymentForm]);
 
