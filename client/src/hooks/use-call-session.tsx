@@ -9,7 +9,8 @@ import {
   reportOutgoingCall,
   updateNativeCallState,
 } from "@/lib/native-call-ui";
-import type { CallTier, CallType, IceServersResponse } from "@shared/socketio-events";
+import { useIceServers } from "@/hooks/use-ice-servers";
+import type { CallTier, CallType } from "@shared/socketio-events";
 
 export type CallStatus =
   | "idle"
@@ -52,11 +53,6 @@ interface CallContext {
   isCaller: boolean;
 }
 
-async function fetchIceServers(): Promise<IceServersResponse> {
-  const res = await fetch("/api/rtc/ice-servers", { credentials: "include" });
-  if (!res.ok) throw new Error(`ice-servers failed: ${res.status}`);
-  return (await res.json()) as IceServersResponse;
-}
 
 /**
  * Generate a cryptographically-strong call session id.
@@ -102,6 +98,7 @@ function generateSessionId(): string {
  * Tier is inferred from `pc.iceConnectionState` + chosen candidate pair.
  */
 export function useCallSession(): UseCallSessionReturn {
+  const { rtcConfiguration } = useIceServers();
   const [status, setStatus] = useState<CallStatus>("idle");
   const [tier, setTier] = useState<CallTier>("p2p");
   const [callType, setCallType] = useState<CallType | null>(null);
@@ -136,11 +133,7 @@ export function useCallSession(): UseCallSessionReturn {
 
   const buildPeerConnection = useCallback(
     async (sessionId: string, peerUserId: string): Promise<RTCPeerConnection> => {
-      const ice = await fetchIceServers();
-      const pc = new RTCPeerConnection({
-        iceServers: ice.iceServers,
-        iceTransportPolicy: "all",
-      });
+      const pc = new RTCPeerConnection(rtcConfiguration);
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {

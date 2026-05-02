@@ -21,7 +21,8 @@ function normalizeIceServer(server: PublicRtcIceServer): RTCIceServer | null {
             ? server.urls.trim()
             : "";
 
-    if ((Array.isArray(urls) && urls.length === 0) || (!Array.isArray(urls) && urls.length === 0)) {
+    const hasUrls = Array.isArray(urls) ? urls.length > 0 : urls.length > 0;
+    if (!hasUrls) {
         return null;
     }
 

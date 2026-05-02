@@ -2,7 +2,7 @@ import type { Express, Response } from "express";
 import { z } from "zod";
 import { authMiddleware, type AuthRequest } from "./middleware";
 import { adminAuthMiddleware, type AdminRequest, createHttpError, getErrorMessage, logAdminAction, resolveErrorStatus } from "../admin-routes/helpers";
-import { getRealtimeProvider, getRealtimeProviderSelectionContext, getRealtimeProviderSnapshot, getProviderRoomFeatures, supportsFeature } from "../services/realtime";
+import { realtimeGovernance } from "../services/realtime";
 import { getRealtimeMonitoringSnapshot, getRealtimeProviderConfig, setRealtimeMonitoringSnapshot, updateRealtimeProviderConfig } from "../storage/admin/realtime";
 import type { RealtimeMode, RealtimeProviderConfig, RealtimeRoomCreateOptions } from "../../shared/realtime";
 
@@ -55,11 +55,14 @@ function toRealtimeConfigResponse(config: RealtimeProviderConfig) {
 
 function toProviderRecommendation(config: RealtimeProviderConfig) {
     return {
-        selfHostedAllowed: supportsFeature(config, "voiceCalls") || supportsFeature(config, "textChat") || supportsFeature(config, "videoCalls"),
+        selfHostedAllowed:
+            realtimeGovernance.supportsFeature(config, "voiceCalls")
+            || realtimeGovernance.supportsFeature(config, "textChat")
+            || realtimeGovernance.supportsFeature(config, "videoCalls"),
         supportedRooms: {
-            chat: getProviderRoomFeatures("chat"),
-            voice: getProviderRoomFeatures("voice"),
-            video: getProviderRoomFeatures("video"),
+            chat: realtimeGovernance.getProviderRoomFeatures("chat"),
+            voice: realtimeGovernance.getProviderRoomFeatures("voice"),
+            video: realtimeGovernance.getProviderRoomFeatures("video"),
         },
     };
 }
@@ -67,11 +70,14 @@ function toProviderRecommendation(config: RealtimeProviderConfig) {
 export function registerRealtimeRoutes(app: Express): void {
     app.get("/api/realtime/provider", authMiddleware, async (_req: AuthRequest, res: Response) => {
         try {
-            const snapshot = await getRealtimeProviderSnapshot();
+            const config = await getRealtimeProviderConfig();
+            const snapshot = await realtimeGovernance.getRealtimeProviderSnapshot();
+            const selectionConfig = config;
             res.json({
                 ...snapshot,
-                recommendations: toProviderRecommendation(snapshot.config),
-                config: toRealtimeConfigResponse(snapshot.config),
+                ready: snapshot.selectedProvider === "self" || snapshot.externalConfigured,
+                recommendations: toProviderRecommendation(selectionConfig),
+                config: toRealtimeConfigResponse(selectionConfig),
             });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
@@ -82,15 +88,22 @@ export function registerRealtimeRoutes(app: Express): void {
         try {
             const config = await getRealtimeProviderConfig();
             const monitoring = await getRealtimeMonitoringSnapshot();
-            const selection = await getRealtimeProviderSelectionContext();
+            const selection = await realtimeGovernance.getRealtimeOrchestrationContext();
+            const snapshot = await realtimeGovernance.getRealtimeProviderSnapshot();
             res.json({
                 config,
                 monitoring,
                 selection,
                 providers: {
                     selfHosted: { available: true },
-                    external: { available: true, type: config.external.providerType, region: config.external.region },
+                    external: {
+                        available: snapshot.externalConfigured,
+                        type: config.external.providerType,
+                        region: config.external.region,
+                    },
                 },
+                ready: snapshot.selectedProvider === "self" || snapshot.externalConfigured,
+                sessionState: snapshot.sessionState,
             });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
@@ -152,14 +165,11 @@ export function registerRealtimeRoutes(app: Express): void {
         try {
             const parsed = createRoomSchema.parse(req.body);
             const config = await getRealtimeProviderConfig();
-            if (!supportsFeature(config, parsed.callType === "chat" ? "textChat" : parsed.callType === "voice" ? "voiceCalls" : "videoCalls")) {
+            if (!realtimeGovernance.supportsFeature(config, parsed.callType === "chat" ? "textChat" : parsed.callType === "voice" ? "voiceCalls" : "videoCalls")) {
                 throw createHttpError(400, "Requested realtime feature is disabled");
             }
 
-            const provider = getRealtimeProvider({
-                mode: config.mode,
-                turnLoadHigh: false,
-            });
+            const { provider } = await realtimeGovernance.resolveRealtimeProvider();
 
             const room = await provider.createRoom(parsed satisfies RealtimeRoomCreateOptions);
             res.json(room);
@@ -173,10 +183,7 @@ export function registerRealtimeRoutes(app: Express): void {
         try {
             const parsed = joinRoomSchema.parse({ roomId: req.params.roomId, ...req.body });
             const config = await getRealtimeProviderConfig();
-            const provider = getRealtimeProvider({
-                mode: config.mode,
-                turnLoadHigh: false,
-            });
+            const { provider } = await realtimeGovernance.resolveRealtimeProvider();
             const result = await provider.joinRoom(parsed.roomId, parsed.userId);
             res.json(result);
         } catch (error: unknown) {
@@ -189,10 +196,7 @@ export function registerRealtimeRoutes(app: Express): void {
         try {
             const parsed = leaveRoomSchema.parse({ roomId: req.params.roomId, ...req.body });
             const config = await getRealtimeProviderConfig();
-            const provider = getRealtimeProvider({
-                mode: config.mode,
-                turnLoadHigh: false,
-            });
+            const { provider } = await realtimeGovernance.resolveRealtimeProvider();
             await provider.leaveRoom(parsed.roomId, parsed.userId);
             res.json({ ok: true });
         } catch (error: unknown) {
@@ -205,10 +209,7 @@ export function registerRealtimeRoutes(app: Express): void {
         try {
             const parsed = endRoomSchema.parse({ roomId: req.params.roomId });
             const config = await getRealtimeProviderConfig();
-            const provider = getRealtimeProvider({
-                mode: config.mode,
-                turnLoadHigh: false,
-            });
+            const { provider } = await realtimeGovernance.resolveRealtimeProvider();
             await provider.endRoom(parsed.roomId);
             res.json({ ok: true });
         } catch (error: unknown) {

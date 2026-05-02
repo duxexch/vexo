@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, type MutableRefObject } from "react";
 import type { IceServersResponse as SharedIceServersResponse } from "@shared/socketio-events";
 import { apiRequest } from "@/lib/queryClient";
+import { buildRtcConfiguration } from "@/lib/rtc-config";
 
 type IceServersResponse = SharedIceServersResponse & {
   iceTransportPolicy?: "all" | "relay";
@@ -64,16 +65,11 @@ export function useIceServers(): UseIceServersResult {
   iceServersRef.current = iceServers;
 
   const rtcConfiguration = useMemo<RTCConfiguration>(() => {
-    const configuration: RTCConfiguration = {
-      iceServers,
-    };
-
-    if (effective.iceTransportPolicy === "relay" || effective.iceTransportPolicy === "all") {
-      configuration.iceTransportPolicy = effective.iceTransportPolicy;
-    }
-
-    return configuration;
-  }, [effective.iceTransportPolicy, iceServers]);
+    return buildRtcConfiguration({
+      iceServers: effective.iceServers,
+      iceTransportPolicy: effective.iceTransportPolicy,
+    });
+  }, [effective.iceTransportPolicy, effective.iceServers]);
 
   return {
     rtcConfiguration,
