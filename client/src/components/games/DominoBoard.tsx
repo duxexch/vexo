@@ -2495,52 +2495,32 @@ export function DominoBoard({
               <svg
                 aria-hidden="true"
                 focusable="false"
-                className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-0"
+                className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-100"
                 viewBox="0 0 100 100"
                 preserveAspectRatio="none"
               >
+                <defs>
+                  <linearGradient id="domino-default-path" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#2aa8ff" stopOpacity="0.45" />
+                    <stop offset="100%" stopColor="#1166dd" stopOpacity="0.8" />
+                  </linearGradient>
+                </defs>
                 <path
-                  d="M 88 18
-                     L 16 18
-                     C 11 18, 9 21, 9 26
-                     L 9 36
-                     C 9 41, 11 44, 16 44
-                     L 84 44
-                     C 89 44, 91 47, 91 52
-                     L 91 62
-                     C 91 67, 89 70, 84 70
-                     L 16 70
-                     C 11 70, 9 73, 9 78
-                     L 9 88
-                     C 9 92, 12 94, 17 94
-                     L 88 94"
+                  d="M 88 18 H 10
+                     M 10 18 L 14 14
+                     M 10 18 C 42 20, 66 20, 88 20
+                     M 88 20 C 92 20, 92 24, 92 30
+                     M 92 30 C 92 50, 92 56, 86 56
+                     M 86 56 C 56 56, 34 56, 12 56
+                     M 12 56 C 8 56, 8 60, 8 66
+                     M 8 66 C 8 82, 24 88, 42 88
+                     M 42 88 C 60 88, 76 88, 90 90"
                   fill="none"
-                  stroke="rgba(24, 139, 255, 0.95)"
-                  strokeWidth="1.4"
+                  stroke="url(#domino-default-path)"
+                  strokeWidth="1.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                />
-                <path
-                  d="M 88 18
-                     L 16 18
-                     C 11 18, 9 21, 9 26
-                     L 9 36
-                     C 9 41, 11 44, 16 44
-                     L 84 44
-                     C 89 44, 91 47, 91 52
-                     L 91 62
-                     C 91 67, 89 70, 84 70
-                     L 16 70
-                     C 11 70, 9 73, 9 78
-                     L 9 88
-                     C 9 92, 12 94, 17 94
-                     L 88 94"
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.18)"
-                  strokeWidth="4.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="0.01 7"
+                  filter="drop-shadow(0 0 1.5px rgba(32,168,255,0.45))"
                 />
               </svg>
 
