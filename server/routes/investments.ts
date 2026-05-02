@@ -445,7 +445,6 @@ export function registerInvestmentRoutes(app: Express): void {
             if (status) updates.status = status as never;
             if (adminNote) updates.adminNote = adminNote;
             updates.reviewedBy = req.admin!.id;
-            updates.reviewedAt = new Date();
 
             if (status === "cancelled" && Number(existing.status !== "cancelled")) {
                 const [stock] = await db.select().from(investmentStocks).where(eq(investmentStocks.id, existing.stockId)).limit(1);
