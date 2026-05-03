@@ -54,6 +54,7 @@ import {
   MessageCircle,
   Bot,
   Building2,
+  Megaphone,
 } from "lucide-react";
 import { AdminAlertsDropdown } from "@/components/admin/AdminAlertsDropdown";
 import { useAdminAlertCountsBySection } from "@/hooks/use-admin-alert-counts";
