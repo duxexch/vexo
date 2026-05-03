@@ -1435,7 +1435,7 @@ export default function WalletPage() {
                           {language === 'ar' ? 'نسخ' : 'Copy'}
                         </Button>
                       </div>
-                      <p className="text-xs whitespace-pre-wrap break-words line-clamp-3" title={selectedDepositMethod.instructions || ''}>
+                      <p className="text-xs whitespace-pre-wrap break-words" title={selectedDepositMethod.instructions || ''}>
                         {selectedDepositMethod.instructions}
                       </p>
                     </div>
@@ -1456,7 +1456,7 @@ export default function WalletPage() {
                 onFocus={(e) => {
                   const target = e.currentTarget;
                   window.setTimeout(() => {
-                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { }
                   }, 250);
                 }}
                 onKeyDown={(e) => {
@@ -1482,7 +1482,7 @@ export default function WalletPage() {
                 onFocus={(e) => {
                   const target = e.currentTarget;
                   window.setTimeout(() => {
-                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+                    try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { }
                   }, 250);
                 }}
                 onKeyDown={(e) => {
