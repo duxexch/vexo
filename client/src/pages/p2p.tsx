@@ -3397,7 +3397,12 @@ function MyOffersTab() {
                           size="icon"
                           variant="ghost"
                           className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
-                          onClick={() => setSelectedTradeOffer(offer)}
+                          onClick={() => {
+                            toast({
+                              title: t('common.info'),
+                              description: t('p2p.negotiation.awaitingFirstProposal'),
+                            });
+                          }}
                           data-testid={`button-negotiate-offer-${offer.id}`}
                         >
                           <Scale className="h-4 w-4" />
@@ -3574,7 +3579,12 @@ function MyOffersTab() {
                             size="icon"
                             variant="ghost"
                             className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
-                            onClick={() => setSelectedTradeOffer(offer)}
+                            onClick={() => {
+                              toast({
+                                title: t('common.info'),
+                                description: t('p2p.negotiation.awaitingFirstProposal'),
+                              });
+                            }}
                             data-testid={`button-negotiate-offer-${offer.id}`}
                           >
                             <Scale className="h-4 w-4" />
@@ -3703,13 +3713,6 @@ function MyOffersTab() {
         </DialogContent>
       </Dialog>
 
-      <TradeOfferDialog
-        offer={selectedTradeOffer}
-        numberLocale={numberLocale}
-        isSubmitting={createTradeFromMyOfferMutation.isPending}
-        onClose={() => setSelectedTradeOffer(null)}
-        onConfirm={(payload) => createTradeFromMyOfferMutation.mutate(payload)}
-      />
     </div>
   );
 }

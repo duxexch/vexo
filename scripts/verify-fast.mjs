@@ -2,12 +2,12 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
 const DEFAULT_ENV = {
-    DATABASE_URL: "postgresql://vex_user:VexLocal2026SecurePass!@localhost:5432/vex_db",
-    DB_SSL: "false",
-    SESSION_SECRET: "vex-local-dev-session-secret-key-2026-very-secure",
-    JWT_SIGNING_KEY: "vex-local-dev-jwt-signing-key-2026-for-user-auth-tokens",
-    ADMIN_JWT_SECRET: "vex-local-dev-admin-jwt-secret-2026-different-from-user",
-    NODE_ENV: "development",
+    DATABASE_URL: process.env.VERIFY_FAST_DATABASE_URL || "postgresql://vex_user:CHANGE_ME_POSTGRES_PASSWORD@localhost:5432/vex_db",
+    DB_SSL: process.env.VERIFY_FAST_DB_SSL || "false",
+    SESSION_SECRET: process.env.VERIFY_FAST_SESSION_SECRET || "CHANGE_ME_SESSION_SECRET",
+    JWT_SIGNING_KEY: process.env.VERIFY_FAST_JWT_SIGNING_KEY || "CHANGE_ME_JWT_SIGNING_KEY",
+    ADMIN_JWT_SECRET: process.env.VERIFY_FAST_ADMIN_JWT_SECRET || "CHANGE_ME_ADMIN_JWT_SECRET",
+    NODE_ENV: process.env.VERIFY_FAST_NODE_ENV || "development",
 };
 
 const VERIFY_PORT = String(process.env.FAST_VERIFY_PORT || "3011");

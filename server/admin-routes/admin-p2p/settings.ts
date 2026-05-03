@@ -30,6 +30,8 @@ const updateP2pSettingsSchema = z.object({
   requireIdentityVerification: z.boolean().optional(),
   requirePhoneVerification: z.boolean().optional(),
   requireEmailVerification: z.boolean().optional(),
+  standardOfferApprovalMode: z.enum(["automatic", "manual"]).optional(),
+  digitalOfferApprovalMode: z.enum(["automatic", "manual"]).optional(),
   p2pBuyCurrencies: z.array(currencyCodeSchema).max(100).optional(),
   p2pSellCurrencies: z.array(currencyCodeSchema).max(100).optional(),
   depositEnabledCurrencies: z.array(currencyCodeSchema).max(100).optional(),
@@ -130,9 +132,17 @@ export function registerP2pSettingsRoutes(app: Express) {
 
       const previousValue = JSON.stringify(existing);
 
+      const resolvedStandardOfferApprovalMode = data.standardOfferApprovalMode ?? existing.standardOfferApprovalMode ?? "automatic";
+      const resolvedDigitalOfferApprovalMode = data.digitalOfferApprovalMode ?? existing.digitalOfferApprovalMode ?? "manual";
+
       // Update settings
       const [updated] = await db.update(p2pSettings)
-        .set({ ...normalizedData, updatedAt: new Date() })
+        .set({
+          ...normalizedData,
+          standardOfferApprovalMode: resolvedStandardOfferApprovalMode,
+          digitalOfferApprovalMode: resolvedDigitalOfferApprovalMode,
+          updatedAt: new Date(),
+        })
         .where(eq(p2pSettings.id, existing.id))
         .returning();
 

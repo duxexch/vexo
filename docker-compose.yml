@@ -24,11 +24,7 @@ services:
     networks:
       - vex-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-vex_user} -d ${POSTGRES_DB:-vex_db}",
-        ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vex_user} -d ${POSTGRES_DB:-vex_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,14 +61,7 @@ services:
     networks:
       - vex-network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "redis-cli",
-          "-a",
-          "${REDIS_PASSWORD:-changeme_redis_password}",
-          "ping",
-        ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme_redis_password}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -129,7 +118,7 @@ services:
     networks:
       - vex-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:3002/health" ]
       interval: 20s
       timeout: 5s
       retries: 3
@@ -155,15 +144,13 @@ services:
       - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
 
       # HTTPS router
-      - "traefik.http.routers.vex-secure.rule=Host(`vixo.click`) ||
-        Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex-secure.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex-secure.entrypoints=websecure"
       - "traefik.http.routers.vex-secure.tls.certresolver=letsencrypt"
       - "traefik.http.services.vex.loadbalancer.server.port=3001"
 
       # HTTP → HTTPS redirect
-      - "traefik.http.routers.vex.rule=Host(`vixo.click`) ||
-        Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex.entrypoints=web"
       - "traefik.http.routers.vex.middlewares=vex-http-canonical"
       - "traefik.http.middlewares.vex-http-canonical.redirectregex.regex=^http://(?:www\\.)?vixo\\.click/(.*)"
@@ -215,8 +202,8 @@ services:
       PRERENDER_TIMEOUT_MS: ${PRERENDER_TIMEOUT_MS:-10000}
       DB_SSL: "false"
       TZ: UTC
-    ports:
-      - "${APP_PORT:-3001}:3001"
+    expose:
+      - "3001"
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads

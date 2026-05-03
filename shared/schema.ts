@@ -1790,6 +1790,8 @@ export const p2pDisputeRules = pgTable("p2p_dispute_rules", {
 
 export const p2pFeeTypeEnum = pgEnum("p2p_fee_type", ["percentage", "fixed", "hybrid"]);
 
+export const currencyApprovalModeEnum = pgEnum("currency_approval_mode", ["automatic", "manual"]);
+
 // ==================== P2P SETTINGS ====================
 
 export const p2pSettings = pgTable("p2p_settings", {
@@ -1815,6 +1817,8 @@ export const p2pSettings = pgTable("p2p_settings", {
   requireIdentityVerification: boolean("require_identity_verification").notNull().default(false),
   requirePhoneVerification: boolean("require_phone_verification").notNull().default(false),
   requireEmailVerification: boolean("require_email_verification").notNull().default(false),
+  standardOfferApprovalMode: currencyApprovalModeEnum("standard_offer_approval_mode").notNull().default("automatic"),
+  digitalOfferApprovalMode: currencyApprovalModeEnum("digital_offer_approval_mode").notNull().default("manual"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { ChessBoard } from '@/components/games/chess/ChessBoard';
+import { ChessBoard } from '@/components/games/ChessBoard';
 import { ChessTimer } from '@/components/games/chess/ChessTimer';
 import { ChessMoveList } from '@/components/games/chess/ChessMoveList';
 import { ChessControls, DrawOfferDialog } from '@/components/games/chess/ChessControls';
@@ -20,6 +20,7 @@ import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, Swords, 
 import { useToast } from '@/hooks/use-toast';
 import { loadSavedTheme, type BoardTheme } from '@/lib/chess-themes';
 import { chessSounds } from '@/lib/chess-sounds';
+
 
 interface ChessPiece {
   type: 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
@@ -217,11 +218,11 @@ export default function ChessGame() {
     }
   }, [gameResult?.winner]);
 
-  const handleMove = useCallback((from: string, to: string, promotion?: string) => {
+  const handleMove = useCallback((move: { from: string; to: string; promotion?: string }) => {
     if (!canPlayActions) {
       return;
     }
-    makeMove(from, to, promotion);
+    makeMove(move.from, move.to, move.promotion);
   }, [makeMove, canPlayActions]);
 
   const handleShare = async () => {
@@ -486,15 +487,14 @@ export default function ChessGame() {
           {/* Board */}
           {gameState && playerColor && (
             <ChessBoard
-              position={position}
-              currentTurn={chessState!.currentTurn}
-              playerColor={playerColor}
-              validMoves={chessState!.validMoves}
-              lastMove={chessState!.lastMove}
-              isCheck={chessState!.isCheck}
+              gameState={chessState?.fen}
+              currentTurn={chessState?.currentTurn}
+              myColor={playerColor === 'w' ? 'white' : 'black'}
+              isMyTurn={!!isGameActive && chessState!.currentTurn === playerColor && canPlayActions}
+              isSpectator={isSpectator}
+              authoritativeValidMoves={chessState?.validMoves}
               onMove={handleMove}
-              disabled={!isGameActive || chessState!.currentTurn !== playerColor || !canPlayActions}
-              theme={boardTheme}
+              status={gameResult ? "finished" : chessState!.isCheckmate || chessState!.isStalemate || chessState!.isDraw ? "finished" : "active"}
             />
           )}
 
