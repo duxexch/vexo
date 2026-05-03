@@ -1,7 +1,0 @@
-client/src/pages/admin/admin-p2p.tsx(2434,60): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
-client/src/pages/admin/admin-p2p.tsx(2435,62): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
-client/src/pages/admin/admin-p2p.tsx(2455,17): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
-  Type 'undefined' is not assignable to type 'string'.
-client/src/pages/admin/admin-p2p.tsx(2548,60): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
-  Type 'undefined' is not assignable to type 'string'.
-client/src/pages/admin/p2p/p2p-trade-dispute-module.tsx(170,40): error TS2322: Type 'string' is not assignable to type '"default" | "destructive" | "secondary" | "outline" | null | undefined'.

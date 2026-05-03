@@ -133,6 +133,10 @@ const PRIORITY_RING: Record<NotifPriority, string> = {
 const MAX_VISIBLE = 4;
 const DEFAULT_DURATION = 5000;
 const URGENT_DURATION = 10000;
+const MOBILE_MAX_WIDTH = "min(100vw-1rem, 420px)";
+const MOBILE_STACK_GAP = 8;
+const MOBILE_TOP_OFFSET = "calc(env(safe-area-inset-top) + 0.5rem)";
+const MOBILE_BOTTOM_OFFSET = "calc(env(safe-area-inset-bottom) + 0.5rem)";
 
 /* ═══════════════ Context ═══════════════ */
 interface NotifPopupContextType {
@@ -229,15 +233,16 @@ function NotifCard({
       role="alert"
       aria-live={notif.priority === "urgent" ? "assertive" : "polite"}
       className={`
-        w-full max-w-[min(420px,calc(100vw-1.5rem))] mx-auto
+        w-full mx-auto
         transform transition-all duration-300 ease-out cursor-pointer select-none
         ${notif.dismissing ? "translate-y-[-20px] opacity-0 scale-95" : "translate-y-0 opacity-100 scale-100"}
       `}
       style={{
+        maxWidth: MOBILE_MAX_WIDTH,
         transform: `translateX(${swipeOffset}px) ${notif.dismissing ? "translateY(-20px) scale(0.95)" : ""}`,
         opacity,
         zIndex: 10000 - index,
-        marginTop: index > 0 ? "8px" : "0",
+        marginTop: index > 0 ? `${MOBILE_STACK_GAP}px` : "0",
       }}
       onClick={() => onClick(notif)}
       onTouchStart={handleTouchStart}
@@ -246,8 +251,8 @@ function NotifCard({
     >
       <div
         className={`
-          relative overflow-hidden rounded-2xl 
-          bg-card/95 backdrop-blur-xl border border-border/50
+          relative overflow-hidden rounded-2xl
+          bg-card/96 backdrop-blur-xl border border-border/50
           shadow-2xl shadow-black/20
           ${priorityRing}
           transition-shadow duration-200
@@ -257,36 +262,36 @@ function NotifCard({
         {/* Top accent gradient line */}
         <div className={`absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r ${accentGradient}`} />
 
-        <div className="flex items-start gap-3 p-3.5 pe-4">
+        <div className="flex items-start gap-2.5 p-3 pe-3.5 sm:gap-3 sm:p-3.5 sm:pe-4">
           {/* Icon */}
           <div className={`
             flex-shrink-0 flex items-center justify-center
-            w-10 h-10 rounded-xl ${iconBg}
+            w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${iconBg}
             ${notif.priority === "urgent" ? "animate-pulse" : ""}
           `}>
-            {notif.icon || <Icon className="w-5 h-5" />}
+            {notif.icon || <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
           </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0 pt-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-semibold text-foreground truncate leading-tight">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="min-w-0 text-[13px] sm:text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words [overflow-wrap:anywhere]">
                 {localizedTitle}
               </h4>
               <span className="text-[10px] text-muted-foreground/60 flex-shrink-0 tabular-nums">
                 {formatTimeAgo(notif.createdAt, isAr)}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+            <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground line-clamp-3 leading-relaxed break-words [overflow-wrap:anywhere]">
               {localizedMessage}
             </p>
           </div>
 
           {/* Close button */}
           <button
-            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full 
-                       hover:bg-muted/60 text-muted-foreground/50 hover:text-muted-foreground 
-                       transition-colors mt-0.5"
+            className="flex-shrink-0 w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-full
+                       hover:bg-muted/60 text-muted-foreground/50 hover:text-muted-foreground
+                       transition-colors mt-0.5 touch-manipulation"
             onClick={(e) => { e.stopPropagation(); onDismiss(notif.id); }}
             aria-label="Dismiss"
           >
@@ -392,11 +397,12 @@ export function VexNotificationPopupProvider({ children }: { children: React.Rea
       {/* Popup Container — fixed at top, above everything */}
       {visible.length > 0 && (
         <div
-          className="fixed top-0 inset-x-0 z-[99999] pointer-events-none pt-2 sm:pt-3 px-2 sm:px-4"
+          className="fixed inset-x-0 z-[99999] pointer-events-none px-2 sm:px-4"
+          style={{ top: MOBILE_TOP_OFFSET, bottom: MOBILE_BOTTOM_OFFSET }}
           aria-label="Notifications"
           role="region"
         >
-          <div className="flex flex-col items-center pointer-events-auto">
+          <div className="flex h-full flex-col items-center justify-start pointer-events-none">
             {visible.map((notif, i) => (
               <NotifCard
                 key={notif.id}
