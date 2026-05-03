@@ -483,12 +483,16 @@ export default function AdminDisputesPage() {
                                 <SelectValue placeholder="Select winner" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value={activeDispute.initiatorId}>
-                                  {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
-                                </SelectItem>
-                                <SelectItem value={activeDispute.respondentId}>
-                                  {activeDispute.respondentName || activeDispute.respondentId} (respondent)
-                                </SelectItem>
+                                {activeDispute.initiatorId && (
+                                  <SelectItem value={activeDispute.initiatorId}>
+                                    {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
+                                  </SelectItem>
+                                )}
+                                {activeDispute.respondentId && (
+                                  <SelectItem value={activeDispute.respondentId}>
+                                    {activeDispute.respondentName || activeDispute.respondentId} (respondent)
+                                  </SelectItem>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>

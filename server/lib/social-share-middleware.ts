@@ -488,6 +488,15 @@ const HOME_CARDS: Record<string, ShareCard> = {
     type: "website",
     canonicalUrl: "",
   },
+  "/p2p/share": {
+    title: "مشاركة صفقة P2P على VEX",
+    description: trimDescription("شارك الصفقة بسرعة عبر واتساب، فيسبوك، تيليجرام، X، ولينكدإن مع صورة وشرح مختصر وواضح."),
+    imageUrl: FALLBACK_IMAGE,
+    imageWidth: FALLBACK_IMAGE_WIDTH,
+    imageHeight: FALLBACK_IMAGE_HEIGHT,
+    type: "website",
+    canonicalUrl: "",
+  },
   "/tournaments": {
     title: "بطولات VEX — انضم وفز بالجوائز",
     description: trimDescription("تصفّح بطولات VEX النشطة والقادمة، سجّل، وشاهد مباريات اللاعبين مباشرة."),
@@ -525,6 +534,39 @@ const HOME_CARDS: Record<string, ShareCard> = {
     canonicalUrl: "",
   },
 };
+
+function buildP2POfferCard(origin: string, req: Request, canonicalUrl: string): ShareCard | null {
+  const offerId = typeof req.query.offerId === "string" ? req.query.offerId.trim() : "";
+  if (!offerId) return null;
+
+  const offerType = typeof req.query.offerType === "string" ? req.query.offerType.trim() : "";
+  const username = typeof req.query.username === "string" ? req.query.username.trim() : "";
+  const currency = typeof req.query.currency === "string" ? req.query.currency.trim().toUpperCase() : "";
+  const amount = typeof req.query.amount === "string" ? req.query.amount.trim() : "";
+  const price = typeof req.query.price === "string" ? req.query.price.trim() : "";
+  const fiatCurrency = typeof req.query.fiatCurrency === "string" ? req.query.fiatCurrency.trim().toUpperCase() : "USD";
+  const dealKind = typeof req.query.dealKind === "string" ? req.query.dealKind.trim() : "standard_asset";
+  const visibility = typeof req.query.visibility === "string" ? req.query.visibility.trim() : "public";
+  const paymentMethods = typeof req.query.paymentMethods === "string" ? req.query.paymentMethods.trim() : "";
+  const title = typeof req.query.title === "string" ? clampText(req.query.title, 80) : "";
+  const summary = typeof req.query.summary === "string" ? clampText(req.query.summary, 220) : "";
+
+  const tradeVerb = offerType === "sell" ? "بيع" : "شراء";
+  const kindLabel = dealKind === "digital_product" ? "صفقة منتج رقمي" : "صفقة P2P";
+  const paymentLabel = paymentMethods ? ` • طرق الدفع: ${paymentMethods}` : "";
+  const visibilityLabel = visibility === "private_friend" ? " • خاصة" : " • عامة";
+  const description = summary || clampText(`${kindLabel}${title ? `: ${title}` : ""}${username ? ` • ${tradeVerb} بواسطة @${username}` : ""}${currency && amount ? ` • ${amount} ${currency}` : ""}${price ? ` • السعر ${price} ${fiatCurrency}` : ""}${paymentLabel}${visibilityLabel}`, 160);
+
+  return {
+    title: title || `${kindLabel} — VEX`,
+    description: trimDescription(description),
+    imageUrl: `${origin}/icons/vex-gaming-logo-512x512.png`,
+    imageWidth: OG_IMAGE_WIDTH,
+    imageHeight: OG_IMAGE_HEIGHT,
+    type: "website",
+    canonicalUrl,
+  };
+}
 
 export function createSocialShareMiddleware() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {

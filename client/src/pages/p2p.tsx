@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Copy, Share2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
@@ -110,6 +111,8 @@ interface P2PTrade {
   createdAt: string;
   completedAt: string | null;
   counterpartyUsername: string;
+  offerCurrency?: string | null;
+  offerFiatCurrency?: string | null;
 }
 
 interface P2PTradeDetails extends P2PTrade {
@@ -3418,6 +3421,38 @@ function MyOffersTab() {
                         size="icon"
                         variant="ghost"
                         className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                        onClick={async () => {
+                          const shareUrl = `${window.location.origin}/p2p/share?offerId=${encodeURIComponent(offer.id)}&offerType=${encodeURIComponent(offer.type)}&username=${encodeURIComponent(offer.username)}&currency=${encodeURIComponent(offer.currency)}&amount=${encodeURIComponent(String(offer.amount))}&price=${encodeURIComponent(String(offer.price))}&fiatCurrency=${encodeURIComponent(offer.fiatCurrency || "USD")}&dealKind=${encodeURIComponent(offer.dealKind || "standard_asset")}&visibility=${encodeURIComponent(offer.visibility || "public")}&paymentMethods=${encodeURIComponent((offer.paymentMethods || []).slice(0, 3).join(", "))}&title=${encodeURIComponent(`${getDealKindLabel(t, offer.dealKind)} ${offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}`)}&summary=${encodeURIComponent(`${offer.username} - ${formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ ${formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)} - ${getVisibilityLabel(t, offer.visibility, offer.targetUsername)}`)}`;
+                          try {
+                            if (navigator.share) {
+                              await navigator.share({
+                                title: `${getDealKindLabel(t, offer.dealKind)} ${offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}`,
+                                text: `${offer.username} - ${formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ ${formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}`,
+                                url: shareUrl,
+                              });
+                            } else if (navigator.clipboard?.writeText) {
+                              await navigator.clipboard.writeText(shareUrl);
+                              toast({ title: t('common.success'), description: t('common.copied') });
+                            } else {
+                              window.prompt(t('common.copyLink'), shareUrl);
+                            }
+                          } catch {
+                            try {
+                              await navigator.clipboard.writeText(shareUrl);
+                              toast({ title: t('common.success'), description: t('common.copied') });
+                            } catch {
+                              window.prompt(t('common.copyLink'), shareUrl);
+                            }
+                          }
+                        }}
+                        data-testid={`button-share-offer-${offer.id}`}
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
                         onClick={() => deleteOfferMutation.mutate(offer.id)}
                         disabled={deleteOfferMutation.isPending}
                         data-testid={`button-delete-offer-${offer.id}`}
@@ -3559,6 +3594,38 @@ function MyOffersTab() {
                             <MessageSquare className="h-4 w-4" />
                           </Button>
                         )}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                          onClick={async () => {
+                            const shareUrl = `${window.location.origin}/p2p/share?offerId=${encodeURIComponent(offer.id)}&offerType=${encodeURIComponent(offer.type)}&username=${encodeURIComponent(offer.username)}&currency=${encodeURIComponent(offer.currency)}&amount=${encodeURIComponent(String(offer.amount))}&price=${encodeURIComponent(String(offer.price))}&fiatCurrency=${encodeURIComponent(offer.fiatCurrency || "USD")}&dealKind=${encodeURIComponent(offer.dealKind || "standard_asset")}&visibility=${encodeURIComponent(offer.visibility || "public")}&paymentMethods=${encodeURIComponent((offer.paymentMethods || []).slice(0, 3).join(", "))}&title=${encodeURIComponent(`${getDealKindLabel(t, offer.dealKind)} ${offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}`)}&summary=${encodeURIComponent(`${offer.username} - ${formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ ${formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)} - ${getVisibilityLabel(t, offer.visibility, offer.targetUsername)}`)}`;
+                            try {
+                              if (navigator.share) {
+                                await navigator.share({
+                                  title: `${getDealKindLabel(t, offer.dealKind)} ${offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}`,
+                                  text: `${offer.username} - ${formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ ${formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}`,
+                                  url: shareUrl,
+                                });
+                              } else if (navigator.clipboard?.writeText) {
+                                await navigator.clipboard.writeText(shareUrl);
+                                toast({ title: t('common.success'), description: t('common.copied') });
+                              } else {
+                                window.prompt(t('common.copyLink'), shareUrl);
+                              }
+                            } catch {
+                              try {
+                                await navigator.clipboard.writeText(shareUrl);
+                                toast({ title: t('common.success'), description: t('common.copied') });
+                              } catch {
+                                window.prompt(t('common.copyLink'), shareUrl);
+                              }
+                            }
+                          }}
+                          data-testid={`button-share-offer-${offer.id}`}
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
                         <Button
                           size="icon"
                           variant="ghost"
@@ -5592,8 +5659,11 @@ function DisputesTab() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div>
-                              <p className="font-medium">{trade.amount} - {formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, activeTrade?.offerFiatCurrency)}</p>
-                              <p className="text-sm text-muted-foreground">{t('p2p.dispute.with')} {trade.counterpartyUsername}</p>
+                              <p className="font-medium">
+                                {trade.amount} - {formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, trade.offerFiatCurrency)}
+                                {` ${t('p2p.dispute.with')} `}
+                                {trade.counterpartyUsername}
+                              </p>
                             </div>
                             <Badge variant="outline">{getTradeStatusLabel(trade.status)}</Badge>
                           </div>

@@ -1,7 +1,3 @@
-client/src/pages/p2p.tsx(4405,199): error TS2339: Property 'offerFiatCurrency' does not exist on type 'P2PTrade'.
-client/src/pages/p2p.tsx(4453,105): error TS2339: Property 'offerFiatCurrency' does not exist on type 'P2PTrade'.
-client/src/pages/p2p.tsx(5595,151): error TS2304: Cannot find name 'activeTrade'.
-client/src/pages/p2p.tsx(5783,162): error TS2339: Property 'offerFiatCurrency' does not exist on type 'P2PTrade'.
 server/routes/p2p-trading/enterprise-state.ts(72,55): error TS2345: Argument of type '{ status: "pending" | "completed" | "cancelled" | "paid" | "confirmed" | "disputed"; dealKind: "standard_asset" | "digital_product"; digitalProductType: string | null; exchangeOffered: string | null; ... 31 more ...; cancelledAt: Date | null; } & { ...; }' is not assignable to parameter of type '{ status: string; runtime?: { escrowState?: string | undefined; ledgerState?: string | undefined; idempotencyConfirmed?: boolean | undefined; finalityHash?: string | undefined; ledgerCommitId?: string | undefined; escrowReleaseTx?: string | undefined; } | null | undefined; }'.
   Types of property 'runtime' are incompatible.
     Type 'unknown' is not assignable to type '{ escrowState?: string | undefined; ledgerState?: string | undefined; idempotencyConfirmed?: boolean | undefined; finalityHash?: string | undefined; ledgerCommitId?: string | undefined; escrowReleaseTx?: string | undefined; } | null | undefined'.
