@@ -61,11 +61,11 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://vex_user:${{ secrets.SECURITY_GATE_POSTGRES_PASSWORD || 'security-gate-postgres' }}@localhost:5432/vex_db
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: ${{ secrets.SECURITY_GATE_REDIS_URL || 'redis://localhost:6379' }}
       DB_SSL: "false"
-      SESSION_SECRET: ${{ secrets.SECURITY_GATE_SESSION_SECRET || 'security-gate-session-secret' }}
-      JWT_SIGNING_KEY: ${{ secrets.SECURITY_GATE_JWT_SIGNING_KEY || 'security-gate-jwt-signing-key' }}
-      JWT_ADMIN_SECRET: ${{ secrets.SECURITY_GATE_JWT_ADMIN_SECRET || 'security-gate-jwt-admin-secret' }}
+      SESSION_SECRET: ${{ secrets.SECURITY_GATE_SESSION_SECRET || 'security-gate-session-secret-2026-05-03' }}
+      JWT_SIGNING_KEY: ${{ secrets.SECURITY_GATE_JWT_SIGNING_KEY || 'security-gate-jwt-signing-key-2026-05-03' }}
+      JWT_ADMIN_SECRET: ${{ secrets.SECURITY_GATE_JWT_ADMIN_SECRET || 'security-gate-jwt-admin-secret-2026-05-03' }}
       PORT: "3011"
 
     steps:
