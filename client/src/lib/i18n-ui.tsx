@@ -62,7 +62,7 @@ export function TranslationDebugger() {
 }
 
 export function LanguageSwitcher() {
-    const { language, setLanguage, t } = useI18n();
+    const { language, setLanguage, t, dir } = useI18n();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
@@ -76,6 +76,10 @@ export function LanguageSwitcher() {
     );
 
     const languageLabel = t("nav.language") || "Language";
+    const popoverAlign = "center";
+    const popoverSide = "bottom";
+    const popoverSideOffset = 8;
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <Tooltip>
@@ -95,7 +99,14 @@ export function LanguageSwitcher() {
                 </PopoverTrigger>
                 <TooltipContent side="bottom">{languageLabel}</TooltipContent>
             </Tooltip>
-            <PopoverContent className="w-72 p-0" align="end">
+            <PopoverContent
+                className="w-72 p-0"
+                align={popoverAlign}
+                side={popoverSide}
+                sideOffset={popoverSideOffset}
+                avoidCollisions={false}
+                dir={dir}
+            >
                 <div className="p-3 border-b">
                     <div className="relative">
                         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

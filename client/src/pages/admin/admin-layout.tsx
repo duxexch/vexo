@@ -69,7 +69,7 @@ function AdminSidebar() {
   const [location, setLocation] = useLocation();
   const { setOpenMobile, isMobile } = useSidebar();
   const { data: sectionCounts } = useAdminAlertCountsBySection();
-  const { t } = useI18n();
+  const { t, dir } = useI18n();
 
   const handleNavClick = useCallback((url: string) => {
     if (isMobile) {
@@ -166,7 +166,7 @@ function AdminSidebar() {
   ];
 
   return (
-    <Sidebar>
+    <Sidebar side={dir === "rtl" ? "right" : "left"}>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <VexLogo size={32} />
