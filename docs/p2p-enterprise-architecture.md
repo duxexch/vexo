@@ -21,18 +21,27 @@ API Layer
   └─ /api/p2p/disputes
         │
         ▼
+Execution Kernel
+  ├─ executeP2PAction() single entry point
+  ├─ orchestrator-enforced command routing
+  ├─ runtime guards for ledger/state/wallet mutation
+  ├─ immutable event append pipeline
+  └─ projection updater
+        │
+        ▼
 Domain Services
   ├─ Offer Service
   ├─ Negotiation Service
   ├─ Trade Lifecycle Service
   ├─ Escrow Service
-  ├─ Ledger Service
+  ├─ Ledger Engine
   ├─ Dispute Service
   ├─ Reconciliation Service
   └─ Risk Engine
         │
         ▼
 Persistence
+  ├─ p2p_events
   ├─ p2p_offers
   ├─ p2p_offer_versions
   ├─ p2p_negotiations
@@ -49,7 +58,7 @@ Persistence
         │
         ▼
 Shared Platform Systems
-  ├─ user wallets / balances
+  ├─ user wallets / balances (projection only)
   ├─ notifications
   ├─ websocket event fanout
   ├─ admin audit logging
@@ -57,15 +66,33 @@ Shared Platform Systems
 ```
 
 ### Design principles
-- All money movements go through the ledger.
-- Business state, operational state, and accounting state are separate.
-- Every mutation is idempotent and audit logged.
+- All money movements go through the execution kernel and ledger.
+- Business state, operational state, and accounting state are separate projections, not competing sources of truth.
+- Every mutation is idempotent, evented, and audit logged.
 - UI never mutates money directly.
 - Disputes always end in a financial outcome.
+- No event means no financial movement.
+- Projections are derived from immutable events and ledger postings.
 
 ---
 
 ## 2) Database schema
+
+### 2.0 Immutable event backbone
+
+```sql
+p2p_events (
+  id                    uuid primary key,
+  event_type            text not null, -- TradeCreated | EscrowLocked | TradeCompleted | DisputeOpened | etc.
+  aggregate_type        text not null, -- offer | negotiation | trade | dispute | ledger
+  aggregate_id          uuid not null,
+  idempotency_key       text not null unique,
+  actor_user_id         uuid not null,
+  payload               jsonb not null,
+  created_at            timestamptz not null,
+  audit_ref             text not null
+)
+```
 
 ### 2.1 Offers
 
@@ -173,6 +200,15 @@ Recommended companion tables:
 - `p2p_ledger_accounts`
 - `p2p_ledger_balances`
 - `p2p_ledger_posting_batches`
+- `p2p_ledger_validation_runs`
+
+### Ledger enforcement rules
+- Ledger entries are append-only.
+- Wallet balances are projections only.
+- Direct wallet mutation is forbidden.
+- Every debit must have a balancing credit in the same posting batch.
+- Every posting batch must be validated before commit.
+- A validator job must continuously compare ledger totals, escrow totals, and wallet projections.
 
 ### 2.5 Escrow
 
@@ -274,6 +310,24 @@ negotiated -> accepted
 negotiated -> expired
 accepted -> expired
 ```
+
+### D. Execution / event flow
+```text
+User/API request
+  -> executeP2PAction()
+  -> hard guards / permission checks
+  -> append immutable p2p_event
+  -> post ledger entries if needed
+  -> update projections
+  -> emit websocket/admin notifications
+```
+
+### State ownership rule
+- Routes never mutate trade, escrow, wallet, or ledger state directly.
+- Only the execution kernel may write commands to the domain.
+- Domain services return commands/events, not ad hoc side effects.
+- Projections are updated after committed events.
+- If the event append fails, the financial action fails.
 
 ### B. Operational State
 ```text
@@ -868,6 +922,21 @@ If a duplicate request arrives:
 - never re-post ledger entries
 - never re-run escrow movement
 
+### Hard enforcement layer
+The runtime must reject these operations outside the execution kernel:
+- direct ledger writes
+- direct wallet updates
+- direct trade state mutation
+- direct escrow release/refund
+- direct dispute resolution writes
+
+Example guard:
+```ts
+if (!executionContext.isOrchestrated) {
+  throw new Error("FORBIDDEN FINANCIAL OPERATION");
+}
+```
+
 ---
 
 ## 12) Risk engine
@@ -878,6 +947,29 @@ If a duplicate request arrives:
 - repeated dispute losses
 - abnormal payout patterns
 - evidence tampering attempts
+- event gaps between trade state and ledger postings
+- orphan ledger entries without a backing event
+- escrow lock attempts without valid trade events
+- balance drift between projections and ledger truth
+
+### Financial consistency layer
+A dedicated validator must run continuously and during reconciliation to detect:
+- ledger vs escrow mismatch
+- orphan transactions
+- missing state events
+- invalid balances
+- duplicate idempotency collisions
+- out-of-order trade projections
+
+### Enterprise correctness model
+```text
+Event -> Orchestrator -> Ledger -> Projection
+```
+
+Not allowed:
+```text
+Route -> Wallet / State / Ledger
+```
 
 ### Abnormal behavior detection
 - high velocity trade creation
@@ -1075,6 +1167,10 @@ This design turns P2P into a financially auditable system with:
 - immutable dispute resolution
 - risk scoring and manual review
 - modular frontend and backend boundaries
+- a single execution kernel
+- hard runtime enforcement
+- immutable event sourcing
+- ledger-backed source of truth
 
 The core rule is simple:
-**every trade transition, every escrow movement, and every dispute outcome must be traceable, idempotent, and financially represented in the ledger.**
+**every trade transition, every escrow movement, and every dispute outcome must be traceable, idempotent, orchestrated, and financially represented in the ledger.**

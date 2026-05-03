@@ -77,14 +77,14 @@ export function registerP2pAnalyticsRoutes(app: Express) {
         .from(p2pTrades)
         .where(inArray(p2pTrades.status, ["pending", "paid", "confirmed", "disputed"]));
 
-      const expiredOpenTrades = await db
+      const [expiredOpenTradesRow] = await db
         .select({
           count: sql<number>`count(*)`,
         })
         .from(p2pTrades)
         .where(and(inArray(p2pTrades.status, ["pending", "paid"]), lte(p2pTrades.expiresAt, new Date())));
 
-      const disputeStats = await db
+      const [disputeStatsRow] = await db
         .select({
           openDisputes: sql<number>`count(*) filter (where ${p2pTrades.status} = 'disputed')`,
         })
@@ -99,15 +99,18 @@ export function registerP2pAnalyticsRoutes(app: Express) {
         .where(gte(p2pTransactionLogs.createdAt, thirtyDaysAgo))
         .groupBy(p2pTransactionLogs.action);
 
+      const expiredOpenTrades = Number(expiredOpenTradesRow?.count ?? 0);
+      const openDisputes = Number(disputeStatsRow?.openDisputes ?? 0);
+
       res.json({
         allTime: completedTrades[0] || { totalTrades: 0, totalVolume: "0", totalFees: "0", totalEscrow: "0" },
         last30Days: recentStats[0] || { totalTrades: 0, totalVolume: "0", totalFees: "0", totalEscrow: "0" },
         byStatus: tradesByStatus,
         openEscrowSnapshot: openEscrowSnapshot[0] || { openTrades: 0, openVolume: "0", openEscrow: "0", openFees: "0" },
         activeTradeRows,
-        expiredOpenTrades: expiredOpenTrades[0]?.count ? Number(expiredOpenTrades[0].count) : 0,
+        expiredOpenTrades,
         disputeStats: {
-          openDisputes: disputeStats[0]?.openDisputes ? Number(disputeStats[0].openDisputes) : 0,
+          openDisputes,
         },
         recentLogs,
         generatedAt: new Date().toISOString(),
@@ -138,7 +141,7 @@ export function registerP2pAnalyticsRoutes(app: Express) {
         .from(p2pTrades)
         .where(inArray(p2pTrades.status, ["pending", "paid", "confirmed", "disputed"]));
 
-      const [expiredOpenTrades] = await db
+      const [expiredOpenTradesRow] = await db
         .select({
           count: sql<number>`count(*)`,
         })
@@ -168,15 +171,17 @@ export function registerP2pAnalyticsRoutes(app: Express) {
         .from(p2pTrades)
         .groupBy(p2pTrades.status);
 
-      const totalOffersCreated = await db.select({ count: sql<number>`count(*)` }).from(p2pOffers);
-      const totalTradesOpened = await db.select({ count: sql<number>`count(*)` }).from(p2pTrades);
+      const [totalOffersCreatedRow] = await db.select({ count: sql<number>`count(*)` }).from(p2pOffers);
+      const [totalTradesOpenedRow] = await db.select({ count: sql<number>`count(*)` }).from(p2pTrades);
+
+      const expiredOpenTrades = Number(expiredOpenTradesRow?.count ?? 0);
 
       const enterpriseSnapshot = {
         reconciliation: {
           id: `p2p_recon_${new Date().toISOString().slice(0, 10)}`,
           businessDate: new Date().toISOString().slice(0, 10),
-          totalOffersCreated: Number(totalOffersCreated[0]?.count || 0),
-          totalTradesOpened: Number(totalTradesOpened[0]?.count || 0),
+          totalOffersCreated: Number(totalOffersCreatedRow?.count || 0),
+          totalTradesOpened: Number(totalTradesOpenedRow?.count || 0),
           totalEscrowLocked: openEscrowSnapshot?.openEscrow || "0",
           completedTrades: Number(completedTrades?.totalTrades || 0),
           cancelledTrades: Number(cancelledTrades?.count || 0),
@@ -195,7 +200,7 @@ export function registerP2pAnalyticsRoutes(app: Express) {
       res.json({
         completedTrades: completedTrades || { totalTrades: 0, totalVolume: "0", totalFees: "0", totalEscrow: "0" },
         openEscrowSnapshot: openEscrowSnapshot || { openTrades: 0, openVolume: "0", openEscrow: "0" },
-        expiredOpenTrades: expiredOpenTrades[0]?.count ? Number(expiredOpenTrades[0].count) : 0,
+        expiredOpenTrades,
         tradeRiskRows,
         enterpriseSnapshot,
         generatedAt: new Date().toISOString(),
