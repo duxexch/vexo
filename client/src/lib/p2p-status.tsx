@@ -29,6 +29,27 @@ export function getOfferStatusBucket(status: string): P2PStatusBucket {
   }
 }
 
+export function getOfferStatusLabel(status: string): string {
+  switch (status) {
+    case "draft":
+      return "Draft";
+    case "pending_approval":
+      return "Waiting for review";
+    case "active":
+      return "Live";
+    case "paused":
+      return "Paused";
+    case "rejected":
+      return "Rejected";
+    case "expired":
+      return "Expired";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
+
 export function getTradeStatusBucket(status: string): P2PStatusBucket {
   switch (status) {
     case "pending":
@@ -46,6 +67,29 @@ export function getTradeStatusBucket(status: string): P2PStatusBucket {
   }
 }
 
+export function getTradeStatusLabel(status: string): string {
+  switch (status) {
+    case "initiated":
+      return "Trade started";
+    case "pending":
+      return "Waiting for payment";
+    case "paid":
+      return "Payment marked";
+    case "confirmed":
+      return "Waiting for confirmation";
+    case "completed":
+      return "Trade completed";
+    case "cancelled":
+      return "Trade cancelled";
+    case "disputed":
+      return "Under review";
+    case "frozen":
+      return "Frozen";
+    default:
+      return status;
+  }
+}
+
 export function getDisputeStatusBucket(status: string): P2PStatusBucket {
   switch (status) {
     case "open":
@@ -56,6 +100,25 @@ export function getDisputeStatusBucket(status: string): P2PStatusBucket {
       return "resolved";
     default:
       return "pending";
+  }
+}
+
+export function getDisputeStatusLabel(status: string): string {
+  switch (status) {
+    case "open":
+      return "Open dispute";
+    case "evidence_collection":
+      return "Collecting evidence";
+    case "under_review":
+      return "Under review";
+    case "escalated":
+      return "Escalated";
+    case "resolved":
+      return "Resolved";
+    case "closed":
+      return "Closed";
+    default:
+      return status;
   }
 }
 

@@ -1,3 +1,4 @@
-server/routes/p2p-trading/enterprise-state.ts(72,55): error TS2345: Argument of type '{ status: "pending" | "completed" | "cancelled" | "paid" | "confirmed" | "disputed"; dealKind: "standard_asset" | "digital_product"; digitalProductType: string | null; exchangeOffered: string | null; ... 31 more ...; cancelledAt: Date | null; } & { ...; }' is not assignable to parameter of type '{ status: string; runtime?: { escrowState?: string | undefined; ledgerState?: string | undefined; idempotencyConfirmed?: boolean | undefined; finalityHash?: string | undefined; ledgerCommitId?: string | undefined; escrowReleaseTx?: string | undefined; } | null | undefined; }'.
-  Types of property 'runtime' are incompatible.
-    Type 'unknown' is not assignable to type '{ escrowState?: string | undefined; ledgerState?: string | undefined; idempotencyConfirmed?: boolean | undefined; finalityHash?: string | undefined; ledgerCommitId?: string | undefined; escrowReleaseTx?: string | undefined; } | null | undefined'.
+
+> rest-express@1.0.1 check:types
+> tsc --noEmit --pretty false
+

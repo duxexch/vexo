@@ -37,8 +37,12 @@ import { WORLD_CURRENCIES } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 import {
   StatusPill,
+  getDisputeStatusBucket,
+  getDisputeStatusLabel,
   getOfferStatusBucket,
+  getOfferStatusLabel,
   getTradeStatusBucket,
+  getTradeStatusLabel,
 } from "@/lib/p2p-status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { P2POffer as P2POfferRow } from "@shared/schema";
@@ -392,6 +396,40 @@ const createOfferSchema = z.object({
   terms: z.string().trim().min(1).max(1200),
   autoReply: z.string().trim().min(1).max(500),
 });
+
+const CREATE_OFFER_MODES = [
+  {
+    id: "standard_asset" as const,
+    titleKey: "p2p.createStandardOffer",
+    descriptionKey: "p2p.offer.standardAssetDesc",
+    helperKey: "p2p.offer.standardAssetHelper",
+  },
+  {
+    id: "digital_product" as const,
+    titleKey: "p2p.createDigitalOffer",
+    descriptionKey: "p2p.offer.digitalProductDesc",
+    helperKey: "p2p.offer.digitalProductHelper",
+  },
+];
+
+const CREATE_OFFER_STEP_COPY: Record<1 | 2 | 3, { titleKey: string; descriptionKey: string }> = {
+  1: {
+    titleKey: "p2p.createOfferStep1Title",
+    descriptionKey: "p2p.createOfferStep1Desc",
+  },
+  2: {
+    titleKey: "p2p.createOfferStep2Title",
+    descriptionKey: "p2p.createOfferStep2Desc",
+  },
+  3: {
+    titleKey: "p2p.createOfferStep3Title",
+    descriptionKey: "p2p.createOfferStep3Desc",
+  },
+};
+
+function getOfferModeLabel(t: TranslateFn, dealKind: "standard_asset" | "digital_product") {
+  return dealKind === "digital_product" ? t("p2p.createDigitalOffer") : t("p2p.createStandardOffer");
+}
 
 export type CreateOfferForm = z.infer<typeof createOfferSchema>;
 
@@ -3383,7 +3421,7 @@ function MyOffersTab() {
                         <StatusPill
                           bucket={getOfferStatusBucket(offer.status)}
                           bucketLabel={t(`p2p.status.bucket.${getOfferStatusBucket(offer.status)}`)}
-                          preciseLabel={String(getStatusBadge(offer.status).props.children)}
+                          preciseLabel={getOfferStatusLabel(offer.status)}
                           tooltipPrefix={t('p2p.status.tooltipPrefix')}
                           testId={`badge-offer-status-${offer.id}`}
                         />
@@ -3717,7 +3755,7 @@ function MyOffersTab() {
   );
 }
 
-function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = {}) {
+function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" | "manage") => void } = {}) {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -4436,7 +4474,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
               description={t('p2p.empty.trades.description')}
               action={{
                 label: t('p2p.empty.trades.cta'),
-                onClick: () => onSwitchTab?.("marketplace"),
+                onClick: () => onSwitchTab?.("browse"),
               }}
             />
           </CardContent>
@@ -4459,7 +4497,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     <StatusPill
                       bucket={getTradeStatusBucket(trade.status)}
                       bucketLabel={t(`p2p.status.bucket.${getTradeStatusBucket(trade.status)}`)}
-                      preciseLabel={String(getStatusBadge(trade.status).props.children)}
+                      preciseLabel={getTradeStatusLabel(trade.status)}
                       tooltipPrefix={t('p2p.status.tooltipPrefix')}
                       testId={`badge-trade-status-${trade.id}`}
                     />
@@ -4566,8 +4604,8 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
               {activeTrade && (
                 <StatusPill
                   bucket={getTradeStatusBucket(activeTrade.status)}
-                  bucketLabel={String(getStatusBadge(activeTrade.status).props.children)}
-                  preciseLabel={String(getStatusBadge(activeTrade.status).props.children)}
+                  bucketLabel={getTradeStatusLabel(activeTrade.status)}
+                  preciseLabel={getTradeStatusLabel(activeTrade.status)}
                   testId="trade-room-status-pill"
                 />
               )}
@@ -6002,9 +6040,12 @@ function DisputesTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={cn("border", getDisputeStatusPillClass(dispute.status))}>
-                          {t(`p2p.dispute.status.${dispute.status}`)}
-                        </Badge>
+                        <StatusPill
+                          bucket={getDisputeStatusBucket(dispute.status)}
+                          bucketLabel={getDisputeStatusLabel(dispute.status)}
+                          preciseLabel={getDisputeStatusLabel(dispute.status)}
+                          testId={`badge-dispute-status-${dispute.id}`}
+                        />
                         <Badge className={cn("border", getDisputeStagePillClass(dispute.stage))}>{t(`p2p.dispute.stage.${dispute.stage}`)}</Badge>
                         <ChevronRight className="h-4 w-4 text-slate-400" />
                       </div>
@@ -6044,9 +6085,12 @@ function DisputesTab() {
                       {t('p2p.dispute.details')}
                     </CardTitle>
                     <div className="flex gap-2">
-                      <Badge className={cn("border", getDisputeStatusPillClass(disputeDetails.dispute.status))}>
-                        {t(`p2p.dispute.status.${disputeDetails.dispute.status}`)}
-                      </Badge>
+                      <StatusPill
+                        bucket={getDisputeStatusBucket(disputeDetails.dispute.status)}
+                        bucketLabel={getDisputeStatusLabel(disputeDetails.dispute.status)}
+                        preciseLabel={getDisputeStatusLabel(disputeDetails.dispute.status)}
+                        testId="badge-dispute-status-details"
+                      />
                       <Badge className={cn("border", getDisputeStagePillClass(disputeDetails.dispute.stage))}>{t(`p2p.dispute.stage.${disputeDetails.dispute.stage}`)}</Badge>
                     </div>
                   </div>
@@ -6256,16 +6300,27 @@ function DisputesTab() {
 
 export default function P2PPage() {
   const { t, dir } = useI18n();
-  const [activeTab, setActiveTab] = useState("marketplace");
+  const [activeSection, setActiveSection] = useState<"browse" | "create" | "manage">("browse");
+  const [activeManageTab, setActiveManageTab] = useState<"offers" | "trades" | "disputes">("offers");
+
+  const openCreateStandardOffer = () => {
+    setActiveSection("create");
+    window.dispatchEvent(new CustomEvent("p2p-create-offer-request", { detail: { dealKind: "standard_asset" } }));
+  };
+
+  const openCreateDigitalOffer = () => {
+    setActiveSection("create");
+    window.dispatchEvent(new CustomEvent("p2p-create-offer-request", { detail: { dealKind: "digital_product" } }));
+  };
 
   return (
     <div className="min-h-[100svh] overflow-x-hidden bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-2 md:p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
-      <div className="mb-4 flex items-start justify-between gap-2 sm:gap-4 flex-wrap">
+      <div className="mb-4 flex items-start justify-between gap-2 flex-wrap">
         <div className="min-w-0">
           <h1 className="font-display text-2xl sm:text-3xl tracking-wider leading-none" data-testid="text-p2p-title">{t('nav.p2p')}</h1>
           <p className="text-sm sm:text-base text-muted-foreground">{t('p2p.description')}</p>
         </div>
-        <div className="flex w-full sm:w-auto gap-2">
+        <div className="flex w-full gap-2 sm:w-auto">
           <Link href="/p2p/profile/me" className="flex-1 sm:flex-none">
             <Button variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0" data-testid="button-p2p-profile">
               <User className="h-4 w-4 sm:me-2" />
@@ -6281,43 +6336,77 @@ export default function P2PPage() {
         </div>
       </div>
 
-      <div>
-        <div className="pt-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeSection} onValueChange={(value) => setActiveSection(value as "browse" | "create" | "manage")}>
+        <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsTrigger value="browse" data-testid="tab-p2p-browse">{t('p2p.intent.browse')}</TabsTrigger>
+          <TabsTrigger value="create" data-testid="tab-p2p-create">{t('p2p.intent.create')}</TabsTrigger>
+          <TabsTrigger value="manage" data-testid="tab-p2p-manage">{t('p2p.intent.manage')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="browse">
+          <div className="mb-3 rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-slate-100">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">{t('p2p.browseTitle')}</h2>
+                <p className="text-sm text-slate-400">{t('p2p.browseDescription')}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => setActiveSection("create")} data-testid="button-browse-create">
+                  {t('p2p.create')}
+                </Button>
+                <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => setActiveSection("manage")} data-testid="button-browse-manage">
+                  {t('p2p.manage')}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <MarketplaceTab />
+        </TabsContent>
+
+        <TabsContent value="create">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Card className="border-slate-800 bg-slate-950/80 text-slate-100">
+              <CardHeader>
+                <CardTitle>{t('p2p.createStandardOffer')}</CardTitle>
+                <CardDescription>{t('p2p.intent.standardOfferDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-slate-400">{t('p2p.intent.standardOfferHelp')}</p>
+                <Button className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={openCreateStandardOffer} data-testid="button-open-standard-create">
+                  {t('p2p.startStandardCreate')}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-950/80 text-slate-100">
+              <CardHeader>
+                <CardTitle>{t('p2p.createDigitalOffer')}</CardTitle>
+                <CardDescription>{t('p2p.intent.digitalOfferDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-slate-400">{t('p2p.intent.digitalOfferHelp')}</p>
+                <Button className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={openCreateDigitalOffer} data-testid="button-open-digital-create">
+                  {t('p2p.startDigitalCreate')}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          <MyOffersTab />
+        </TabsContent>
+
+        <TabsContent value="manage">
+          <Tabs value={activeManageTab} onValueChange={(value) => setActiveManageTab(value as "offers" | "trades" | "disputes")}>
             <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <TabsTrigger value="marketplace" data-testid="tab-marketplace">
-                {t('p2p.marketplace')}
-              </TabsTrigger>
-              <TabsTrigger value="my-offers" data-testid="tab-my-offers">
-                {t('p2p.myOffers')}
-              </TabsTrigger>
-              <TabsTrigger value="my-trades" data-testid="tab-my-trades">
-                {t('p2p.myTrades')}
-              </TabsTrigger>
-              <TabsTrigger value="disputes" data-testid="tab-disputes">
-                <Scale className="h-4 w-4 me-1" />
-                {t('p2p.disputes')}
-              </TabsTrigger>
+              <TabsTrigger value="offers" data-testid="tab-manage-offers">{t('p2p.myOffers')}</TabsTrigger>
+              <TabsTrigger value="trades" data-testid="tab-manage-trades">{t('p2p.myTrades')}</TabsTrigger>
+              <TabsTrigger value="disputes" data-testid="tab-manage-disputes">{t('p2p.disputes')}</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="marketplace">
-              <MarketplaceTab />
-            </TabsContent>
-
-            <TabsContent value="my-offers">
-              <MyOffersTab />
-            </TabsContent>
-
-            <TabsContent value="my-trades">
-              <MyTradesTab onSwitchTab={setActiveTab} />
-            </TabsContent>
-
-            <TabsContent value="disputes">
-              <DisputesTab />
-            </TabsContent>
+            <TabsContent value="offers"><MyOffersTab /></TabsContent>
+            <TabsContent value="trades"><MyTradesTab onSwitchTab={setActiveSection} /></TabsContent>
+            <TabsContent value="disputes"><DisputesTab /></TabsContent>
           </Tabs>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
