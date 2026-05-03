@@ -26,6 +26,8 @@ import { useI18n } from "@/lib/i18n";
 import { queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUnreadAlertEntities, useMarkAlertReadByEntity } from "@/hooks/use-admin-alert-counts";
+import { P2PStatsOverview } from "@/pages/admin/p2p/P2PStatsOverview";
+import { P2PSettingsPanel as P2PSettingsPanelShell } from "@/pages/admin/p2p/P2PSettingsPanel";
 import {
   Search,
   ArrowLeftRight,
@@ -130,6 +132,8 @@ interface P2PDispute {
   respondentUsername?: string;
   initiatorName?: string;
   respondentName?: string;
+  initiatorId?: string;
+  respondentId?: string;
   reason?: string;
   createdAt?: string;
   [key: string]: unknown;
@@ -235,6 +239,36 @@ interface FreezeProgramRequest {
 interface FreezeProgramPayload {
   configs: FreezeProgramConfig[];
   paymentMethods: FreezeProgramMethodOption[];
+}
+
+interface P2PAnalytics {
+  allTime?: {
+    totalFees?: string;
+    totalVolume?: string;
+    totalTrades?: number;
+  };
+  last30Days?: {
+    totalFees?: string;
+  };
+  byStatus?: Array<{
+    status: string;
+    count: number;
+    volume?: string;
+    fees?: string;
+  }>;
+  openEscrowSnapshot?: {
+    openEscrow?: string;
+    openTrades?: number;
+  };
+  disputeStats?: {
+    openDisputes?: number;
+  };
+  expiredOpenTrades?: number;
+  recentLogs?: Array<{
+    action: string;
+    count: number;
+  }>;
+  generatedAt?: string;
 }
 
 const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
@@ -1238,14 +1272,26 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
   );
 }
 
+type AdminP2PActionDialog =
+  | "cancelOffer"
+  | "approveOffer"
+  | "rejectOffer"
+  | "resolveDispute"
+  | "viewOffer"
+  | "viewTrade"
+  | "viewDispute"
+  | "escalateDispute"
+  | "closeDispute"
+  | "viewLogs";
+
 export default function AdminP2PPage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [monthlyLimitDrafts, setMonthlyLimitDrafts] = useState<Record<string, string>>({});
-  const [selectedOffer, setSelectedOffer] = useState<any>(null);
-  const [selectedTrade, setSelectedTrade] = useState<any>(null);
-  const [actionDialog, setActionDialog] = useState<string | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
+  const [selectedTrade, setSelectedTrade] = useState<P2PTrade | P2PDispute | null>(null);
+  const [actionDialog, setActionDialog] = useState<AdminP2PActionDialog | null>(null);
 
   // Alert-based highlighting for P2P trades and disputes
   const { data: unreadData } = useUnreadAlertEntities("/admin/p2p");
@@ -1366,6 +1412,11 @@ export default function AdminP2PPage() {
     queryKey: ["/api/admin/p2p/disputes", disputeStatus, disputeSortBy],
     queryFn: () => adminFetch(`/api/admin/p2p/disputes?status=${disputeStatus}&sortBy=${disputeSortBy}`),
     refetchInterval: 15000, // Poll every 15 seconds for near-real-time updates
+  });
+
+  const { data: analytics } = useQuery<P2PAnalytics>({
+    queryKey: ["/api/admin/p2p/analytics"],
+    queryFn: () => adminFetch("/api/admin/p2p/analytics"),
   });
 
   const { data: stats } = useQuery({
@@ -1535,7 +1586,9 @@ export default function AdminP2PPage() {
     setResolution("");
   };
 
-  const getStatusColor = (status: string) => {
+  type BadgeVariant = "default" | "destructive" | "secondary" | "outline";
+
+  const getStatusColor = (status: string): BadgeVariant => {
     switch (status) {
       case "active": return "default";
       case "completed": return "secondary";
@@ -1604,60 +1657,111 @@ export default function AdminP2PPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card className={statCardClass}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <ArrowLeftRight className="h-5 w-5 text-primary" />
+      <P2PStatsOverview
+        testId="p2p-stats-overview"
+        stats={[
+          { label: t("admin.p2p.stats.activeOffers"), value: stats?.activeOffers || 0, testId: "stat-active-offers" },
+          { label: t("admin.p2p.stats.completedTrades"), value: stats?.completedTrades || 0, testId: "stat-completed-trades" },
+          { label: t("admin.p2p.stats.pendingTrades"), value: stats?.pendingTrades || 0, testId: "stat-pending-trades" },
+          { label: t("admin.p2p.stats.openDisputes"), value: stats?.openDisputes || 0, testId: "stat-open-disputes" },
+        ]}
+      />
+
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className={surfaceCardClass}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t("admin.p2p.stats.financialSnapshot")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.totalFees")}</p>
+                <p className="mt-1 text-lg font-semibold">${Number(analytics.allTime?.totalFees || 0).toFixed(2)}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.activeOffers")}</p>
-                <p className="text-2xl font-bold">{stats?.activeOffers || 0}</p>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.totalTradeVolume")}</p>
+                <p className="mt-1 text-lg font-semibold">${Number(analytics.allTime?.totalVolume || 0).toFixed(2)}</p>
               </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.openEscrow")}</p>
+                <p className="mt-1 text-lg font-semibold">${Number(analytics.openEscrowSnapshot?.openEscrow || 0).toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.expiredOpenTrades")}</p>
+                <p className="mt-1 text-lg font-semibold">{analytics.expiredOpenTrades || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={surfaceCardClass}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t("admin.p2p.stats.operationalSnapshot")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                  <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.openTrades")}</p>
+                  <p className="mt-1 text-lg font-semibold">{analytics.openEscrowSnapshot?.openTrades || 0}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                  <p className="text-xs text-muted-foreground">{t("admin.p2p.stats.openDisputes")}</p>
+                  <p className="mt-1 text-lg font-semibold">{analytics.disputeStats?.openDisputes || 0}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{t("admin.p2p.stats.generatedAt")}: {analytics.generatedAt ? new Date(analytics.generatedAt).toLocaleString() : "-"}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`${surfaceCardClass} lg:col-span-2`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t("admin.p2p.stats.ledgerActivity")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(analytics.recentLogs || []).slice(0, 8).map((item: { action: string; count: number }) => (
+                  <div key={item.action} className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{item.action.replace(/_/g, " ")}</p>
+                    <p className="mt-1 text-lg font-semibold">{item.count}</p>
+                  </div>
+                ))}
+                {(analytics.recentLogs || []).length === 0 && (
+                  <p className="text-sm text-muted-foreground">{t("admin.p2p.details.none")}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {analytics?.byStatus && analytics.byStatus.length > 0 && (
+        <Card className={surfaceCardClass}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">{t("admin.p2p.stats.tradesByStatus")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              {analytics.byStatus.map((item: { status: string; count: number; volume?: string; fees?: string }) => (
+                <div key={item.status} className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      item.status === "completed" ? "default" :
+                        item.status === "cancelled" ? "destructive" :
+                          item.status === "disputed" ? "destructive" :
+                            "secondary"
+                    }
+                    data-testid={`badge-status-${item.status}`}
+                  >
+                    {item.status}
+                  </Badge>
+                  <span className="text-sm font-medium">{item.count}</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
-        <Card className={statCardClass}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/10">
-                <Check className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.completedTrades")}</p>
-                <p className="text-2xl font-bold">{stats?.completedTrades || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className={statCardClass}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/10">
-                <Clock className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.pendingTrades")}</p>
-                <p className="text-2xl font-bold">{stats?.pendingTrades || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className={statCardClass}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/10">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.openDisputes")}</p>
-                <p className="text-2xl font-bold">{stats?.openDisputes || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      )}
 
       <Tabs defaultValue="offers">
         <div className="overflow-x-auto pb-1">
@@ -2214,7 +2318,9 @@ export default function AdminP2PPage() {
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">
-          <P2PSettingsPanel toast={toast} />
+          <P2PSettingsPanelShell title={t("nav.settings")} description={t("admin.p2p.description")} testId="p2p-settings-panel">
+            <P2PSettingsPanel toast={toast} />
+          </P2PSettingsPanelShell>
         </TabsContent>
       </Tabs>
 
@@ -2239,8 +2345,8 @@ export default function AdminP2PPage() {
             <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={BUTTON_3D_DANGER_CLASS}
-              onClick={() => cancelOfferMutation.mutate({ id: selectedOffer?.id, reason: actionReason })}
-              disabled={!actionReason}
+              onClick={() => cancelOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason })}
+              disabled={!actionReason || !selectedOffer?.id}
               data-testid="button-confirm-cancel"
             >
               {t("admin.p2p.offers.cancel")}
@@ -2272,10 +2378,10 @@ export default function AdminP2PPage() {
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
-              className={button3dPrimaryClass}
-              onClick={() => approveOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason.trim() || undefined })}
-              disabled={approveOfferMutation.isPending || !selectedOffer?.id}
-              data-testid="button-confirm-approve-offer"
+              className={BUTTON_3D_CLASS}
+              onClick={() => approveOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason })}
+              disabled={!actionReason || closeDisputeMutation.isPending || !selectedTrade?.id}
+              data-testid="button-confirm-close"
             >
               {approveOfferMutation.isPending ? t("common.loading") : t("admin.p2p.offers.approve")}
             </Button>
@@ -2327,8 +2433,8 @@ export default function AdminP2PPage() {
                   <SelectValue placeholder={t("admin.p2p.disputes.resolveDialog.selectWinner")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="initiator">Initiator ({selectedTrade?.initiatorName})</SelectItem>
-                  <SelectItem value="respondent">Respondent ({selectedTrade?.respondentName})</SelectItem>
+                  <SelectItem value="initiator">Initiator ({String(selectedTrade?.initiatorName ?? "-")})</SelectItem>
+                  <SelectItem value="respondent">Respondent ({String(selectedTrade?.respondentName ?? "-")})</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2348,9 +2454,11 @@ export default function AdminP2PPage() {
             <Button
               className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
               onClick={() => resolveDisputeMutation.mutate({
-                id: selectedTrade?.id,
+                id: String(selectedTrade?.id || ""),
                 resolution: actionReason,
-                winnerId: resolution === "initiator" ? selectedTrade?.initiatorId : selectedTrade?.respondentId,
+                winnerId: resolution === "initiator"
+                  ? String((selectedTrade as P2PDispute | null)?.initiatorId || "")
+                  : String((selectedTrade as P2PDispute | null)?.respondentId || ""),
               })}
               disabled={!resolution || !actionReason}
               data-testid="button-confirm-resolve"
@@ -2404,8 +2512,8 @@ export default function AdminP2PPage() {
             <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
-              onClick={() => escalateDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
-              disabled={escalateDisputeMutation.isPending}
+              onClick={() => escalateDisputeMutation.mutate({ id: String(selectedTrade?.id || ""), reason: actionReason })}
+              disabled={escalateDisputeMutation.isPending || !selectedTrade?.id}
               data-testid="button-confirm-escalate"
             >
               {escalateDisputeMutation.isPending ? t("common.loading") : t("admin.p2p.disputes.escalate")}
@@ -2439,7 +2547,7 @@ export default function AdminP2PPage() {
             <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={button3dClass}
-              onClick={() => closeDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
+              onClick={() => closeDisputeMutation.mutate({ id: String(selectedTrade?.id || ""), reason: actionReason })}
               disabled={!actionReason || closeDisputeMutation.isPending}
               data-testid="button-confirm-close"
             >
@@ -2456,7 +2564,7 @@ export default function AdminP2PPage() {
             <DialogTitle>{t("admin.p2p.disputes.auditLog")}</DialogTitle>
           </DialogHeader>
           <div className="px-6 py-5">
-            <DisputeAuditLog disputeId={selectedTrade?.id} />
+            <DisputeAuditLog disputeId={selectedTrade?.id ? String(selectedTrade.id) : undefined} />
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <Button className={button3dClass} onClick={closeDialog}>{t("common.close")}</Button>
@@ -2470,7 +2578,7 @@ export default function AdminP2PPage() {
 function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
   const { t } = useI18n();
 
-  const { data: logs = [], isLoading, isError } = useQuery({
+  const { data: logs = [], isLoading, isError } = useQuery<P2PAuditLog[]>({
     queryKey: ["/api/admin/p2p/disputes", disputeId, "logs"],
     queryFn: () => disputeId
       ? adminFetch(`/api/admin/p2p/disputes/${disputeId}/logs`)
@@ -2500,8 +2608,8 @@ function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
               {new Date(log.createdAt).toLocaleString()}
             </span>
           </div>
-          <p className="mt-1 text-sm text-foreground">{log.description}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("admin.p2p.disputes.auditLog.by")}: {log.username}</p>
+          <p className="mt-1 text-sm text-foreground">{String(log.description ?? "")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("admin.p2p.disputes.auditLog.by")}: {String(log.username ?? "")}</p>
         </div>
       ))}
     </div>
