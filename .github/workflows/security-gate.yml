@@ -39,7 +39,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: vex_user
-          POSTGRES_PASSWORD: ${{ secrets.SECURITY_GATE_POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: ${{ secrets.SECURITY_GATE_POSTGRES_PASSWORD || 'security-gate-postgres' }}
           POSTGRES_DB: vex_db
         ports:
           - 5432:5432
@@ -60,12 +60,12 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://vex_user:${{ secrets.SECURITY_GATE_POSTGRES_PASSWORD }}@localhost:5432/vex_db
+      DATABASE_URL: postgresql://vex_user:${{ secrets.SECURITY_GATE_POSTGRES_PASSWORD || 'security-gate-postgres' }}@localhost:5432/vex_db
       REDIS_URL: redis://localhost:6379
       DB_SSL: "false"
-      SESSION_SECRET: ${{ secrets.SECURITY_GATE_SESSION_SECRET }}
-      JWT_SIGNING_KEY: ${{ secrets.SECURITY_GATE_JWT_SIGNING_KEY }}
-      JWT_ADMIN_SECRET: ${{ secrets.SECURITY_GATE_JWT_ADMIN_SECRET }}
+      SESSION_SECRET: ${{ secrets.SECURITY_GATE_SESSION_SECRET || 'security-gate-session-secret' }}
+      JWT_SIGNING_KEY: ${{ secrets.SECURITY_GATE_JWT_SIGNING_KEY || 'security-gate-jwt-signing-key' }}
+      JWT_ADMIN_SECRET: ${{ secrets.SECURITY_GATE_JWT_ADMIN_SECRET || 'security-gate-jwt-admin-secret' }}
       PORT: "3011"
 
     steps:
