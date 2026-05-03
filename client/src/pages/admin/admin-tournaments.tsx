@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { ARCADE_GAMES } from "@shared/arcade-games";
 import {
   Trophy,
   Plus,
@@ -91,7 +92,11 @@ const GAME_TYPES = [
   { value: "dominoes", label: "Dominoes", labelAr: "دومينو" },
   { value: "baloot", label: "Baloot", labelAr: "بلوت" },
   { value: "tarneeb", label: "Tarneeb", labelAr: "طرنيب" },
-  { value: "snake", label: "Snake Arena", labelAr: "أرينا الثعبان" },
+  ...ARCADE_GAMES.map((game) => ({
+    value: game.key,
+    label: game.titleEn,
+    labelAr: game.titleAr,
+  })),
 ];
 
 const TOURNAMENT_GAME_TYPE_ALIASES: Record<string, string> = {
