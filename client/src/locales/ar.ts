@@ -1729,6 +1729,8 @@ const ar: Record<string, string> = {
   'admin.layout.menu.giftCatalog': 'كتالوج الهدايا',
   'admin.layout.menu.tournaments': 'البطولات',
   'admin.layout.menu.auditLogs': 'سجلات التدقيق',
+  'admin.layout.menu.realtime': 'الوقت الحقيقي',
+  'admin.layout.menu.announcements': 'الإعلانات',
   'admin.layout.settings.appSettings': 'إعدادات التطبيق',
   'admin.layout.settings.projectCurrency': 'عملة المنصة',
   'admin.layout.settings.seoSettings': 'إعدادات SEO',
