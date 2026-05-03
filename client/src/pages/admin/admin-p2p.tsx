@@ -183,6 +183,8 @@ interface P2PSettings {
   requireIdentityVerification: boolean;
   requirePhoneVerification: boolean;
   requireEmailVerification: boolean;
+  standardOfferApprovalMode: "automatic" | "manual";
+  digitalOfferApprovalMode: "automatic" | "manual";
   p2pBuyCurrencies: string[];
   p2pSellCurrencies: string[];
   depositEnabledCurrencies: string[];
@@ -831,6 +833,60 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </div>
 
             <div className="pt-4 border-t space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Label>{t("admin.p2p.settings.standardOfferApprovalMode")}</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {t("admin.p2p.settings.standardOfferApprovalMode.description")}
+                      </p>
+                    </div>
+                    <Badge variant={settings?.standardOfferApprovalMode === "manual" ? "secondary" : "default"}>
+                      {settings?.standardOfferApprovalMode || "automatic"}
+                    </Badge>
+                  </div>
+                  <Select
+                    value={settings?.standardOfferApprovalMode || "automatic"}
+                    onValueChange={(value) => handleUpdateSetting("standardOfferApprovalMode", value as "automatic" | "manual")}
+                  >
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-standard-offer-approval-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="automatic">{t("admin.p2p.settings.approvalMode.automatic")}</SelectItem>
+                      <SelectItem value="manual">{t("admin.p2p.settings.approvalMode.manual")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Label>{t("admin.p2p.settings.digitalOfferApprovalMode")}</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {t("admin.p2p.settings.digitalOfferApprovalMode.description")}
+                      </p>
+                    </div>
+                    <Badge variant={settings?.digitalOfferApprovalMode === "manual" ? "secondary" : "default"}>
+                      {settings?.digitalOfferApprovalMode || "manual"}
+                    </Badge>
+                  </div>
+                  <Select
+                    value={settings?.digitalOfferApprovalMode || "manual"}
+                    onValueChange={(value) => handleUpdateSetting("digitalOfferApprovalMode", value as "automatic" | "manual")}
+                  >
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-digital-offer-approval-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="automatic">{t("admin.p2p.settings.approvalMode.automatic")}</SelectItem>
+                      <SelectItem value="manual">{t("admin.p2p.settings.approvalMode.manual")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label>{t("admin.p2p.settings.autoExpireTrades")}</Label>

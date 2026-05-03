@@ -895,7 +895,13 @@ export function registerOfferRoutes(app: Express) {
 
       const now = new Date();
       const isPublicOffer = normalizedVisibility === "public";
-      const initialStatus = isPublicOffer ? "pending_approval" : "active";
+      const approvalMode = normalizedDealKind === "digital_product"
+        ? (globalSettings?.digitalOfferApprovalMode ?? "manual")
+        : (globalSettings?.standardOfferApprovalMode ?? "automatic");
+      const initialStatus = isPublicOffer && approvalMode === "manual" ? "pending_approval" : "active";
+      const approvedAt = initialStatus === "active" ? now : null;
+      const submittedForReviewAt = isPublicOffer && initialStatus === "pending_approval" ? now : null;
+      const reviewedAt = initialStatus === "active" ? now : null;
 
       const created = await storage.createP2POffer({
         userId: req.user!.id,
@@ -922,9 +928,9 @@ export function registerOfferRoutes(app: Express) {
         paymentTimeLimit: parsedPaymentTimeLimit,
         terms: safeTerms || null,
         autoReply: safeAutoReply || null,
-        submittedForReviewAt: isPublicOffer ? now : null,
-        approvedAt: isPublicOffer ? null : now,
-        reviewedAt: isPublicOffer ? null : now,
+        submittedForReviewAt,
+        approvedAt,
+        reviewedAt,
       });
 
       const ownerP2PUsername = await ensureP2PUsername(req.user!.id, user?.username);

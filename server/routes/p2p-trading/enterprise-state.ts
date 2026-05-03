@@ -69,7 +69,16 @@ export function registerP2PEnterpriseStateRoutes(app: Express) {
                 return res.status(403).json({ error: "Not authorized to view this trade" });
             }
 
-            const finality = assertEnterpriseFinality(trade as typeof trade & { runtime?: unknown });
+            const finality = assertEnterpriseFinality(trade as typeof trade & {
+                runtime?: {
+                    escrowState?: string;
+                    ledgerState?: string;
+                    idempotencyConfirmed?: boolean;
+                    finalityHash?: string;
+                    ledgerCommitId?: string;
+                    escrowReleaseTx?: string;
+                } | null;
+            });
             if (!finality.ok) {
                 return res.status(409).json({
                     error: finality.reason || "Trade finality is not verified",

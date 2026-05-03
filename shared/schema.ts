@@ -3959,7 +3959,6 @@ export type SeasonReward = typeof seasonRewards.$inferSelect;
 
 // ==================== PROJECT CURRENCY ====================
 
-export const currencyApprovalModeEnum = pgEnum("currency_approval_mode", ["automatic", "manual"]);
 export const currencyConversionStatusEnum = pgEnum("currency_conversion_status", ["pending", "approved", "rejected", "completed"]);
 export const currencyLedgerTypeEnum = pgEnum("currency_ledger_type", ["conversion", "game_stake", "game_win", "p2p_send", "p2p_receive", "p2p_escrow", "p2p_received", "p2p_refund", "bonus", "refund", "admin_adjustment"]);
 
