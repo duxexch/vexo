@@ -17,6 +17,11 @@ import {
   resolveP2PVerificationRequirements,
 } from "./helpers";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
+import {
+  mapTradeStatusToEnterpriseAccountingState,
+  mapTradeStatusToEnterpriseBusinessState,
+  mapTradeStatusToEnterpriseOperationalState,
+} from "./enterprise-bridge";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
 import { isEitherUserBlocked } from "../../lib/user-blocking";
@@ -67,6 +72,11 @@ export function registerTradeRoutes(app: Express) {
           totalPrice: trade.fiatAmount,
           isBuyer: trade.buyerId === req.user!.id,
           isSeller: trade.sellerId === req.user!.id,
+          enterpriseState: {
+            business: mapTradeStatusToEnterpriseBusinessState(trade.status),
+            operational: mapTradeStatusToEnterpriseOperationalState(trade.status),
+            accounting: mapTradeStatusToEnterpriseAccountingState(trade.status),
+          },
         };
       });
       res.json(enriched);
@@ -644,6 +654,11 @@ export function registerTradeRoutes(app: Express) {
         offerTerms: offer?.terms || null,
         offerAutoReply: offer?.autoReply || null,
         offerPaymentTimeLimit: offer?.paymentTimeLimit || null,
+        enterpriseState: {
+          business: mapTradeStatusToEnterpriseBusinessState(trade.status),
+          operational: mapTradeStatusToEnterpriseOperationalState(trade.status),
+          accounting: mapTradeStatusToEnterpriseAccountingState(trade.status),
+        },
         buyer: buyer ? { id: buyer.id, username: buyerP2PUsername, nickname: buyer.nickname } : null,
         seller: seller ? { id: seller.id, username: sellerP2PUsername, nickname: seller.nickname } : null,
       });

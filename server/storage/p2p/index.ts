@@ -31,3 +31,10 @@ export { createP2PTradeProjectCurrencyAtomic } from './atomic-project-create';
 export { completeP2PTradeProjectCurrencyAtomic } from './atomic-project-complete';
 export { cancelP2PTradeProjectCurrencyAtomic } from './atomic-project-cancel';
 export { resolveP2PDisputedTradeProjectCurrencyAtomic } from './atomic-project-resolve';
+
+export {
+  buildP2PTradeProjection,
+  appendP2PTradeLedgerLog,
+  createP2PLedgerEntry,
+  createP2PTradeStateEvent,
+} from './ledger';

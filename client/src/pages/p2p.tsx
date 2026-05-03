@@ -591,9 +591,9 @@ export function CreateOfferCurrencyField({
                     <SelectItem key={supportedCurrency} value={supportedCurrency} data-testid={`select-offer-currency-option-${supportedCurrency}`}>
                       {showHint
                         ? t('p2p.balanceHint', {
-                            currency: supportedCurrency,
-                            amount: formatAssetAmount(hintAmount, supportedCurrency, numberLocale),
-                          })
+                          currency: supportedCurrency,
+                          amount: formatAssetAmount(hintAmount, supportedCurrency, numberLocale),
+                        })
                         : supportedCurrency}
                     </SelectItem>
                   );
@@ -4623,267 +4623,267 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                       })}
                     </div>
 
-                      <div className="space-y-3">
-                        {showBuyerGuidedPendingFlow && (
-                          <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
-                            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-                              <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
-                                <p className="text-slate-400">{t('p2p.paymentMethod')}</p>
-                                <p className="mt-1 text-slate-100">{activeTrade.paymentMethod || "-"}</p>
-                              </div>
-                              <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
-                                <p className="text-slate-400">{t('common.amount')}</p>
-                                <p className="mt-1 text-slate-100">
-                                  {formatAssetAmount(activeTrade.amount, activeTradeOfferCurrency || activeTradeFiatCurrency || "USDT", numberLocale)}
-                                </p>
-                              </div>
+                    <div className="space-y-3">
+                      {showBuyerGuidedPendingFlow && (
+                        <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
+                          <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                            <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
+                              <p className="text-slate-400">{t('p2p.paymentMethod')}</p>
+                              <p className="mt-1 text-slate-100">{activeTrade.paymentMethod || "-"}</p>
                             </div>
+                            <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
+                              <p className="text-slate-400">{t('common.amount')}</p>
+                              <p className="mt-1 text-slate-100">
+                                {formatAssetAmount(activeTrade.amount, activeTradeOfferCurrency || activeTradeFiatCurrency || "USDT", numberLocale)}
+                              </p>
+                            </div>
+                          </div>
 
-                            {(activeTrade.offerTerms || activeTrade.offerAutoReply) && (
-                              <div className="space-y-1 rounded border border-slate-800 bg-slate-900/60 p-2 text-xs text-slate-300">
-                                <p className="text-slate-400">{t('transactions.paymentInstructions')}</p>
-                                {activeTrade.offerTerms && <p className="whitespace-pre-wrap break-words">{activeTrade.offerTerms}</p>}
-                                {activeTrade.offerAutoReply && <p className="whitespace-pre-wrap break-words">{activeTrade.offerAutoReply}</p>}
+                          {(activeTrade.offerTerms || activeTrade.offerAutoReply) && (
+                            <div className="space-y-1 rounded border border-slate-800 bg-slate-900/60 p-2 text-xs text-slate-300">
+                              <p className="text-slate-400">{t('transactions.paymentInstructions')}</p>
+                              {activeTrade.offerTerms && <p className="whitespace-pre-wrap break-words">{activeTrade.offerTerms}</p>}
+                              {activeTrade.offerAutoReply && <p className="whitespace-pre-wrap break-words">{activeTrade.offerAutoReply}</p>}
+                            </div>
+                          )}
+
+                          {!buyerInstructionAcknowledged ? (
+                            <Button
+                              className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
+                              onClick={() => acknowledgeBuyerInstructionsMutation.mutate()}
+                              disabled={acknowledgeBuyerInstructionsMutation.isPending}
+                              data-testid="button-acknowledge-buyer-instructions"
+                            >
+                              {t('common.confirm')}
+                            </Button>
+                          ) : (
+                            <p className="text-xs text-emerald-300">{t('common.confirm')}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {showBuyerGuidedPendingFlow && buyerInstructionAcknowledged && (
+                        <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
+                          <Input
+                            value={paymentReference}
+                            onChange={(e) => setPaymentReference(e.target.value)}
+                            placeholder={t('transactions.paymentReference')}
+                            className="border-slate-700 bg-slate-900 text-slate-100"
+                            data-testid="input-payment-reference"
+                          />
+                          <p className="text-xs text-slate-400">{t('transactions.referenceNote')}</p>
+                          {selectedImageDraft ? (
+                            <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 p-2">
+                              <img
+                                src={selectedImageDraft.fileData}
+                                alt={t('support.image')}
+                                className="h-14 w-14 rounded object-cover"
+                                data-testid="img-pay-proof-preview"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
+                                <p className="text-[10px] text-slate-400">{selectedImageDraft.fileType}</p>
                               </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-rose-300 hover:text-rose-200"
+                                onClick={() => setSelectedImageDraft(undefined)}
+                                data-testid="button-pay-proof-remove"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                                onClick={() => tradeImageInputRef.current?.click()}
+                                disabled={isUploadingImage}
+                                data-testid="button-pay-upload-proof"
+                              >
+                                <Upload className="me-1 h-4 w-4" />
+                                {t('support.uploadImage')}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                                onClick={() => tradeCameraInputRef.current?.click()}
+                                disabled={isUploadingImage}
+                                data-testid="button-pay-capture-proof"
+                              >
+                                <Camera className="me-1 h-4 w-4" />
+                                {t('support.takePhoto')}
+                              </Button>
+                            </div>
+                          )}
+                          <Button
+                            className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                            onClick={() => tradeActionMutation.mutate("pay")}
+                            disabled={
+                              tradeActionMutation.isPending
+                              || isUploadingImage
+                              || paymentReference.trim().length === 0
+                              || !selectedImageDraft
+                            }
+                            data-testid="button-trade-action-pay"
+                          >
+                            {t('p2p.tradeProcessing')}
+                          </Button>
+                        </div>
+                      )}
+
+                      {activeTrade.isBuyer && activeTrade.status === "paid" && (
+                        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 p-3 text-xs text-emerald-300">
+                          <p>{t('p2p.tradeProcessing')}</p>
+                          {remainingTradeWindow && (
+                            <p className="mt-1 text-emerald-200">{remainingTradeWindow}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {activeTrade.isSeller && activeTrade.status === "paid" && (
+                        <Button
+                          className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
+                          onClick={() => tradeActionMutation.mutate("confirm")}
+                          disabled={tradeActionMutation.isPending}
+                          data-testid="button-trade-action-confirm"
+                        >
+                          {t('common.confirm')}
+                        </Button>
+                      )}
+
+                      {activeTrade.isSeller && activeTrade.status === "confirmed" && (
+                        <Button
+                          className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                          onClick={() => tradeActionMutation.mutate("complete")}
+                          disabled={tradeActionMutation.isPending}
+                          data-testid="button-trade-action-complete"
+                        >
+                          {t('p2p.tradeCompleted')}
+                        </Button>
+                      )}
+
+                      {canEscalateToArbitration && (
+                        <div className="space-y-2 rounded-lg border border-amber-700/40 bg-amber-900/10 p-3">
+                          <Textarea
+                            value={arbitrationDetails}
+                            onChange={(event) => setArbitrationDetails(event.target.value)}
+                            placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
+                            className="border-amber-800/50 bg-slate-950 text-slate-100"
+                            rows={3}
+                            data-testid="textarea-quick-dispute-details"
+                          />
+                          <Button
+                            variant="outline"
+                            className="w-full border-amber-700/60 bg-amber-900/20 text-amber-200 hover:bg-amber-900/30"
+                            onClick={() => quickDisputeMutation.mutate()}
+                            disabled={quickDisputeMutation.isPending}
+                            data-testid="button-quick-dispute"
+                          >
+                            <Scale className="me-1 h-4 w-4" />
+                            {t('p2p.dispute.submitDispute')}
+                          </Button>
+                        </div>
+                      )}
+
+                      {(activeTrade.status === "pending" || activeTrade.status === "paid") && (
+                        <div className="space-y-2 rounded-lg border border-red-700/30 bg-red-900/10 p-3">
+                          <Input
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder={t('p2p.dispute.reason')}
+                            className="border-slate-700 bg-slate-950 text-slate-100"
+                            data-testid="input-trade-cancel-reason"
+                          />
+
+                          <label className="flex items-center gap-2 text-xs text-slate-300">
+                            <Checkbox
+                              checked={cancelConfirmNoFundsMoved}
+                              onCheckedChange={(checked) => setCancelConfirmNoFundsMoved(Boolean(checked))}
+                            />
+                            <span>{t('p2p.dispute.reason.no_payment')}</span>
+                          </label>
+
+                          <label className="flex items-center gap-2 text-xs text-slate-300">
+                            <Checkbox
+                              checked={cancelConfirmConsequences}
+                              onCheckedChange={(checked) => setCancelConfirmConsequences(Boolean(checked))}
+                            />
+                            <span>{t('p2p.dispute.mutualAgreement')}</span>
+                          </label>
+
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {canCurrentUserRequestCancellation && (
+                              <Button
+                                variant="outline"
+                                className="border-red-700/50 bg-red-900/20 text-red-100 hover:bg-red-900/30"
+                                onClick={() => requestCancellationApprovalMutation.mutate()}
+                                disabled={
+                                  requestCancellationApprovalMutation.isPending
+                                  || !cancelConfirmNoFundsMoved
+                                  || !cancelConfirmConsequences
+                                }
+                                data-testid="button-request-cancellation-approval"
+                              >
+                                {t('common.send')}
+                              </Button>
                             )}
 
-                            {!buyerInstructionAcknowledged ? (
+                            {canApproveActiveCancellationRequest && (
                               <Button
-                                className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
-                                onClick={() => acknowledgeBuyerInstructionsMutation.mutate()}
-                                disabled={acknowledgeBuyerInstructionsMutation.isPending}
-                                data-testid="button-acknowledge-buyer-instructions"
+                                variant="outline"
+                                className="border-brand-gold/50 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20"
+                                onClick={() => approveCancellationRequestMutation.mutate()}
+                                disabled={
+                                  approveCancellationRequestMutation.isPending
+                                  || !cancelConfirmNoFundsMoved
+                                  || !cancelConfirmConsequences
+                                }
+                                data-testid="button-approve-cancellation-request"
                               >
                                 {t('common.confirm')}
                               </Button>
-                            ) : (
-                              <p className="text-xs text-emerald-300">{t('common.confirm')}</p>
+                            )}
+
+                            {canFinalizeApprovedCancellation && (
+                              <Button
+                                variant="destructive"
+                                className="sm:col-span-2"
+                                onClick={() => tradeActionMutation.mutate("cancel")}
+                                disabled={
+                                  tradeActionMutation.isPending
+                                  || !cancelConfirmNoFundsMoved
+                                  || !cancelConfirmConsequences
+                                }
+                                data-testid="button-trade-action-cancel"
+                              >
+                                {t('common.cancel')}
+                              </Button>
                             )}
                           </div>
-                        )}
 
-                        {showBuyerGuidedPendingFlow && buyerInstructionAcknowledged && (
-                          <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
-                            <Input
-                              value={paymentReference}
-                              onChange={(e) => setPaymentReference(e.target.value)}
-                              placeholder={t('transactions.paymentReference')}
-                              className="border-slate-700 bg-slate-900 text-slate-100"
-                              data-testid="input-payment-reference"
-                            />
-                            <p className="text-xs text-slate-400">{t('transactions.referenceNote')}</p>
-                            {selectedImageDraft ? (
-                              <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 p-2">
-                                <img
-                                  src={selectedImageDraft.fileData}
-                                  alt={t('support.image')}
-                                  className="h-14 w-14 rounded object-cover"
-                                  data-testid="img-pay-proof-preview"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
-                                  <p className="text-[10px] text-slate-400">{selectedImageDraft.fileType}</p>
-                                </div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-rose-300 hover:text-rose-200"
-                                  onClick={() => setSelectedImageDraft(undefined)}
-                                  data-testid="button-pay-proof-remove"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                                  onClick={() => tradeImageInputRef.current?.click()}
-                                  disabled={isUploadingImage}
-                                  data-testid="button-pay-upload-proof"
-                                >
-                                  <Upload className="me-1 h-4 w-4" />
-                                  {t('support.uploadImage')}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                                  onClick={() => tradeCameraInputRef.current?.click()}
-                                  disabled={isUploadingImage}
-                                  data-testid="button-pay-capture-proof"
-                                >
-                                  <Camera className="me-1 h-4 w-4" />
-                                  {t('support.takePhoto')}
-                                </Button>
-                              </div>
-                            )}
-                            <Button
-                              className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                              onClick={() => tradeActionMutation.mutate("pay")}
-                              disabled={
-                                tradeActionMutation.isPending
-                                || isUploadingImage
-                                || paymentReference.trim().length === 0
-                                || !selectedImageDraft
-                              }
-                              data-testid="button-trade-action-pay"
-                            >
-                              {t('p2p.tradeProcessing')}
-                            </Button>
-                          </div>
-                        )}
-
-                        {activeTrade.isBuyer && activeTrade.status === "paid" && (
-                          <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 p-3 text-xs text-emerald-300">
-                            <p>{t('p2p.tradeProcessing')}</p>
-                            {remainingTradeWindow && (
-                              <p className="mt-1 text-emerald-200">{remainingTradeWindow}</p>
-                            )}
-                          </div>
-                        )}
-
-                        {activeTrade.isSeller && activeTrade.status === "paid" && (
-                          <Button
-                            className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
-                            onClick={() => tradeActionMutation.mutate("confirm")}
-                            disabled={tradeActionMutation.isPending}
-                            data-testid="button-trade-action-confirm"
-                          >
-                            {t('common.confirm')}
-                          </Button>
-                        )}
-
-                        {activeTrade.isSeller && activeTrade.status === "confirmed" && (
-                          <Button
-                            className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                            onClick={() => tradeActionMutation.mutate("complete")}
-                            disabled={tradeActionMutation.isPending}
-                            data-testid="button-trade-action-complete"
-                          >
-                            {t('p2p.tradeCompleted')}
-                          </Button>
-                        )}
-
-                        {canEscalateToArbitration && (
-                          <div className="space-y-2 rounded-lg border border-amber-700/40 bg-amber-900/10 p-3">
-                            <Textarea
-                              value={arbitrationDetails}
-                              onChange={(event) => setArbitrationDetails(event.target.value)}
-                              placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
-                              className="border-amber-800/50 bg-slate-950 text-slate-100"
-                              rows={3}
-                              data-testid="textarea-quick-dispute-details"
-                            />
-                            <Button
-                              variant="outline"
-                              className="w-full border-amber-700/60 bg-amber-900/20 text-amber-200 hover:bg-amber-900/30"
-                              onClick={() => quickDisputeMutation.mutate()}
-                              disabled={quickDisputeMutation.isPending}
-                              data-testid="button-quick-dispute"
-                            >
-                              <Scale className="me-1 h-4 w-4" />
-                              {t('p2p.dispute.submitDispute')}
-                            </Button>
-                          </div>
-                        )}
-
-                        {(activeTrade.status === "pending" || activeTrade.status === "paid") && (
-                          <div className="space-y-2 rounded-lg border border-red-700/30 bg-red-900/10 p-3">
-                            <Input
-                              value={cancelReason}
-                              onChange={(e) => setCancelReason(e.target.value)}
-                              placeholder={t('p2p.dispute.reason')}
-                              className="border-slate-700 bg-slate-950 text-slate-100"
-                              data-testid="input-trade-cancel-reason"
-                            />
-
-                            <label className="flex items-center gap-2 text-xs text-slate-300">
-                              <Checkbox
-                                checked={cancelConfirmNoFundsMoved}
-                                onCheckedChange={(checked) => setCancelConfirmNoFundsMoved(Boolean(checked))}
-                              />
-                              <span>{t('p2p.dispute.reason.no_payment')}</span>
-                            </label>
-
-                            <label className="flex items-center gap-2 text-xs text-slate-300">
-                              <Checkbox
-                                checked={cancelConfirmConsequences}
-                                onCheckedChange={(checked) => setCancelConfirmConsequences(Boolean(checked))}
-                              />
-                              <span>{t('p2p.dispute.mutualAgreement')}</span>
-                            </label>
-
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              {canCurrentUserRequestCancellation && (
-                                <Button
-                                  variant="outline"
-                                  className="border-red-700/50 bg-red-900/20 text-red-100 hover:bg-red-900/30"
-                                  onClick={() => requestCancellationApprovalMutation.mutate()}
-                                  disabled={
-                                    requestCancellationApprovalMutation.isPending
-                                    || !cancelConfirmNoFundsMoved
-                                    || !cancelConfirmConsequences
-                                  }
-                                  data-testid="button-request-cancellation-approval"
-                                >
-                                  {t('common.send')}
-                                </Button>
-                              )}
-
-                              {canApproveActiveCancellationRequest && (
-                                <Button
-                                  variant="outline"
-                                  className="border-brand-gold/50 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20"
-                                  onClick={() => approveCancellationRequestMutation.mutate()}
-                                  disabled={
-                                    approveCancellationRequestMutation.isPending
-                                    || !cancelConfirmNoFundsMoved
-                                    || !cancelConfirmConsequences
-                                  }
-                                  data-testid="button-approve-cancellation-request"
-                                >
-                                  {t('common.confirm')}
-                                </Button>
-                              )}
-
-                              {canFinalizeApprovedCancellation && (
-                                <Button
-                                  variant="destructive"
-                                  className="sm:col-span-2"
-                                  onClick={() => tradeActionMutation.mutate("cancel")}
-                                  disabled={
-                                    tradeActionMutation.isPending
-                                    || !cancelConfirmNoFundsMoved
-                                    || !cancelConfirmConsequences
-                                  }
-                                  data-testid="button-trade-action-cancel"
-                                >
-                                  {t('common.cancel')}
-                                </Button>
-                              )}
+                          {activeCancellationRequest && (
+                            <div className="rounded-md border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-300">
+                              <p>
+                                {activeCancellationApproval
+                                  ? t('common.approved')
+                                  : t('common.pending')}
+                              </p>
+                              <p className="mt-1 text-slate-400">{activeCancellationRequest.payload.reason || t('p2p.dispute.reason')}</p>
                             </div>
-
-                            {activeCancellationRequest && (
-                              <div className="rounded-md border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-300">
-                                <p>
-                                  {activeCancellationApproval
-                                    ? t('common.approved')
-                                    : t('common.pending')}
-                                </p>
-                                <p className="mt-1 text-slate-400">{activeCancellationRequest.payload.reason || t('p2p.dispute.reason')}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
+                </div>
               ) : null;
 
               const composer = canComposeTradeMessages ? (

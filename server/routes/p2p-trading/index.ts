@@ -5,6 +5,7 @@ import { registerTradeRoutes } from "./trades";
 import { registerTradePaymentRoutes } from "./trade-payment";
 import { registerTradeLifecycleRoutes } from "./trade-lifecycle";
 import { registerRateMessageRoutes } from "./rate-messages";
+import { registerP2PEnterpriseStateRoutes } from "./enterprise-state";
 
 export function registerP2PTradingRoutes(app: Express) {
   registerOfferRoutes(app);
@@ -12,4 +13,5 @@ export function registerP2PTradingRoutes(app: Express) {
   registerTradePaymentRoutes(app);
   registerTradeLifecycleRoutes(app);
   registerRateMessageRoutes(app);
+  registerP2PEnterpriseStateRoutes(app);
 }
