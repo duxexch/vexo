@@ -1349,21 +1349,13 @@ export default function WalletPage() {
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'اسم الوسيلة' : 'Method Name'}
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate min-w-0 flex-1" title={selectedDepositMethod.name}>
+                    <div className="min-w-0">
+                      <span
+                        className="block min-w-0 text-sm font-medium whitespace-normal break-words leading-5"
+                        title={selectedDepositMethod.name}
+                      >
                         {selectedDepositMethod.name}
                       </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 shrink-0"
-                        onClick={() => copyPaymentMethodValue(selectedDepositMethod.name, language === 'ar' ? 'اسم الوسيلة' : 'method name')}
-                        data-testid="button-copy-method-name"
-                      >
-                        <Copy className="h-3.5 w-3.5 me-1" />
-                        {language === 'ar' ? 'نسخ' : 'Copy'}
-                      </Button>
                     </div>
                   </div>
 
@@ -1371,9 +1363,9 @@ export default function WalletPage() {
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'رقم الوسيلة' : 'Method Number'}
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <span
-                        className="text-sm font-mono font-medium truncate min-w-0 flex-1 select-all"
+                        className="min-w-0 flex-1 text-sm font-mono font-medium whitespace-normal break-all leading-5 select-all"
                         title={selectedDepositMethod.methodNumber || ''}
                       >
                         {selectedDepositMethod.methodNumber || '-'}
@@ -1396,9 +1388,9 @@ export default function WalletPage() {
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                       {language === 'ar' ? 'البيانات كاملة' : 'Full Payment Data'}
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <span
-                        className="text-xs text-muted-foreground truncate min-w-0 flex-1"
+                        className="min-w-0 flex-1 text-xs text-muted-foreground whitespace-normal break-words leading-5"
                         title={`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`}
                       >
                         {selectedDepositMethod.name} | {selectedDepositMethod.methodNumber || '-'}
