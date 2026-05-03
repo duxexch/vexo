@@ -1047,11 +1047,6 @@ function AdminRouter() {
                             <AdminAuditLogsPage />
                         </AdminLayout>
                     </Route>
-                    <Route path="/admin/payment-security">
-                        <AdminLayout>
-                            <AdminPaymentSecurityPage />
-                        </AdminLayout>
-                    </Route>
                 </Switch>
             </Suspense>
         </ErrorBoundary>

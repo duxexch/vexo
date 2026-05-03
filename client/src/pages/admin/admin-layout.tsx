@@ -101,6 +101,7 @@ function AdminSidebar() {
     p2p: "admin.layout.menu.p2pManagement",
     "support-settings": "admin.layout.menu.supportSettings",
     "id-verification": "admin.layout.menu.idVerification",
+    realtime: "admin.layout.menu.realtime",
     support: "admin.layout.menu.supportContacts",
     "anti-cheat": "admin.layout.menu.antiCheat",
     "payment-security": "admin.layout.menu.paymentSecurity",
@@ -116,40 +117,55 @@ function AdminSidebar() {
     agents: "admin.layout.menu.agents",
     tournaments: "admin.layout.menu.tournaments",
     "audit-logs": "admin.layout.menu.auditLogs",
+    announcements: "admin.layout.menu.announcements",
   };
 
-  const menuItems = ADMIN_ROUTE_REGISTRY.map((route: AdminRouteEntry) => ({
+  const getMenuIcon = (key: string) => {
+    switch (key) {
+      case "dashboard": return LayoutDashboard;
+      case "users": return Users;
+      case "transactions": return DollarSign;
+      case "games": return Gamepad2;
+      case "game-sections": return LayoutGrid;
+      case "challenges": return Swords;
+      case "challenge-settings": return Settings;
+      case "p2p": return ArrowLeftRight;
+      case "support-settings": return Heart;
+      case "id-verification": return IdCard;
+      case "realtime": return BarChart3;
+      case "support": return Headset;
+      case "anti-cheat": return Shield;
+      case "payment-security": return ShieldAlert;
+      case "chat-management": return MessageCircle;
+      case "sam9": return Bot;
+      case "analytics": return BarChart3;
+      case "disputes": return AlertTriangle;
+      case "free-play": return Gift;
+      case "marketers": return Crown;
+      case "gifts": return Gift;
+      case "investments": return Building2;
+      case "finance": return DollarSign;
+      case "agents": return Headset;
+      case "tournaments": return Trophy;
+      case "audit-logs": return FileText;
+      case "announcements": return Megaphone;
+      default: return LayoutDashboard;
+    }
+  };
+
+  const menuItems = ADMIN_ROUTE_REGISTRY.filter((route) => route.category === "management").map((route: AdminRouteEntry) => ({
     id: route.key,
     titleKey: menuTitleKeyByRoute[route.key] || `admin.layout.menu.${route.key}`,
     url: route.path,
-    icon:
-      route.key === "dashboard" ? LayoutDashboard :
-        route.key === "users" ? Users :
-          route.key === "transactions" ? DollarSign :
-            route.key === "games" ? Gamepad2 :
-              route.key === "game-sections" ? LayoutGrid :
-                route.key === "challenges" ? Swords :
-                  route.key === "challenge-settings" ? Settings :
-                    route.key === "p2p" ? ArrowLeftRight :
-                      route.key === "support-settings" ? Heart :
-                        route.key === "id-verification" ? IdCard :
-                          route.key === "support" ? Headset :
-                            route.key === "anti-cheat" ? Shield :
-                              route.key === "payment-security" ? ShieldAlert :
-                                route.key === "chat-management" ? MessageCircle :
-                                  route.key === "sam9" ? Bot :
-                                    route.key === "analytics" ? BarChart3 :
-                                      route.key === "disputes" ? AlertTriangle :
-                                        route.key === "free-play" ? Gift :
-                                          route.key === "marketers" ? Crown :
-                                            route.key === "gifts" ? Gift :
-                                              route.key === "investments" ? Building2 :
-                                                route.key === "finance" ? DollarSign :
-                                                  route.key === "agents" ? Headset :
-                                                    route.key === "tournaments" ? Trophy :
-                                                      route.key === "audit-logs" ? FileText :
-                                                        LayoutDashboard,
+    icon: getMenuIcon(route.key),
     hasBadge: ["users", "transactions", "p2p", "support-settings", "id-verification", "payment-security", "disputes", "agents"].includes(route.key),
+  }));
+
+  const quickLinkItems = ADMIN_ROUTE_REGISTRY.filter((route) => route.category === "quick-links").map((route) => ({
+    id: route.key,
+    titleKey: menuTitleKeyByRoute[route.key] || `admin.layout.menu.${route.key}`,
+    url: route.path,
+    icon: getMenuIcon(route.key),
   }));
 
   const settingsItems = [
@@ -238,6 +254,18 @@ function AdminSidebar() {
                   <span>{t("admin.layout.quickLinks.viewUserApp")}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {quickLinkItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton
+                    isActive={location === item.url}
+                    onClick={() => handleNavClick(item.url)}
+                    data-testid={`admin-link-${item.id}`}
+                  >
+                    <item.icon />
+                    <span>{t(item.titleKey)}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
