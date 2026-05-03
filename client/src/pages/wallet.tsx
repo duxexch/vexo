@@ -1333,14 +1333,14 @@ export default function WalletPage() {
 
               {selectedDepositMethod && (
                 <div className="mt-3 rounded-lg border bg-muted/30 p-2 space-y-1.5" data-testid="deposit-method-details">
-                  <div className="flex items-center gap-2 px-1 pb-1">
+                  <div className="flex items-center gap-2 px-1 pb-1 min-w-0">
                     <PaymentMethodIcon
                       iconUrl={selectedDepositMethod.iconUrl}
                       type={selectedDepositMethod.type}
                       alt={selectedDepositMethod.name}
-                      className="h-7 w-7"
+                      className="h-7 w-7 shrink-0"
                     />
-                    <span className="text-sm font-semibold truncate" title={selectedDepositMethod.name}>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={selectedDepositMethod.name}>
                       {selectedDepositMethod.name}
                     </span>
                   </div>
