@@ -26,25 +26,25 @@ import {
 
 // Sound mapping by notification type — using new distinctive sounds
 const NOTIFICATION_SOUND_MAP: Record<string, Parameters<typeof playSound>[0]> = {
-  transaction: 'transaction_alert',
-  p2p: 'transaction_alert',
-  security: 'security_alert',
-  warning: 'security_alert',
-  announcement: 'notification',
-  promotion: 'promo_chime',
-  system: 'notification',
-  id_verification: 'success',
-  success: 'success',
-  chat: 'chat_incoming',
-  challenge: 'challenge',
-  support: 'support',
-  game: 'level_up',
+  transaction: "transaction_alert",
+  p2p: "transaction_alert",
+  security: "security_alert",
+  warning: "security_alert",
+  announcement: "notification",
+  promotion: "promo_chime",
+  system: "notification",
+  id_verification: "success",
+  success: "success",
+  chat: "chat_incoming",
+  challenge: "challenge",
+  support: "support",
+  game: "level_up",
 };
 
 // Priority-based sound override
 const PRIORITY_SOUND_MAP: Record<string, Parameters<typeof playSound>[0]> = {
-  urgent: 'urgent_alarm',
-  high: 'notification',
+  urgent: "urgent_alarm",
+  high: "notification",
 };
 
 interface NotificationContextType {
@@ -68,26 +68,26 @@ export function useNotificationStatus() {
 // Map URL path to section key for auto-read
 function routeToSection(path: string): string | null {
   const map: [string, string][] = [
-    ['/wallet', 'wallet'],
-    ['/transactions', 'transactions'],
-    ['/p2p', 'p2p'],
-    ['/challenges', 'challenges'],
-    ['/multiplayer', 'multiplayer'],
-    ['/chat', 'chat'],
-    ['/support', 'support'],
-    ['/settings', 'settings'],
-    ['/friends', 'friends'],
-    ['/notifications', 'notifications'],
-    ['/games', 'games'],
-    ['/free', 'free'],
-    ['/admin', 'admin'],
-    ['/leaderboard', 'leaderboard'],
-    ['/affiliates', 'affiliates'],
+    ["/wallet", "wallet"],
+    ["/transactions", "transactions"],
+    ["/p2p", "p2p"],
+    ["/challenges", "challenges"],
+    ["/multiplayer", "multiplayer"],
+    ["/chat", "chat"],
+    ["/support", "support"],
+    ["/settings", "settings"],
+    ["/friends", "friends"],
+    ["/notifications", "notifications"],
+    ["/games", "games"],
+    ["/free", "free"],
+    ["/admin", "admin"],
+    ["/leaderboard", "leaderboard"],
+    ["/affiliates", "affiliates"],
   ];
   for (const [prefix, section] of map) {
-    if (path === prefix || path.startsWith(prefix + '/')) return section;
+    if (path === prefix || path.startsWith(prefix + "/")) return section;
   }
-  if (path === '/' || path === '') return 'dashboard';
+  if (path === "/" || path === "") return "dashboard";
   return null;
 }
 
@@ -104,9 +104,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const recentNotificationKeysRef = useRef<Map<string, number>>(new Map());
   const pushSyncStartedRef = useRef(false);
 
-  // Keep refs updated to avoid stale closures in WebSocket callbacks
-  useEffect(() => { languageRef.current = language; }, [language]);
-  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const { data: unreadCountData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
@@ -116,7 +120,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const unreadCount = unreadCountData?.count || 0;
 
-  // Fetch per-section unread counts
   const { data: sectionCountsData } = useQuery<{ counts: Record<string, number> }>({
     queryKey: ["/api/notifications/section-counts"],
     enabled: !!token,
@@ -125,7 +128,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const sectionCounts = sectionCountsData?.counts || {};
 
-  // Mark section notifications as read
   const markSectionReadMutation = useMutation({
     mutationFn: async (section: string) => {
       await apiRequest("POST", "/api/notifications/read-section", { section });
@@ -137,13 +139,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     },
   });
 
-  const markSectionRead = useCallback((section: string) => {
-    if (sectionCounts[section] && sectionCounts[section] > 0) {
-      markSectionReadMutation.mutate(section);
-    }
-  }, [sectionCounts, markSectionReadMutation]);
+  const markSectionRead = useCallback(
+    (section: string) => {
+      if (sectionCounts[section] && sectionCounts[section] > 0) {
+        markSectionReadMutation.mutate(section);
+      }
+    },
+    [sectionCounts, markSectionReadMutation],
+  );
 
-  // Auto-mark section as read when user navigates to it
   const [location] = useLocation();
   const prevLocationRef = useRef(location);
 
@@ -164,147 +168,180 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (location === prevLocationRef.current) return;
     prevLocationRef.current = location;
 
-    // Map route to section key
     const sectionKey = routeToSection(location);
     if (sectionKey && sectionCounts[sectionKey] && sectionCounts[sectionKey] > 0) {
-      // Delay slightly so page renders first
       const timer = setTimeout(() => markSectionRead(sectionKey), 500);
       return () => clearTimeout(timer);
     }
   }, [location, sectionCounts, markSectionRead]);
 
-  const showNotificationToast = useCallback((notification: AppNotification) => {
-    const lang = languageRef.current;
-    const title = lang === "ar" && notification.titleAr ? notification.titleAr : notification.title;
-    const message = lang === "ar" && notification.messageAr ? notification.messageAr : notification.message;
-    const titleAr = notification.titleAr || notification.title;
-    const messageAr = notification.messageAr || notification.message;
-    const safeLink = normalizeSafeNotificationLink(notification.link);
-    const metadata = getNotificationMetadata(notification);
-    const metadataEvent = typeof metadata?.event === "string" ? metadata.event : null;
-    const metadataSessionId = typeof metadata?.sessionId === "string" ? metadata.sessionId : null;
-    const isPrivateCallInvite = metadataEvent === "private_call_invite";
-    const chatSenderId = typeof metadata?.senderId === "string" ? metadata.senderId : null;
-    const urlParams = new URLSearchParams(window.location.search);
-    const openChatUser = urlParams.get("user");
-    const isUserInSameChatThread = location.startsWith("/chat")
-      && !!chatSenderId
-      && openChatUser === chatSenderId
-      && document.visibilityState === "visible";
+  const showNotificationToast = useCallback(
+    (notification: AppNotification) => {
+      const lang = languageRef.current;
+      const title = lang === "ar" && notification.titleAr ? notification.titleAr : notification.title;
+      const message = lang === "ar" && notification.messageAr ? notification.messageAr : notification.message;
+      const titleAr = notification.titleAr || notification.title;
+      const messageAr = notification.messageAr || notification.message;
+      const safeLink = normalizeSafeNotificationLink(notification.link);
+      const metadata = getNotificationMetadata(notification);
+      const metadataEvent = typeof metadata?.event === "string" ? metadata.event : null;
+      const metadataSessionId = typeof metadata?.sessionId === "string" ? metadata.sessionId : null;
+      const metadataReferenceId = typeof metadata?.referenceId === "string" ? metadata.referenceId : null;
+      const isPrivateCallInvite = metadataEvent === "private_call_invite";
+      const chatSenderId = typeof metadata?.senderId === "string" ? metadata.senderId : null;
+      const urlParams = new URLSearchParams(window.location.search);
+      const openChatUser = urlParams.get("user");
+      const isUserInSameChatThread =
+        location.startsWith("/chat") &&
+        !!chatSenderId &&
+        openChatUser === chatSenderId &&
+        document.visibilityState === "visible";
 
-    // Play sound based on priority first, then type
-    const soundKey = metadataEvent === "chat_message"
-      ? "chat_incoming"
-      : (PRIORITY_SOUND_MAP[notification.priority] || NOTIFICATION_SOUND_MAP[notification.type] || 'notification');
+      const dedupeKey = [
+        notification.id ? `id:${notification.id}` : "",
+        metadataReferenceId ? `ref:${metadataReferenceId}` : "",
+        metadataEvent ? `event:${metadataEvent}` : "",
+        notification.type || "system",
+        notification.priority || "normal",
+        title,
+        message,
+        safeLink || "",
+      ]
+        .filter(Boolean)
+        .join("|");
 
-    if (!isUserInSameChatThread) {
-      playSound(soundKey);
-    }
+      const now = Date.now();
+      const cache = recentNotificationKeysRef.current;
+      for (const [cachedKey, seenAt] of cache) {
+        if (now - seenAt > 15000) {
+          cache.delete(cachedKey);
+        }
+      }
 
-    if (isUserInSameChatThread) {
-      return;
-    }
+      const seenAt = cache.get(dedupeKey);
+      if (seenAt && now - seenAt < 15000) {
+        return;
+      }
+      cache.set(dedupeKey, now);
 
-    // Task #89: surface incoming DMs as Messenger-style floating
-    // bubbles. We dispatch unconditionally for chat events that survived
-    // the "same thread" suppression above; the bubble layer itself
-    // applies the muted-peer / active-call / preference checks so the
-    // notification toast and bubble logic stay decoupled.
-    if (metadataEvent === "chat_message" && chatSenderId) {
+      const soundKey =
+        metadataEvent === "chat_message"
+          ? "chat_incoming"
+          : (PRIORITY_SOUND_MAP[notification.priority] || NOTIFICATION_SOUND_MAP[notification.type] || "notification");
+
+      if (!isUserInSameChatThread) {
+        playSound(soundKey);
+      }
+
+      if (isUserInSameChatThread) {
+        return;
+      }
+
+      if (metadataEvent === "chat_message" && chatSenderId) {
+        window.dispatchEvent(
+          new CustomEvent("vex-incoming-dm", {
+            detail: {
+              senderId: chatSenderId,
+              title: notification.title,
+              titleAr,
+              message: notification.message,
+              messageAr,
+              link: safeLink || `/chat?user=${encodeURIComponent(chatSenderId)}`,
+              messageId: typeof metadata?.messageId === "string" ? metadata.messageId : null,
+            },
+          }),
+        );
+      }
+
       window.dispatchEvent(
-        new CustomEvent("vex-incoming-dm", {
+        new CustomEvent("vex-show-popup", {
           detail: {
-            senderId: chatSenderId,
+            type: isPrivateCallInvite ? "challenge" : (notification.type || "system"),
+            priority: notification.priority || "normal",
             title: notification.title,
             titleAr,
             message: notification.message,
             messageAr,
-            link: safeLink || `/chat?user=${encodeURIComponent(chatSenderId)}`,
-            messageId: typeof metadata?.messageId === "string" ? metadata.messageId : null,
+            link: safeLink || undefined,
+            duration: isPrivateCallInvite
+              ? 15000
+              : (notification.priority === "urgent"
+                ? 10000
+                : notification.priority === "high"
+                  ? 7000
+                  : 5000),
           },
         }),
       );
-    }
 
-    // Show professional popup notification (VexNotificationPopup)
-    window.dispatchEvent(new CustomEvent("vex-show-popup", {
-      detail: {
-        type: isPrivateCallInvite ? "challenge" : (notification.type || "system"),
-        priority: notification.priority || "normal",
-        title: notification.title,
-        titleAr,
-        message: notification.message,
-        messageAr,
-        link: safeLink || undefined,
-        duration: isPrivateCallInvite ? 15000 : (notification.priority === "urgent" ? 10000 : notification.priority === "high" ? 7000 : 5000),
-      },
-    }));
-
-    // Browser native push notification (for lock screen / background)
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      try {
-        // Use Service Worker for persistent notifications when available
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_NOTIFICATION',
-            title,
-            options: {
-              body: message,
-              icon: '/icons/vex-gaming-logo-192x192.png',
-              badge: '/icons/vex-gaming-logo-96x96.png',
-              tag: isPrivateCallInvite && metadataSessionId
-                ? `vex-private-call-${metadataSessionId}`
-                : `vex-${notification.type}-${notification.id}`,
-              renotify: !!isPrivateCallInvite,
-              requireInteraction: isPrivateCallInvite || notification.priority === 'urgent',
-              vibrate: notification.priority === 'urgent' ? [200, 80, 200, 80, 200] :
-                notification.priority === 'high' ? [200, 100, 200] : [150, 80, 150],
-              data: {
-                url: safeLink || '/',
-                notificationType: isPrivateCallInvite ? 'private_call_invite' : notification.type,
-                soundType: isPrivateCallInvite ? 'challenge' : notification.type,
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: "SHOW_NOTIFICATION",
+              title,
+              options: {
+                body: message,
+                icon: "/icons/vex-gaming-logo-192x192.png",
+                badge: "/icons/vex-gaming-logo-96x96.png",
+                tag: isPrivateCallInvite && metadataSessionId
+                  ? `vex-private-call-${metadataSessionId}`
+                  : `vex-${notification.type}-${notification.id}`,
+                renotify: !!isPrivateCallInvite,
+                requireInteraction: isPrivateCallInvite || notification.priority === "urgent",
+                vibrate: notification.priority === "urgent"
+                  ? [200, 80, 200, 80, 200]
+                  : notification.priority === "high"
+                    ? [200, 100, 200]
+                    : [150, 80, 150],
+                data: {
+                  url: safeLink || "/",
+                  notificationType: isPrivateCallInvite ? "private_call_invite" : notification.type,
+                  soundType: isPrivateCallInvite ? "challenge" : notification.type,
+                },
+                actions: isPrivateCallInvite
+                  ? [
+                    { action: "open_call", title: languageRef.current === "ar" ? "فتح المكالمة" : "Open call" },
+                    { action: "dismiss", title: languageRef.current === "ar" ? "إغلاق" : "Dismiss" },
+                  ]
+                  : [{ action: "dismiss", title: languageRef.current === "ar" ? "إغلاق" : "Dismiss" }],
+                dir: languageRef.current === "ar" ? "rtl" : "ltr",
+                lang: languageRef.current || "en",
+                silent: false,
+                timestamp: Date.now(),
               },
-              actions: isPrivateCallInvite
-                ? [
-                  { action: 'open_call', title: languageRef.current === 'ar' ? 'فتح المكالمة' : 'Open call' },
-                  { action: 'dismiss', title: languageRef.current === 'ar' ? 'إغلاق' : 'Dismiss' },
-                ]
-                : [{ action: 'dismiss', title: languageRef.current === 'ar' ? 'إغلاق' : 'Dismiss' }],
-              dir: languageRef.current === 'ar' ? 'rtl' : 'ltr',
-              lang: languageRef.current || 'en',
-              silent: false,
-              timestamp: Date.now(),
-            },
-          });
-        } else {
-          // Fallback to basic Notification API
-          const browserNotif = new Notification(title, {
-            body: message,
-            icon: '/icons/vex-gaming-logo-192x192.png',
-            tag: `vex-${notification.id}`,
-            requireInteraction: isPrivateCallInvite || notification.priority === 'urgent',
-          });
-          browserNotif.onclick = () => {
-            window.focus();
-            navigateToSafeNotificationLink(safeLink);
-            browserNotif.close();
-          };
-          setTimeout(() => browserNotif.close(), 8000);
+            });
+          } else {
+            const browserNotif = new Notification(title, {
+              body: message,
+              icon: "/icons/vex-gaming-logo-192x192.png",
+              tag: `vex-${notification.id}`,
+              requireInteraction: isPrivateCallInvite || notification.priority === "urgent",
+            });
+            browserNotif.onclick = () => {
+              window.focus();
+              navigateToSafeNotificationLink(safeLink);
+              browserNotif.close();
+            };
+            setTimeout(() => browserNotif.close(), 8000);
+          }
+        } catch {
+          // ignore browser notification failures
         }
-      } catch { }
-    }
-
-    // Vibrate on mobile (if supported)
-    if (navigator.vibrate) {
-      if (notification.priority === 'urgent') {
-        navigator.vibrate([200, 100, 200, 100, 200]);
-      } else if (notification.priority === 'high') {
-        navigator.vibrate([200, 100, 200]);
-      } else {
-        navigator.vibrate(100);
       }
-    }
-  }, [getNotificationMetadata, location]);
+
+      if (navigator.vibrate) {
+        if (notification.priority === "urgent") {
+          navigator.vibrate([200, 100, 200, 100, 200]);
+        } else if (notification.priority === "high") {
+          navigator.vibrate([200, 100, 200]);
+        } else {
+          navigator.vibrate(100);
+        }
+      }
+    },
+    [getNotificationMetadata, location],
+  );
 
   const isBadgeAssignmentNotification = useCallback((notification: AppNotification): boolean => {
     if (notification.type !== "success" || !notification.metadata) {
@@ -323,7 +360,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const now = Date.now();
     const dedupeWindowMs = 15000;
 
-    const fallbackKey = `${notification.type || 'system'}:${notification.title || ''}:${notification.message || ''}:${notification.link || ''}`;
+    const fallbackKey = `${notification.type || "system"}:${notification.title || ""}:${notification.message || ""}:${notification.link || ""}`;
     const key = notification.id ? `id:${notification.id}` : `fallback:${fallbackKey}`;
 
     const cache = recentNotificationKeysRef.current;
@@ -373,7 +410,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       try {
         const data = JSON.parse(event.data);
 
-        // ====== NEW NOTIFICATION (real-time from server) ======
         if (data.type === "new_notification") {
           queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
           queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
@@ -397,96 +433,94 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           showNotificationToast(notification);
         }
 
-        // ====== INITIAL UNREAD NOTIFICATIONS (on connect) ======
         if (data.type === "unread_notifications") {
           queryClient.setQueryData(["/api/notifications"], data.data);
         }
 
-        // ====== SYSTEM EVENTS ======
         if (data.type === "system_event") {
           const event = data.event;
-          if (event?.type === 'game_config_changed') {
+          if (event?.type === "game_config_changed") {
             invalidatePublicGameCaches();
-            playSound('notification');
-            const lang = languageRef.current;
-            window.dispatchEvent(new CustomEvent("vex-show-popup", {
-              detail: {
-                type: "system",
-                priority: "normal",
-                title: 'Game settings updated',
-                titleAr: 'تم تحديث إعدادات اللعبة',
-                message: 'Latest game configuration has been applied',
-                messageAr: 'تم تطبيق أحدث إعدادات اللعبة',
-              },
-            }));
+            playSound("notification");
+            window.dispatchEvent(
+              new CustomEvent("vex-show-popup", {
+                detail: {
+                  type: "system",
+                  priority: "normal",
+                  title: "Game settings updated",
+                  titleAr: "تم تحديث إعدادات اللعبة",
+                  message: "Latest game configuration has been applied",
+                  messageAr: "تم تطبيق أحدث إعدادات اللعبة",
+                },
+              }),
+            );
           }
-          if (event?.type === 'p2p_settings_changed') {
-            queryClient.invalidateQueries({ queryKey: ['/api/p2p'] });
-            const lang = languageRef.current;
-            playSound('notification');
-            window.dispatchEvent(new CustomEvent("vex-show-popup", {
-              detail: {
-                type: "p2p",
-                priority: "normal",
-                title: 'P2P Settings Updated',
-                titleAr: 'تحديث إعدادات P2P',
-                message: 'Trading settings have been updated',
-                messageAr: 'تم تحديث إعدادات التداول',
-              },
-            }));
+          if (event?.type === "p2p_settings_changed") {
+            queryClient.invalidateQueries({ queryKey: ["/api/p2p"] });
+            playSound("notification");
+            window.dispatchEvent(
+              new CustomEvent("vex-show-popup", {
+                detail: {
+                  type: "p2p",
+                  priority: "normal",
+                  title: "P2P Settings Updated",
+                  titleAr: "تحديث إعدادات P2P",
+                  message: "Trading settings have been updated",
+                  messageAr: "تم تحديث إعدادات التداول",
+                },
+              }),
+            );
           }
-          if (event?.type === 'config_updated') {
-            queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/sections'] });
+          if (event?.type === "config_updated") {
+            queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/sections"] });
           }
         }
 
-        // ====== CHALLENGE UPDATES ======
         if (data.type === "challenge_update") {
-          queryClient.invalidateQueries({ queryKey: ['/api/challenges/public'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/challenges/available'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/challenges/my'] });
+          queryClient.invalidateQueries({ queryKey: ["/api/challenges/public"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/challenges/available"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/challenges/my"] });
 
-          // Only show popup for friend challenges targeted at this user, not all public challenges
-          if (data.eventType === 'created' && data.data?.opponentType === 'friend' && data.data?.player2Id === userRef.current?.id) {
-            const lang = languageRef.current;
-            playSound('challenge');
-            window.dispatchEvent(new CustomEvent("vex-show-popup", {
-              detail: {
-                type: "challenge",
-                priority: "high",
-                title: 'You\'ve Been Challenged!',
-                titleAr: 'تم تحديك!',
-                message: `${data.data.player1Name} challenged you to ${data.data.gameType}`,
-                messageAr: `${data.data.player1Name} تحداك في ${data.data.gameType}`,
-                link: '/challenges',
-              },
-            }));
+          if (data.eventType === "created" && data.data?.opponentType === "friend" && data.data?.player2Id === userRef.current?.id) {
+            playSound("challenge");
+            window.dispatchEvent(
+              new CustomEvent("vex-show-popup", {
+                detail: {
+                  type: "challenge",
+                  priority: "high",
+                  title: "You've Been Challenged!",
+                  titleAr: "تم تحديك!",
+                  message: `${data.data.player1Name} challenged you to ${data.data.gameType}`,
+                  messageAr: `${data.data.player1Name} تحداك في ${data.data.gameType}`,
+                  link: "/challenges",
+                },
+              }),
+            );
           }
         }
 
-        // ====== GAME START ======
         if (data.type === "game_start") {
           const payload = data.payload;
           const currentUser = userRef.current;
           const safeRedirectUrl = normalizeSafeNotificationLink(payload?.redirectUrl);
           if (safeRedirectUrl && currentUser?.id) {
-            // Check if current user is any player in the game (not just player1)
             const playerIds = [payload.player1Id, payload.player2Id, payload.player3Id, payload.player4Id].filter(Boolean);
             if (playerIds.includes(currentUser.id)) {
-              const lang = languageRef.current;
-              playSound('level_up');
-              window.dispatchEvent(new CustomEvent("vex-show-popup", {
-                detail: {
-                  type: "game",
-                  priority: "high",
-                  title: 'Game Started!',
-                  titleAr: 'بدأت المباراة!',
-                  message: 'Redirecting to game...',
-                  messageAr: 'جاري الانتقال إلى اللعبة...',
-                  duration: 3000,
-                },
-              }));
+              playSound("level_up");
+              window.dispatchEvent(
+                new CustomEvent("vex-show-popup", {
+                  detail: {
+                    type: "game",
+                    priority: "high",
+                    title: "Game Started!",
+                    titleAr: "بدأت المباراة!",
+                    message: "Redirecting to game...",
+                    messageAr: "جاري الانتقال إلى اللعبة...",
+                    duration: 3000,
+                  },
+                }),
+              );
               setTimeout(() => {
                 window.location.assign(safeRedirectUrl);
               }, 800);
@@ -494,45 +528,43 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // ====== SUPPORT MESSAGE (admin reply) ======
         if (data.type === "support_message") {
           queryClient.invalidateQueries({ queryKey: ["support-messages"] });
           queryClient.invalidateQueries({ queryKey: ["support-unread"] });
           queryClient.invalidateQueries({ queryKey: ["support-ticket"] });
 
-          playSound('support');
+          playSound("support");
 
-          const lang = languageRef.current;
-          const msgContent = data.data?.content || '';
-          window.dispatchEvent(new CustomEvent("vex-show-popup", {
-            detail: {
-              type: "support",
-              priority: "high",
-              title: 'Support Reply 💬',
-              titleAr: 'رد من الدعم الفني 💬',
-              message: msgContent.substring(0, 100) || 'You have a new support message',
-              messageAr: msgContent.substring(0, 100) || 'لديك رسالة جديدة من الدعم',
-              duration: 8000,
-            },
-          }));
+          const msgContent = data.data?.content || "";
+          window.dispatchEvent(
+            new CustomEvent("vex-show-popup", {
+              detail: {
+                type: "support",
+                priority: "high",
+                title: "Support Reply 💬",
+                titleAr: "رد من الدعم الفني 💬",
+                message: msgContent.substring(0, 100) || "You have a new support message",
+                messageAr: msgContent.substring(0, 100) || "لديك رسالة جديدة من الدعم",
+                duration: 8000,
+              },
+            }),
+          );
 
-          // Signal support widget to show unread badge (don't force-open if user closed it)
-          window.dispatchEvent(new CustomEvent('support-chat-new-message'));
+          window.dispatchEvent(new CustomEvent("support-chat-new-message"));
 
-          // Push notification for background/locked screen
-          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({
-              type: 'SHOW_NOTIFICATION',
-              title: lang === 'ar' ? 'رد من الدعم الفني' : 'Support Reply',
+              type: "SHOW_NOTIFICATION",
+              title: languageRef.current === "ar" ? "رد من الدعم الفني" : "Support Reply",
               options: {
-                body: msgContent.substring(0, 100) || (lang === 'ar' ? 'لديك رسالة جديدة من الدعم' : 'You have a new support message'),
-                icon: '/icons/vex-gaming-logo-192x192.png',
-                badge: '/icons/vex-gaming-logo-96x96.png',
-                tag: 'vex-support-reply',
+                body: msgContent.substring(0, 100) || (languageRef.current === "ar" ? "لديك رسالة جديدة من الدعم" : "You have a new support message"),
+                icon: "/icons/vex-gaming-logo-192x192.png",
+                badge: "/icons/vex-gaming-logo-96x96.png",
+                tag: "vex-support-reply",
                 vibrate: [200, 100, 200],
-                data: { url: '/', notificationType: 'support' },
-                dir: lang === 'ar' ? 'rtl' : 'ltr',
-                lang: lang || 'ar',
+                data: { url: "/", notificationType: "support" },
+                dir: languageRef.current === "ar" ? "rtl" : "ltr",
+                lang: languageRef.current || "ar",
               },
             });
           }
@@ -542,12 +574,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // ====== BALANCE UPDATE ======
         if (data.type === "balance_update") {
           queryClient.invalidateQueries({ queryKey: ["/api/user"] });
           queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
         }
-
       } catch (error) {
         console.error("[NotificationProvider] WebSocket message error:", error);
       }
@@ -574,7 +604,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     };
   }, [token, showNotificationToast, maxReconnectAttempts, isDuplicateRealtimeNotification, isBadgeAssignmentNotification]);
-  // Connect WebSocket when authenticated
+
   useEffect(() => {
     if (token && user) {
       connectWebSocket();
@@ -591,7 +621,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [token, user, connectWebSocket]);
 
-  // Initialize browser permission + push subscription sync.
   useEffect(() => {
     if (!user || pushSyncStartedRef.current) {
       return;

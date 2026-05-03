@@ -2380,8 +2380,8 @@ export default function AdminP2PPage() {
             <Button
               className={BUTTON_3D_CLASS}
               onClick={() => approveOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason })}
-              disabled={!actionReason || closeDisputeMutation.isPending || !selectedTrade?.id}
-              data-testid="button-confirm-close"
+              disabled={!selectedOffer?.id || approveOfferMutation.isPending}
+              data-testid="button-confirm-approve-offer"
             >
               {approveOfferMutation.isPending ? t("common.loading") : t("admin.p2p.offers.approve")}
             </Button>
