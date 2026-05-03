@@ -44,7 +44,7 @@ import {
   getTradeStatusBucket,
   getTradeStatusLabel,
 } from "@/lib/p2p-status";
-import { mapOfferUiState, mapTradeUiState } from "@/p2p/state/stateMapper";
+import { mapOfferUiState, mapTradeEntityUiState, mapTradeUiState } from "@/p2p/state/stateMapper";
 import { useP2PUiState } from "@/p2p/hooks/useP2PUiState";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { P2POffer as P2POfferRow } from "@shared/schema";
@@ -807,7 +807,10 @@ function TradeOfferDialog({
   }, [threadNegotiations]);
 
   const pendingActionNegotiation = useMemo(() => {
-    return threadNegotiations.find((row) => row.status === "pending" && row.isActionRequired);
+    return threadNegotiations.find((row) => {
+      const rowUiState = mapTradeUiState({ status: row.status });
+      return rowUiState.bucket === "pending" && row.isActionRequired;
+    });
   }, [threadNegotiations]);
 
   const negotiationWorkflowState = useMemo(() => {
@@ -1097,9 +1100,10 @@ function TradeOfferDialog({
                       )}
 
                       {threadNegotiations.map((row) => {
-                        const statusLabel = row.status === "accepted"
+                        const rowUiState = mapTradeUiState({ status: row.status });
+                        const statusLabel = rowUiState.bucket === "resolved"
                           ? t('common.approved')
-                          : row.status === "rejected"
+                          : rowUiState.bucket === "cancelled"
                             ? t('common.rejected')
                             : t('common.pending');
 
@@ -4212,7 +4216,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     };
 
     for (const trade of sortedTrades) {
-      const uiState = mapTradeUiState(trade.status);
+      const uiState = mapTradeEntityUiState(trade);
       if (uiState.bucket === "pending" || uiState.bucket === "active") {
         counters.pending += 1;
       }
@@ -4231,8 +4235,9 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     const normalizedSearch = tradeSearch.trim().toLowerCase();
 
     return sortedTrades.filter((trade) => {
-      const uiState = mapTradeUiState(trade.status);
-      if (tradeStatusFilter !== "all" && uiState.status !== tradeStatusFilter) {
+      const uiState = mapTradeEntityUiState(trade);
+      const selectedFilterBucket = tradeStatusFilter === "all" ? "all" : getTradeStatusBucket(tradeStatusFilter);
+      if (selectedFilterBucket !== "all" && uiState.bucket !== selectedFilterBucket) {
         return false;
       }
 
@@ -4372,11 +4377,15 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
   };
 
   const getStatusPillClass = (status: string) => {
-    if (status === "completed") return "border-emerald-600/40 bg-emerald-600/10 text-emerald-300";
-    if (status === "disputed") return "border-amber-600/40 bg-amber-600/10 text-amber-300";
-    if (status === "cancelled") return "border-red-600/40 bg-red-600/10 text-red-300";
-    if (status === "paid" || status === "confirmed") return "border-sky-600/40 bg-sky-600/10 text-sky-300";
-    return "border-slate-700 bg-slate-800 text-slate-200";
+    const palette: Record<string, string> = {
+      completed: "border-emerald-600/40 bg-emerald-600/10 text-emerald-300",
+      disputed: "border-amber-600/40 bg-amber-600/10 text-amber-300",
+      cancelled: "border-red-600/40 bg-red-600/10 text-red-300",
+      paid: "border-sky-600/40 bg-sky-600/10 text-sky-300",
+      confirmed: "border-sky-600/40 bg-sky-600/10 text-sky-300",
+    };
+
+    return palette[status] || "border-slate-700 bg-slate-800 text-slate-200";
   };
 
   const getTimelineStepState = (tradeStatus: string, step: "pending" | "paid" | "confirmed" | "completed") => {
@@ -5556,9 +5565,10 @@ function DisputesTab() {
     });
   };
 
-  const eligibleTrades = trades?.filter(t =>
-    t.status === 'pending' || t.status === 'paid' || t.status === 'confirmed' || t.status === 'disputed'
-  ) || [];
+  const eligibleTrades = trades?.filter((trade) => {
+    const uiState = mapTradeEntityUiState(trade);
+    return uiState.bucket === "pending" || uiState.bucket === "active";
+  }) || [];
 
   const sortedDisputes = useMemo(() => {
     return [...(disputes || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
