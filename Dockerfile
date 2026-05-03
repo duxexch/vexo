@@ -22,6 +22,7 @@ COPY drizzle.config.ts tsconfig.json vite.config.ts postcss.config.js tailwind.c
 COPY server ./server
 COPY client ./client
 COPY script ./script
+COPY scripts ./scripts
 
 # Build the application
 RUN npm run build
