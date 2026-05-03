@@ -1,4 +1,7 @@
-
-> rest-express@1.0.1 check:types
-> tsc --noEmit --pretty false
-
+client/src/pages/p2p.tsx(2540,11): error TS2367: This comparison appears to be unintentional because the types '"standard" | "digital"' and '"digital_product"' have no overlap.
+client/src/pages/p2p.tsx(2698,52): error TS2345: Argument of type '"standard_asset"' is not assignable to parameter of type '"standard" | "digital"'.
+client/src/pages/p2p.tsx(2709,52): error TS2345: Argument of type '"digital_product"' is not assignable to parameter of type '"standard" | "digital"'.
+client/src/pages/p2p.tsx(2793,24): error TS2367: This comparison appears to be unintentional because the types '"standard" | "digital"' and '"digital_product"' have no overlap.
+client/src/pages/p2p.tsx(3399,184): error TS2345: Argument of type '"standard_asset"' is not assignable to parameter of type '"standard" | "digital"'.
+server/routes/p2p-trading/offers.ts(605,13): error TS2451: Cannot redeclare block-scoped variable 'currencyControls'.
+server/routes/p2p-trading/offers.ts(719,13): error TS2451: Cannot redeclare block-scoped variable 'currencyControls'.

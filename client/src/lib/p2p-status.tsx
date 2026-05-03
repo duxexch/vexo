@@ -11,6 +11,40 @@ import { cn } from "@/lib/utils";
 
 export type P2PStatusBucket = "pending" | "active" | "resolved" | "cancelled";
 
+const OFFER_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  pending_approval: "Waiting for review",
+  active: "Live",
+  paused: "Paused",
+  rejected: "Rejected",
+  expired: "Expired",
+  cancelled: "Cancelled",
+  inactive: "Paused",
+};
+
+const TRADE_STATUS_LABELS: Record<string, string> = {
+  initiated: "Trade started",
+  pending: "Waiting for payment",
+  awaiting_payment: "Waiting for payment",
+  paid: "Payment marked",
+  payment_sent: "Payment sent",
+  awaiting_confirmation: "Waiting for confirmation",
+  confirmed: "Waiting for confirmation",
+  completed: "Trade completed",
+  cancelled: "Trade cancelled",
+  disputed: "Under review",
+  frozen: "Frozen",
+};
+
+const DISPUTE_STATUS_LABELS: Record<string, string> = {
+  open: "Open dispute",
+  evidence_collection: "Collecting evidence",
+  under_review: "Under review",
+  escalated: "Escalated",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
 export function getOfferStatusBucket(status: string): P2PStatusBucket {
   switch (status) {
     case "active":
@@ -23,6 +57,7 @@ export function getOfferStatusBucket(status: string): P2PStatusBucket {
     case "pending_approval":
     case "paused":
     case "inactive":
+    case "draft":
       return "pending";
     default:
       return "pending";
@@ -30,32 +65,18 @@ export function getOfferStatusBucket(status: string): P2PStatusBucket {
 }
 
 export function getOfferStatusLabel(status: string): string {
-  switch (status) {
-    case "draft":
-      return "Draft";
-    case "pending_approval":
-      return "Waiting for review";
-    case "active":
-      return "Live";
-    case "paused":
-      return "Paused";
-    case "rejected":
-      return "Rejected";
-    case "expired":
-      return "Expired";
-    case "cancelled":
-      return "Cancelled";
-    default:
-      return status;
-  }
+  return OFFER_STATUS_LABELS[status] || status;
 }
 
 export function getTradeStatusBucket(status: string): P2PStatusBucket {
   switch (status) {
     case "pending":
+    case "awaiting_payment":
       return "pending";
     case "paid":
+    case "payment_sent":
     case "confirmed":
+    case "awaiting_confirmation":
     case "disputed":
       return "active";
     case "completed":
@@ -68,32 +89,16 @@ export function getTradeStatusBucket(status: string): P2PStatusBucket {
 }
 
 export function getTradeStatusLabel(status: string): string {
-  switch (status) {
-    case "initiated":
-      return "Trade started";
-    case "pending":
-      return "Waiting for payment";
-    case "paid":
-      return "Payment marked";
-    case "confirmed":
-      return "Waiting for confirmation";
-    case "completed":
-      return "Trade completed";
-    case "cancelled":
-      return "Trade cancelled";
-    case "disputed":
-      return "Under review";
-    case "frozen":
-      return "Frozen";
-    default:
-      return status;
-  }
+  return TRADE_STATUS_LABELS[status] || status;
 }
 
 export function getDisputeStatusBucket(status: string): P2PStatusBucket {
   switch (status) {
     case "open":
     case "investigating":
+    case "evidence_collection":
+    case "under_review":
+    case "escalated":
       return "active";
     case "resolved":
     case "closed":
@@ -104,22 +109,7 @@ export function getDisputeStatusBucket(status: string): P2PStatusBucket {
 }
 
 export function getDisputeStatusLabel(status: string): string {
-  switch (status) {
-    case "open":
-      return "Open dispute";
-    case "evidence_collection":
-      return "Collecting evidence";
-    case "under_review":
-      return "Under review";
-    case "escalated":
-      return "Escalated";
-    case "resolved":
-      return "Resolved";
-    case "closed":
-      return "Closed";
-    default:
-      return status;
-  }
+  return DISPUTE_STATUS_LABELS[status] || status;
 }
 
 const BUCKET_META: Record<

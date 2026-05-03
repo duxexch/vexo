@@ -1,5 +1,7 @@
 export type P2POfferKind = "standard" | "digital";
 
+export type P2PInternalDealKind = "standard_asset" | "digital_product";
+
 export type P2PDigitalTradeType =
     | "account_sale"
     | "asset_exchange"
@@ -43,6 +45,40 @@ export type P2PReconciliationStatus = "ok" | "warning" | "failed";
 export type P2PRiskTier = "low" | "medium" | "high" | "verified" | "restricted";
 
 export type P2PActionRecommendation = "allow" | "review" | "hold" | "block";
+
+export const P2P_PUBLIC_DEAL_KIND: Record<P2POfferKind, P2PInternalDealKind> = {
+    standard: "standard_asset",
+    digital: "digital_product",
+};
+
+export const P2P_INTERNAL_DEAL_KIND: Record<P2PInternalDealKind, P2POfferKind> = {
+    standard_asset: "standard",
+    digital_product: "digital",
+};
+
+export function normalizeP2PDealKind(rawValue: unknown): P2PInternalDealKind {
+    if (rawValue === "digital" || rawValue === "digital_product") {
+        return "digital_product";
+    }
+
+    return "standard_asset";
+}
+
+export function normalizeP2PPublicDealKind(rawValue: unknown): P2POfferKind {
+    return normalizeP2PDealKind(rawValue) === "digital_product" ? "digital" : "standard";
+}
+
+export function isP2PStandardDeal(rawValue: unknown): boolean {
+    return normalizeP2PDealKind(rawValue) === "standard_asset";
+}
+
+export function toP2PPublicDealKind(rawValue: unknown): P2POfferKind {
+    return normalizeP2PDealKind(rawValue) === "digital_product" ? "digital" : "standard";
+}
+
+export function isP2PDigitalDeal(rawValue: unknown): boolean {
+    return normalizeP2PDealKind(rawValue) === "digital_product";
+}
 
 export interface P2PLedgerEntry {
     entryId: string;

@@ -22,11 +22,18 @@ import {
   getUserCurrentMonthP2PTradeVolume,
   resolveP2PVerificationRequirements,
 } from "./helpers";
+import {
+  normalizeP2PDealKind,
+  toP2PPublicDealKind,
+} from "@shared/p2p-enterprise";
+import {
+  ALLOWED_PAYMENT_TIME_LIMITS,
+  MAX_NEGOTIATED_ADMIN_FEE_RATE,
+  MAX_NEGOTIATION_FIELD_LENGTH,
+  validateOfferCreation,
+} from "./offer-validation";
 
-const ALLOWED_PAYMENT_TIME_LIMITS = new Set([15, 30, 45, 60]);
-const MAX_NEGOTIATION_FIELD_LENGTH = 2000;
 const MAX_NEGOTIATED_TERMS_LENGTH = 4000;
-const MAX_NEGOTIATED_ADMIN_FEE_RATE = 0.2;
 
 interface OfferOwnedPaymentMethod {
   id: string;
@@ -53,7 +60,7 @@ function mapOwnedPaymentMethodsForClient(methods: OfferOwnedPaymentMethod[]) {
 function mapOfferForClient(offer: Record<string, unknown>, username: string, country?: string | null) {
   const availableAmount = String(offer.availableAmount ?? offer.amount ?? '0');
   const visibility = String(offer.visibility || "public");
-  const dealKind = String(offer.dealKind || "standard_asset");
+  const dealKind = toP2PPublicDealKind(offer.dealKind);
 
   return {
     id: String(offer.id),
@@ -104,7 +111,7 @@ async function areUsersMutualFriends(userId: string, targetUserId: string): Prom
 }
 
 function normalizeDealKind(rawValue: unknown): "standard_asset" | "digital_product" {
-  return rawValue === "digital_product" ? "digital_product" : "standard_asset";
+  return normalizeP2PDealKind(rawValue);
 }
 
 function parseNegotiatedAdminFeeRate(rawValue: unknown): string | null {
@@ -595,6 +602,12 @@ export function registerOfferRoutes(app: Express) {
         return res.status(403).json({ error: "P2P trading is currently disabled" });
       }
 
+      const currencyControls = resolveP2PCurrencyControls(globalSettings);
+      const normalizedOfferType = String(type || "").trim().toLowerCase();
+      const allowedCurrenciesForType = normalizedOfferType === "sell"
+        ? currencyControls.p2pSellCurrencies
+        : currencyControls.p2pBuyCurrencies;
+
       if (user.p2pBanned) {
         return res.status(403).json({
           error: user.p2pBanReason || "Your P2P access is currently restricted",
@@ -659,246 +672,75 @@ export function registerOfferRoutes(app: Express) {
         });
       }
 
-      // Validate type
-      if (!type || !['buy', 'sell'].includes(type)) {
-        return res.status(400).json({ error: "Type must be 'buy' or 'sell'" });
-      }
+      const validation = await validateOfferCreation({
+        user,
+        type,
+        amount,
+        price,
+        currency,
+        fiatCurrency,
+        minLimit,
+        maxLimit,
+        paymentMethods,
+        paymentMethodIds,
+        paymentTimeLimit,
+        terms,
+        autoReply,
+        dealKind,
+        digitalProductType,
+        exchangeOffered,
+        exchangeRequested,
+        supportMediationRequested,
+        requestedAdminFeePercentage,
+        visibility,
+        targetUserId,
+        allowedCurrenciesForType,
+        minTradeAmount: globalSettings ? resolveConfiguredTradeBound(globalSettings.minTradeAmount, 10) : undefined,
+        maxTradeAmount: globalSettings ? Math.max(
+          resolveConfiguredTradeBound(globalSettings.minTradeAmount, 10),
+          resolveConfiguredTradeBound(globalSettings.maxTradeAmount, 100000),
+        ) : undefined,
+        availableBalanceForSell: undefined,
+        ownedPaymentMethodIds: ownedPaymentMethods.map((method) => method.id),
+        ownedPaymentMethodNames: ownedPaymentMethods.map((method) => method.name),
+        ownedPaymentMethodTypes: ownedPaymentMethods.map((method) => method.type),
+        isMutualFriend: areUsersMutualFriends,
+        isBlockedEitherWay: isEitherUserBlocked,
+        getUserById: async (userId: string) => {
+          const userRecord = await storage.getUser(userId);
+          return userRecord ?? null;
+        },
+      });
 
-      // Validate amounts
-      const parsedAmount = parseFloat(amount);
-      const parsedPrice = parseFloat(price);
-      const parsedMinLimit = parseFloat(minLimit);
-      const parsedMaxLimit = parseFloat(maxLimit);
-
-      if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 1000000) {
-        return res.status(400).json({ error: "Amount must be a positive number up to 1,000,000" });
-      }
-      if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 100000) {
-        return res.status(400).json({ error: "Price must be a positive number" });
-      }
-      if (isNaN(parsedMinLimit) || parsedMinLimit <= 0) {
-        return res.status(400).json({ error: "Min limit must be a positive number" });
-      }
-      if (isNaN(parsedMaxLimit) || parsedMaxLimit <= 0 || parsedMaxLimit < parsedMinLimit) {
-        return res.status(400).json({ error: "Max limit must be >= min limit" });
-      }
-      if (parsedMaxLimit > parsedAmount) {
-        return res.status(400).json({ error: "Max limit cannot exceed total amount" });
-      }
-
-      if (globalSettings) {
-        const minTradeAmount = resolveConfiguredTradeBound(globalSettings.minTradeAmount, 10);
-        const maxTradeAmount = Math.max(minTradeAmount, resolveConfiguredTradeBound(globalSettings.maxTradeAmount, 100000));
-        if (parsedMinLimit < minTradeAmount || parsedMaxLimit > maxTradeAmount) {
-          return res.status(400).json({ error: `Trade limits must be between ${minTradeAmount} and ${maxTradeAmount}` });
-        }
+      if (!validation.ok) {
+        return res.status(validation.status).json({ error: validation.error });
       }
 
       const currencyControls = resolveP2PCurrencyControls(globalSettings);
-      const allowedCurrenciesForType = type === "buy"
-        ? currencyControls.p2pBuyCurrencies
-        : currencyControls.p2pSellCurrencies;
-
-      if (allowedCurrenciesForType.length === 0) {
-        return res.status(403).json({
-          error: `P2P ${type} offers are currently disabled for all currencies by admin settings`,
-        });
-      }
-
-      // Validate currency
-      const normalizedCurrency = normalizeCurrencyCode(currency);
-      if (!normalizedCurrency || !isCurrencyAllowedForOfferType(type, normalizedCurrency, currencyControls)) {
-        return res.status(400).json({
-          error: `Currency must be one of: ${allowedCurrenciesForType.join(', ')}`,
-        });
-      }
-
-      const allowedQuoteCurrencies = currencyControls.allowedP2PCurrencies;
-      const normalizedFiatCurrency = normalizeCurrencyCode(fiatCurrency || normalizedCurrency);
-      if (!normalizedFiatCurrency || !allowedQuoteCurrencies.includes(normalizedFiatCurrency)) {
-        return res.status(400).json({
-          error: `Quote currency must be one of: ${allowedQuoteCurrencies.join(', ')}`,
-        });
-      }
-
-      if (type === "sell") {
-        // Sell offers may use ANY currency on the seller's allow-list. The
-        // matching wallet (primary or sub) supplies escrow when a trade opens.
-        const allowedForUser = getEffectiveAllowedCurrencies(user);
-        if (!allowedForUser.includes(normalizedCurrency)) {
-          return res.status(400).json({
-            error: `Sell offers must use one of your wallet currencies: ${allowedForUser.join(", ")}`,
-          });
-        }
-
-        // Read the actual matching wallet balance (primary → users.balance,
-        // sub → user_currency_wallets row, 0 if no row yet).
-        const rawWalletBalance = (await getWalletBalance(req.user!.id, normalizedCurrency)) ?? 0;
-        const frozenIncoming = await getFrozenIncomingSellBalance(req.user!.id, normalizedCurrency);
-        const reservedOutgoing = await db
-          .select({
-            total: sql<string>`coalesce(sum(cast(${p2pOffers.availableAmount} as numeric)), 0)`,
-          })
-          .from(p2pOffers)
-          .innerJoin(p2pTraderProfiles, eq(p2pOffers.userId, p2pTraderProfiles.userId))
-          .where(and(
-            eq(p2pOffers.userId, req.user!.id),
-            eq(p2pOffers.type, "sell"),
-            eq(p2pOffers.status, "active"),
-            eq(p2pOffers.cryptoCurrency, normalizedCurrency),
-          ))
-          .then((rows) => Number(rows[0]?.total || 0));
-
-        const availableToSell = Math.max(0, rawWalletBalance - frozenIncoming - reservedOutgoing);
-
-        if (parsedAmount > availableToSell) {
-          return res.status(400).json({
-            error: `Insufficient available balance for sell offer. Available: ${availableToSell.toFixed(8)} ${normalizedCurrency}`,
-          });
-        }
-      }
-
-      const requestedPaymentMethodIds = Array.isArray(paymentMethodIds)
-        ? paymentMethodIds.filter((methodId: unknown): methodId is string => typeof methodId === "string" && methodId.trim().length > 0)
-        : [];
-
-      const legacyPaymentMethodSelectors = Array.isArray(paymentMethods)
-        ? paymentMethods.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)
-        : (typeof paymentMethods === "string" && paymentMethods.trim().length > 0 ? [paymentMethods] : []);
-
-      const methodsById = new Map(ownedPaymentMethods.map((method) => [method.id, method]));
-      const methodsByName = new Map(ownedPaymentMethods.map((method) => [normalizePaymentSelector(method.name), method]));
-      const methodsByType = new Map(ownedPaymentMethods.map((method) => [normalizePaymentSelector(method.type), method]));
-
-      const selectedMethodsMap = new Map<string, OfferOwnedPaymentMethod>();
-
-      if (requestedPaymentMethodIds.length > 0) {
-        const invalidIds: string[] = [];
-        for (const methodId of requestedPaymentMethodIds) {
-          const method = methodsById.get(methodId);
-          if (!method) {
-            invalidIds.push(methodId);
-            continue;
-          }
-          selectedMethodsMap.set(method.id, method);
-        }
-
-        if (invalidIds.length > 0) {
-          return res.status(400).json({ error: "One or more selected payment methods are invalid or inactive" });
-        }
-      } else {
-        for (const selector of legacyPaymentMethodSelectors) {
-          const normalizedSelector = normalizePaymentSelector(selector);
-          const method = methodsByName.get(normalizedSelector) || methodsByType.get(normalizedSelector);
-          if (!method) {
-            continue;
-          }
-          selectedMethodsMap.set(method.id, method);
-        }
-      }
-
-      const selectedMethods = Array.from(selectedMethodsMap.values());
-      if (selectedMethods.length === 0) {
-        return res.status(400).json({ error: "Select at least one of your active payment methods" });
-      }
-
-      if (selectedMethods.length > 5) {
-        return res.status(400).json({ error: "A maximum of 5 payment methods is allowed per offer" });
-      }
-
-      const parsedPaymentTimeLimit = Number(paymentTimeLimit ?? 15);
-      if (!Number.isInteger(parsedPaymentTimeLimit) || !ALLOWED_PAYMENT_TIME_LIMITS.has(parsedPaymentTimeLimit)) {
-        return res.status(400).json({ error: `Payment time limit must be one of: ${Array.from(ALLOWED_PAYMENT_TIME_LIMITS).join(', ')}` });
-      }
-
-      const safeTerms = typeof terms === "string"
-        ? sanitizePlainText(terms, { maxLength: 1200 })
-        : null;
-
-      const safeAutoReply = typeof autoReply === "string"
-        ? sanitizePlainText(autoReply, { maxLength: 500 })
-        : null;
-
-      if (!safeTerms || safeTerms.trim().length === 0) {
-        return res.status(400).json({ error: "Offer terms are required" });
-      }
-
-      if (!safeAutoReply || safeAutoReply.trim().length === 0) {
-        return res.status(400).json({ error: "Auto reply is required" });
-      }
-
-      const normalizedDealKind = normalizeDealKind(dealKind);
-      const safeDigitalProductType = typeof digitalProductType === "string"
-        ? sanitizePlainText(digitalProductType, { maxLength: 120 }).trim()
-        : "";
-      const safeExchangeOffered = typeof exchangeOffered === "string"
-        ? sanitizePlainText(exchangeOffered, { maxLength: MAX_NEGOTIATION_FIELD_LENGTH }).trim()
-        : "";
-      const safeExchangeRequested = typeof exchangeRequested === "string"
-        ? sanitizePlainText(exchangeRequested, { maxLength: MAX_NEGOTIATION_FIELD_LENGTH }).trim()
-        : "";
-      const normalizedSupportMediationRequested = supportMediationRequested === true;
-
-      const normalizedRequestedAdminFeePercentage = parseNegotiatedAdminFeeRate(requestedAdminFeePercentage);
-      if (requestedAdminFeePercentage !== undefined && requestedAdminFeePercentage !== null && requestedAdminFeePercentage !== "" && !normalizedRequestedAdminFeePercentage) {
-        return res.status(400).json({ error: `Requested admin fee must be between 0 and ${MAX_NEGOTIATED_ADMIN_FEE_RATE}` });
-      }
-
-      if (normalizedDealKind === "digital_product") {
-        if (!safeDigitalProductType) {
-          return res.status(400).json({ error: "Digital product type is required" });
-        }
-
-        if (!safeExchangeOffered) {
-          return res.status(400).json({ error: "Exchange offered description is required" });
-        }
-
-        if (!safeExchangeRequested) {
-          return res.status(400).json({ error: "Exchange requested description is required" });
-        }
-      }
-
-      const normalizedVisibility = typeof visibility === "string" ? visibility.trim() : "public";
-      if (!["public", "private_friend"].includes(normalizedVisibility)) {
-        return res.status(400).json({ error: "Visibility must be either 'public' or 'private_friend'" });
-      }
-
-      let normalizedTargetUserId: string | null = null;
-      if (normalizedVisibility === "private_friend") {
-        if (typeof targetUserId !== "string" || targetUserId.trim().length === 0) {
-          return res.status(400).json({ error: "Target friend is required for private offers" });
-        }
-
-        normalizedTargetUserId = targetUserId.trim();
-        if (normalizedTargetUserId === req.user!.id) {
-          return res.status(400).json({ error: "You cannot target yourself" });
-        }
-
-        const [targetUser, isMutualFriend, blockedEitherWay] = await Promise.all([
-          storage.getUser(normalizedTargetUserId),
-          areUsersMutualFriends(req.user!.id, normalizedTargetUserId),
-          isEitherUserBlocked(req.user!.id, normalizedTargetUserId),
-        ]);
-
-        if (!targetUser) {
-          return res.status(404).json({ error: "Target user not found" });
-        }
-
-        if (!isMutualFriend) {
-          return res.status(403).json({ error: "Private offers can only target mutual friends" });
-        }
-
-        if (blockedEitherWay) {
-          return res.status(403).json({ error: "Cannot target a blocked user" });
-        }
-      }
-
-      const now = new Date();
+      const normalizedCurrency = validation.normalizedCurrency;
+      const normalizedFiatCurrency = validation.normalizedFiatCurrency;
+      const normalizedDealKind = validation.dealKind;
+      const selectedMethods = validation.selectedPaymentMethodNames;
+      const parsedAmount = validation.parsedAmount;
+      const parsedPrice = validation.parsedPrice;
+      const parsedMinLimit = validation.parsedMinLimit;
+      const parsedMaxLimit = validation.parsedMaxLimit;
+      const parsedPaymentTimeLimit = validation.parsedPaymentTimeLimit;
+      const safeTerms = validation.safeTerms;
+      const safeAutoReply = validation.safeAutoReply;
+      const safeDigitalProductType = validation.safeDigitalProductType;
+      const safeExchangeOffered = validation.safeExchangeOffered;
+      const safeExchangeRequested = validation.safeExchangeRequested;
+      const normalizedSupportMediationRequested = validation.normalizedSupportMediationRequested;
+      const normalizedRequestedAdminFeePercentage = validation.normalizedRequestedAdminFeePercentage;
+      const normalizedVisibility = validation.normalizedVisibility;
+      const normalizedTargetUserId = validation.normalizedTargetUserId;
       const isPublicOffer = normalizedVisibility === "public";
       const approvalMode = normalizedDealKind === "digital_product"
         ? (globalSettings?.digitalOfferApprovalMode ?? "manual")
         : (globalSettings?.standardOfferApprovalMode ?? "automatic");
       const initialStatus = isPublicOffer && approvalMode === "manual" ? "pending_approval" : "active";
+      const now = new Date();
       const approvedAt = initialStatus === "active" ? now : null;
       const submittedForReviewAt = isPublicOffer && initialStatus === "pending_approval" ? now : null;
       const reviewedAt = initialStatus === "active" ? now : null;
@@ -917,14 +759,12 @@ export function registerOfferRoutes(app: Express) {
         targetUserId: normalizedTargetUserId,
         cryptoCurrency: normalizedCurrency,
         fiatCurrency: normalizedFiatCurrency,
-        // Persist wallet routing for sell-side escrow & buy-side settlement.
-        // Always set to the offer's crypto currency so trades inherit it.
         walletCurrency: normalizedCurrency,
         price: parsedPrice.toFixed(2),
         availableAmount: parsedAmount.toFixed(8),
         minLimit: parsedMinLimit.toFixed(2),
         maxLimit: parsedMaxLimit.toFixed(2),
-        paymentMethods: selectedMethods.map((method) => method.name),
+        paymentMethods: selectedMethods,
         paymentTimeLimit: parsedPaymentTimeLimit,
         terms: safeTerms || null,
         autoReply: safeAutoReply || null,

@@ -44,6 +44,7 @@ import {
   getTradeStatusBucket,
   getTradeStatusLabel,
 } from "@/lib/p2p-status";
+import { useP2PUiState } from "@/p2p/hooks/useP2PUiState";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { P2POffer as P2POfferRow } from "@shared/schema";
 
@@ -377,7 +378,7 @@ interface DisputeRule {
 
 const createOfferSchema = z.object({
   type: z.enum(["buy", "sell"]),
-  dealKind: z.enum(["standard_asset", "digital_product"]),
+  dealKind: z.enum(["standard", "digital"]),
   digitalProductType: z.string().trim().max(120).optional(),
   exchangeOffered: z.string().trim().max(800).optional(),
   exchangeRequested: z.string().trim().max(800).optional(),
@@ -399,13 +400,13 @@ const createOfferSchema = z.object({
 
 const CREATE_OFFER_MODES = [
   {
-    id: "standard_asset" as const,
+    id: "standard" as const,
     titleKey: "p2p.createStandardOffer",
     descriptionKey: "p2p.offer.standardAssetDesc",
     helperKey: "p2p.offer.standardAssetHelper",
   },
   {
-    id: "digital_product" as const,
+    id: "digital" as const,
     titleKey: "p2p.createDigitalOffer",
     descriptionKey: "p2p.offer.digitalProductDesc",
     helperKey: "p2p.offer.digitalProductHelper",
@@ -427,8 +428,8 @@ const CREATE_OFFER_STEP_COPY: Record<1 | 2 | 3, { titleKey: string; descriptionK
   },
 };
 
-function getOfferModeLabel(t: TranslateFn, dealKind: "standard_asset" | "digital_product") {
-  return dealKind === "digital_product" ? t("p2p.createDigitalOffer") : t("p2p.createStandardOffer");
+function getOfferModeLabel(t: TranslateFn, dealKind: "standard" | "digital") {
+  return dealKind === "digital" ? t("p2p.createDigitalOffer") : t("p2p.createStandardOffer");
 }
 
 export type CreateOfferForm = z.infer<typeof createOfferSchema>;
@@ -2062,7 +2063,7 @@ function MyOffersTab() {
     resolver: zodResolver(createOfferSchema),
     defaultValues: {
       type: "sell",
-      dealKind: "standard_asset",
+      dealKind: "standard",
       digitalProductType: "",
       exchangeOffered: "",
       exchangeRequested: "",
@@ -2275,13 +2276,13 @@ function MyOffersTab() {
 
       const res = await apiRequest("POST", "/api/p2p/offers", {
         ...data,
-        dealKind: data.dealKind,
-        digitalProductType: data.dealKind === "digital_product" ? normalizedDigitalProductType : undefined,
-        exchangeOffered: data.dealKind === "digital_product" ? normalizedExchangeOffered : undefined,
-        exchangeRequested: data.dealKind === "digital_product" ? normalizedExchangeRequested : undefined,
-        supportMediationRequested: data.dealKind === "digital_product" ? data.supportMediationRequested : false,
+        dealKind: data.dealKind === "digital" ? "digital_product" : "standard_asset",
+        digitalProductType: data.dealKind === "digital" ? normalizedDigitalProductType : undefined,
+        exchangeOffered: data.dealKind === "digital" ? normalizedExchangeOffered : undefined,
+        exchangeRequested: data.dealKind === "digital" ? normalizedExchangeRequested : undefined,
+        supportMediationRequested: data.dealKind === "digital" ? data.supportMediationRequested : false,
         requestedAdminFeePercentage:
-          data.dealKind === "digital_product" ? normalizedRequestedAdminFeePercentage : undefined,
+          data.dealKind === "digital" ? normalizedRequestedAdminFeePercentage : undefined,
         visibility: data.visibility,
         targetUserId: data.visibility === "private_friend" ? data.targetUserId : undefined,
         paymentMethodIds: data.paymentMethodIds,
@@ -2299,7 +2300,7 @@ function MyOffersTab() {
       setCreateOfferStep(1);
       form.reset({
         type: "sell",
-        dealKind: "standard_asset",
+        dealKind: "standard",
         digitalProductType: "",
         exchangeOffered: "",
         exchangeRequested: "",
@@ -2499,7 +2500,7 @@ function MyOffersTab() {
       return;
     }
 
-    if (data.dealKind === "digital_product") {
+    if (data.dealKind === "digital") {
       const digitalProductType = String(data.digitalProductType || "").trim();
       const exchangeOffered = String(data.exchangeOffered || "").trim();
       const exchangeRequested = String(data.exchangeRequested || "").trim();
@@ -3875,15 +3876,18 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     && activeCancellationRequest?.payload.requesterId !== user?.id;
   const canFinalizeApprovedCancellation = Boolean(activeCancellationRequest)
     && Boolean(activeCancellationApproval);
-  const canCurrentUserRequestCancellation = Boolean(activeTrade)
-    && !activeCancellationRequest
-    && (activeTrade?.status === "pending" || activeTrade?.status === "paid");
-  const canEscalateToArbitration = Boolean(activeTrade)
-    && (activeTrade?.status === "paid" || activeTrade?.status === "confirmed");
-  const canShowTradeWorkflowPanel = Boolean(activeTrade)
-    && activeTrade?.status !== "cancelled";
+  const { trade: tradeUiState } = useP2PUiState({ trade: activeTrade });
+
+  const canCurrentUserRequestCancellation = tradeUiState?.allowedActions.includes("cancel") && !activeCancellationRequest;
+  const canEscalateToArbitration = tradeUiState?.allowedActions.includes("dispute");
+  const canShowTradeWorkflowPanel = Boolean(activeTrade) && tradeUiState?.isLocked !== true;
   const canComposeTradeMessages = Boolean(activeTrade);
-  const showBuyerGuidedPendingFlow = Boolean(activeTrade?.isBuyer && activeTrade?.status === "pending");
+  const showBuyerGuidedPendingFlow = Boolean(activeTrade?.isBuyer && tradeUiState?.primaryAction === "pay");
+  const canBuyerConfirmPayment = tradeUiState?.bucket === "active" && activeTrade?.isBuyer;
+  const canSellerConfirmTrade = tradeUiState?.primaryAction === "confirm" && activeTrade?.isSeller;
+  const canSellerCompleteTrade = tradeUiState?.bucket === "resolved" && activeTrade?.isSeller;
+  const isTradePendingOrPaid = tradeUiState?.bucket === "pending" || tradeUiState?.bucket === "active";
+  const isTradeTerminal = tradeUiState?.bucket === "cancelled" || tradeUiState?.bucket === "resolved";
   const activeTradeOfferCurrency = normalizeCurrencyCodeValue(activeTrade?.offerCurrency || "");
   const activeTradeFiatCurrency = normalizeCurrencyCodeValue(activeTrade?.offerFiatCurrency || "");
   const prioritizedWalletBalances = useMemo(() => {
@@ -4847,7 +4851,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                         </div>
                       )}
 
-                      {activeTrade.isBuyer && activeTrade.status === "paid" && (
+                      {canBuyerConfirmPayment && (
                         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 p-3 text-xs text-emerald-300">
                           <p>{t('p2p.tradeProcessing')}</p>
                           {remainingTradeWindow && (
@@ -4856,7 +4860,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                         </div>
                       )}
 
-                      {activeTrade.isSeller && activeTrade.status === "paid" && (
+                      {canSellerConfirmTrade && (
                         <Button
                           className="w-full bg-brand-gold text-slate-900 hover:bg-brand-gold-dark"
                           onClick={() => tradeActionMutation.mutate("confirm")}
@@ -4867,7 +4871,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                         </Button>
                       )}
 
-                      {activeTrade.isSeller && activeTrade.status === "confirmed" && (
+                      {canSellerCompleteTrade && (
                         <Button
                           className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                           onClick={() => tradeActionMutation.mutate("complete")}
@@ -4901,7 +4905,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                         </div>
                       )}
 
-                      {(activeTrade.status === "pending" || activeTrade.status === "paid") && (
+                      {isTradePendingOrPaid && (
                         <div className="space-y-2 rounded-lg border border-red-700/30 bg-red-900/10 p-3">
                           <Input
                             value={cancelReason}
@@ -4996,7 +5000,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
 
               const composer = canComposeTradeMessages ? (
                 <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
-                  {activeTrade.status === "cancelled" && (
+                  {tradeUiState?.bucket === "cancelled" && (
                     <p className="px-1 text-xs text-slate-400">{t('p2p.tradeCancelled')}</p>
                   )}
 
@@ -5185,7 +5189,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                       );
                     })}
 
-                    {(activeTrade.status === "cancelled" || activeTrade.status === "disputed") && (
+                    {isTradeTerminal && (
                       <Badge className={cn("border", getStatusPillClass(activeTrade.status))}>
                         {getStatusBadge(activeTrade.status).props.children}
                       </Badge>
