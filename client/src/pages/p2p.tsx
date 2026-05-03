@@ -44,6 +44,7 @@ import {
   getTradeStatusBucket,
   getTradeStatusLabel,
 } from "@/lib/p2p-status";
+import { mapOfferUiState, mapTradeUiState } from "@/p2p/state/stateMapper";
 import { useP2PUiState } from "@/p2p/hooks/useP2PUiState";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { P2POffer as P2POfferRow } from "@shared/schema";
@@ -378,7 +379,7 @@ interface DisputeRule {
 
 const createOfferSchema = z.object({
   type: z.enum(["buy", "sell"]),
-  dealKind: z.enum(["standard", "digital"]),
+  dealKind: z.enum(["standard_asset", "digital_product"]),
   digitalProductType: z.string().trim().max(120).optional(),
   exchangeOffered: z.string().trim().max(800).optional(),
   exchangeRequested: z.string().trim().max(800).optional(),
@@ -400,13 +401,13 @@ const createOfferSchema = z.object({
 
 const CREATE_OFFER_MODES = [
   {
-    id: "standard" as const,
+    id: "standard_asset" as const,
     titleKey: "p2p.createStandardOffer",
     descriptionKey: "p2p.offer.standardAssetDesc",
     helperKey: "p2p.offer.standardAssetHelper",
   },
   {
-    id: "digital" as const,
+    id: "digital_product" as const,
     titleKey: "p2p.createDigitalOffer",
     descriptionKey: "p2p.offer.digitalProductDesc",
     helperKey: "p2p.offer.digitalProductHelper",
@@ -428,8 +429,8 @@ const CREATE_OFFER_STEP_COPY: Record<1 | 2 | 3, { titleKey: string; descriptionK
   },
 };
 
-function getOfferModeLabel(t: TranslateFn, dealKind: "standard" | "digital") {
-  return dealKind === "digital" ? t("p2p.createDigitalOffer") : t("p2p.createStandardOffer");
+function getOfferModeLabel(t: TranslateFn, dealKind: "standard_asset" | "digital_product") {
+  return dealKind === "digital_product" ? t("p2p.createDigitalOffer") : t("p2p.createStandardOffer");
 }
 
 export type CreateOfferForm = z.infer<typeof createOfferSchema>;
@@ -2063,7 +2064,7 @@ function MyOffersTab() {
     resolver: zodResolver(createOfferSchema),
     defaultValues: {
       type: "sell",
-      dealKind: "standard",
+      dealKind: "standard_asset",
       digitalProductType: "",
       exchangeOffered: "",
       exchangeRequested: "",
@@ -2276,13 +2277,13 @@ function MyOffersTab() {
 
       const res = await apiRequest("POST", "/api/p2p/offers", {
         ...data,
-        dealKind: data.dealKind === "digital" ? "digital_product" : "standard_asset",
-        digitalProductType: data.dealKind === "digital" ? normalizedDigitalProductType : undefined,
-        exchangeOffered: data.dealKind === "digital" ? normalizedExchangeOffered : undefined,
-        exchangeRequested: data.dealKind === "digital" ? normalizedExchangeRequested : undefined,
-        supportMediationRequested: data.dealKind === "digital" ? data.supportMediationRequested : false,
+        dealKind: data.dealKind,
+        digitalProductType: data.dealKind === "digital_product" ? normalizedDigitalProductType : undefined,
+        exchangeOffered: data.dealKind === "digital_product" ? normalizedExchangeOffered : undefined,
+        exchangeRequested: data.dealKind === "digital_product" ? normalizedExchangeRequested : undefined,
+        supportMediationRequested: data.dealKind === "digital_product" ? data.supportMediationRequested : false,
         requestedAdminFeePercentage:
-          data.dealKind === "digital" ? normalizedRequestedAdminFeePercentage : undefined,
+          data.dealKind === "digital_product" ? normalizedRequestedAdminFeePercentage : undefined,
         visibility: data.visibility,
         targetUserId: data.visibility === "private_friend" ? data.targetUserId : undefined,
         paymentMethodIds: data.paymentMethodIds,
@@ -2300,7 +2301,7 @@ function MyOffersTab() {
       setCreateOfferStep(1);
       form.reset({
         type: "sell",
-        dealKind: "standard",
+        dealKind: "standard_asset",
         digitalProductType: "",
         exchangeOffered: "",
         exchangeRequested: "",
@@ -2500,7 +2501,7 @@ function MyOffersTab() {
       return;
     }
 
-    if (data.dealKind === "digital") {
+    if (data.dealKind === "digital_product") {
       const digitalProductType = String(data.digitalProductType || "").trim();
       const exchangeOffered = String(data.exchangeOffered || "").trim();
       const exchangeRequested = String(data.exchangeRequested || "").trim();
@@ -2593,31 +2594,17 @@ function MyOffersTab() {
     setCreateOfferStep((previous) => (previous === 3 ? 2 : 1));
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      active: "default",
-      pending_approval: "outline",
-      rejected: "destructive",
-      cancelled: "destructive",
-      paused: "secondary",
-      inactive: "secondary",
-      completed: "outline",
-    };
-    const labels: Record<string, string> = {
-      active: t('p2p.statusActive'),
-      pending_approval: t('common.pending'),
-      rejected: t('common.rejected'),
-      cancelled: t('p2p.tradeCancelled'),
-      paused: t('p2p.statusInactive'),
-      inactive: t('p2p.statusInactive'),
-      completed: t('p2p.statusCompleted'),
-    };
-    return <Badge variant={variants[status] || "default"} >{labels[status] || status}</Badge>;
-  };
-
   const sortedOffers = useMemo(() => {
     return [...(myOffers || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [myOffers]);
+
+  const offerUiStatesById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof mapOfferUiState>>();
+    for (const offer of sortedOffers) {
+      map.set(offer.id, mapOfferUiState(offer));
+    }
+    return map;
+  }, [sortedOffers]);
 
   const offerStats = useMemo(() => {
     const counters = {
@@ -2629,23 +2616,15 @@ function MyOffersTab() {
     };
 
     for (const offer of sortedOffers) {
-      if (offer.status === "active") counters.active += 1;
-      if (offer.status === "pending_approval") counters.pending += 1;
-      if (offer.status === "completed") counters.completed += 1;
-      if (offer.status === "rejected") counters.rejected += 1;
+      const uiState = offerUiStatesById.get(offer.id) || mapOfferUiState(offer);
+      if (uiState.bucket === "active") counters.active += 1;
+      if (uiState.bucket === "pending") counters.pending += 1;
+      if (uiState.bucket === "resolved") counters.completed += 1;
+      if (uiState.bucket === "cancelled") counters.rejected += 1;
     }
 
     return counters;
-  }, [sortedOffers]);
-
-  const getStatusPillClass = (status: string) => {
-    if (status === "active") return "border-emerald-600/40 bg-emerald-600/10 text-emerald-300";
-    if (status === "pending_approval") return "border-amber-600/40 bg-amber-600/10 text-amber-300";
-    if (status === "rejected" || status === "cancelled") return "border-red-600/40 bg-red-600/10 text-red-300";
-    if (status === "inactive") return "border-slate-700 bg-slate-800 text-slate-200";
-    if (status === "paused") return "border-slate-700 bg-slate-800 text-slate-200";
-    return "border-sky-600/40 bg-sky-600/10 text-sky-300";
-  };
+  }, [offerUiStatesById, sortedOffers]);
 
   if (isLoading) {
     return (
@@ -3419,48 +3398,60 @@ function MyOffersTab() {
                         {offer.dealKind === "digital_product" && (
                           <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
                         )}
-                        <StatusPill
-                          bucket={getOfferStatusBucket(offer.status)}
-                          bucketLabel={t(`p2p.status.bucket.${getOfferStatusBucket(offer.status)}`)}
-                          preciseLabel={getOfferStatusLabel(offer.status)}
-                          tooltipPrefix={t('p2p.status.tooltipPrefix')}
-                          testId={`badge-offer-status-${offer.id}`}
-                        />
+                        {(() => {
+                          const uiState = offerUiStatesById.get(offer.id) || mapOfferUiState(offer);
+                          return (
+                            <StatusPill
+                              bucket={uiState.bucket}
+                              bucketLabel={t(`p2p.status.bucket.${uiState.bucket}`)}
+                              preciseLabel={uiState.label}
+                              tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                              testId={`badge-offer-status-${offer.id}`}
+                            />
+                          );
+                        })()}
                       </div>
                       <p className="mt-2 text-xs text-slate-400">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</p>
                     </div>
 
                     <div className="flex gap-1">
-                      {offer.status === "active" && offer.dealKind === "digital_product" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
-                          onClick={() => {
-                            toast({
-                              title: t('common.info'),
-                              description: t('p2p.negotiation.awaitingFirstProposal'),
-                            });
-                          }}
-                          data-testid={`button-negotiate-offer-${offer.id}`}
-                        >
-                          <Scale className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {offer.status === "rejected" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
-                          onClick={() => {
-                            setResubmitDialogOffer(offer);
-                            setCounterResponseDraft(offer.counterResponse || "");
-                          }}
-                          data-testid={`button-resubmit-offer-${offer.id}`}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      )}
+                      {(() => {
+                        const uiState = offerUiStatesById.get(offer.id) || mapOfferUiState(offer);
+                        return (
+                          <>
+                            {uiState.bucket === "active" && offer.dealKind === "digital_product" && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
+                                onClick={() => {
+                                  toast({
+                                    title: t('common.info'),
+                                    description: t('p2p.negotiation.awaitingFirstProposal'),
+                                  });
+                                }}
+                                data-testid={`button-negotiate-offer-${offer.id}`}
+                              >
+                                <Scale className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {uiState.bucket === "cancelled" && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                                onClick={() => {
+                                  setResubmitDialogOffer(offer);
+                                  setCounterResponseDraft(offer.counterResponse || "");
+                                }}
+                                data-testid={`button-resubmit-offer-${offer.id}`}
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </>
+                        );
+                      })()}
                       <Button
                         size="icon"
                         variant="ghost"
@@ -3592,13 +3583,18 @@ function MyOffersTab() {
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <StatusPill
-                          bucket={getOfferStatusBucket(offer.status)}
-                          bucketLabel={t(`p2p.status.bucket.${getOfferStatusBucket(offer.status)}`)}
-                          preciseLabel={String(getStatusBadge(offer.status).props.children)}
-                          tooltipPrefix={t('p2p.status.tooltipPrefix')}
-                          testId={`badge-offer-status-row-${offer.id}`}
-                        />
+                        {(() => {
+                          const uiState = offerUiStatesById.get(offer.id) || mapOfferUiState(offer);
+                          return (
+                            <StatusPill
+                              bucket={uiState.bucket}
+                              bucketLabel={t(`p2p.status.bucket.${uiState.bucket}`)}
+                              preciseLabel={uiState.label}
+                              tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                              testId={`badge-offer-status-row-${offer.id}`}
+                            />
+                          );
+                        })()}
                         <p className="text-[11px] text-slate-400">{getVisibilityLabel(t, offer.visibility, offer.targetUsername)}</p>
                         {offer.dealKind === "digital_product" && (
                           <p className="text-[11px] text-violet-300">{offer.digitalProductType || getDealKindLabel(t, offer.dealKind)}</p>
@@ -3613,36 +3609,43 @@ function MyOffersTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {offer.status === "active" && offer.dealKind === "digital_product" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
-                            onClick={() => {
-                              toast({
-                                title: t('common.info'),
-                                description: t('p2p.negotiation.awaitingFirstProposal'),
-                              });
-                            }}
-                            data-testid={`button-negotiate-offer-${offer.id}`}
-                          >
-                            <Scale className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {offer.status === "rejected" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
-                            onClick={() => {
-                              setResubmitDialogOffer(offer);
-                              setCounterResponseDraft(offer.counterResponse || "");
-                            }}
-                            data-testid={`button-resubmit-offer-${offer.id}`}
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                        )}
+                        {(() => {
+                          const uiState = offerUiStatesById.get(offer.id) || mapOfferUiState(offer);
+                          return (
+                            <>
+                              {uiState.bucket === "active" && offer.dealKind === "digital_product" && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
+                                  onClick={() => {
+                                    toast({
+                                      title: t('common.info'),
+                                      description: t('p2p.negotiation.awaitingFirstProposal'),
+                                    });
+                                  }}
+                                  data-testid={`button-negotiate-offer-${offer.id}`}
+                                >
+                                  <Scale className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {uiState.bucket === "cancelled" && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                                  onClick={() => {
+                                    setResubmitDialogOffer(offer);
+                                    setCounterResponseDraft(offer.counterResponse || "");
+                                  }}
+                                  data-testid={`button-resubmit-offer-${offer.id}`}
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </>
+                          );
+                        })()}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -3876,7 +3879,8 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     && activeCancellationRequest?.payload.requesterId !== user?.id;
   const canFinalizeApprovedCancellation = Boolean(activeCancellationRequest)
     && Boolean(activeCancellationApproval);
-  const { trade: tradeUiState } = useP2PUiState({ trade: activeTrade });
+  const tradeUiState = useP2PUiState({ trade: activeTrade }).trade;
+  const currentTradeStatus = tradeUiState?.status ?? null;
 
   const canCurrentUserRequestCancellation = tradeUiState?.allowedActions.includes("cancel") && !activeCancellationRequest;
   const canEscalateToArbitration = tradeUiState?.allowedActions.includes("dispute");
@@ -4164,7 +4168,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
 
   const tradeDefaultTabAppliedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!activeTrade || !activeTradeId) {
+    if (!activeTradeId || !tradeUiState) {
       tradeDefaultTabAppliedRef.current = null;
       return;
     }
@@ -4172,18 +4176,14 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
       return;
     }
     tradeDefaultTabAppliedRef.current = activeTradeId;
-    const status = activeTrade.status;
-    if (status === "completed" || status === "cancelled" || status === "disputed") {
+    if (tradeUiState.bucket === "resolved" || tradeUiState.bucket === "cancelled") {
       setMobileTradeTab("status");
-    } else if (
-      (activeTrade.isBuyer && status === "pending")
-      || (activeTrade.isSeller && (status === "paid" || status === "confirmed"))
-    ) {
+    } else if (tradeUiState.primaryAction === "pay") {
       setMobileTradeTab("pay");
     } else {
       setMobileTradeTab("chat");
     }
-  }, [activeTrade, activeTradeId]);
+  }, [tradeUiState, activeTradeId]);
 
   const closeTradeRoom = () => {
     setActiveTradeId(null);
@@ -4212,13 +4212,14 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     };
 
     for (const trade of sortedTrades) {
-      if (trade.status === "pending" || trade.status === "paid" || trade.status === "confirmed") {
+      const uiState = mapTradeUiState(trade.status);
+      if (uiState.bucket === "pending" || uiState.bucket === "active") {
         counters.pending += 1;
       }
-      if (trade.status === "completed") {
+      if (uiState.bucket === "resolved") {
         counters.completed += 1;
       }
-      if (trade.status === "disputed") {
+      if (uiState.label === "Under review") {
         counters.disputed += 1;
       }
     }
@@ -4230,7 +4231,8 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
     const normalizedSearch = tradeSearch.trim().toLowerCase();
 
     return sortedTrades.filter((trade) => {
-      if (tradeStatusFilter !== "all" && trade.status !== tradeStatusFilter) {
+      const uiState = mapTradeUiState(trade.status);
+      if (tradeStatusFilter !== "all" && uiState.status !== tradeStatusFilter) {
         return false;
       }
 
@@ -4243,10 +4245,10 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
   }, [sortedTrades, tradeSearch, tradeStatusFilter]);
 
   useEffect(() => {
-    if (!activeTradeId || activeTrade?.status !== "pending") {
+    if (!activeTradeId || tradeUiState?.bucket !== "pending") {
       setBuyerInstructionAcknowledged(false);
     }
-  }, [activeTrade?.status, activeTradeId]);
+  }, [tradeUiState?.bucket, activeTradeId]);
 
   useEffect(() => {
     if (!activeTradeId) {
@@ -4498,13 +4500,18 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                       <p className="truncate text-base font-semibold" data-testid={`text-counterparty-${trade.id}`}>{trade.counterpartyUsername}</p>
                       <p className="mt-1 text-xs text-slate-400">#{trade.id.slice(0, 8)}</p>
                     </div>
-                    <StatusPill
-                      bucket={getTradeStatusBucket(trade.status)}
-                      bucketLabel={t(`p2p.status.bucket.${getTradeStatusBucket(trade.status)}`)}
-                      preciseLabel={getTradeStatusLabel(trade.status)}
-                      tooltipPrefix={t('p2p.status.tooltipPrefix')}
-                      testId={`badge-trade-status-${trade.id}`}
-                    />
+                    {(() => {
+                      const uiState = mapTradeUiState(trade);
+                      return (
+                        <StatusPill
+                          bucket={uiState.bucket}
+                          bucketLabel={t(`p2p.status.bucket.${uiState.bucket}`)}
+                          preciseLabel={uiState.label}
+                          tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                          testId={`badge-trade-status-${trade.id}`}
+                        />
+                      );
+                    })()}
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -4565,13 +4572,18 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                       {formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, trade.offerFiatCurrency)}
                     </TableCell>
                     <TableCell>
-                      <StatusPill
-                        bucket={getTradeStatusBucket(trade.status)}
-                        bucketLabel={t(`p2p.status.bucket.${getTradeStatusBucket(trade.status)}`)}
-                        preciseLabel={String(getStatusBadge(trade.status).props.children)}
-                        tooltipPrefix={t('p2p.status.tooltipPrefix')}
-                        testId={`badge-trade-status-row-${trade.id}`}
-                      />
+                      {(() => {
+                        const uiState = mapTradeUiState(trade);
+                        return (
+                          <StatusPill
+                            bucket={uiState.bucket}
+                            bucketLabel={t(`p2p.status.bucket.${uiState.bucket}`)}
+                            preciseLabel={uiState.label}
+                            tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                            testId={`badge-trade-status-row-${trade.id}`}
+                          />
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-slate-400">
                       {formatLocalizedDate(trade.createdAt, numberLocale)}
@@ -4605,11 +4617,11 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
           <DialogHeader className="border-b border-slate-800 pb-3">
             <DialogTitle className="flex flex-wrap items-center gap-2">
               <span>{t('p2p.trade')} {activeTradeId ? `#${activeTradeId.slice(0, 8)}` : ""}</span>
-              {activeTrade && (
+              {tradeUiState && (
                 <StatusPill
-                  bucket={getTradeStatusBucket(activeTrade.status)}
-                  bucketLabel={getTradeStatusLabel(activeTrade.status)}
-                  preciseLabel={getTradeStatusLabel(activeTrade.status)}
+                  bucket={tradeUiState.bucket}
+                  bucketLabel={t(`p2p.status.bucket.${tradeUiState.bucket}`)}
+                  preciseLabel={tradeUiState.label}
                   testId="trade-room-status-pill"
                 />
               )}
@@ -4712,7 +4724,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       {(["pending", "paid", "confirmed", "completed"] as const).map((step) => {
-                        const state = getTimelineStepState(activeTrade.status, step);
+                        const state = getTimelineStepState(tradeUiState?.bucket === "resolved" ? "completed" : tradeUiState?.bucket === "active" ? "confirmed" : tradeUiState?.bucket === "cancelled" ? "cancelled" : "pending", step);
                         return (
                           <span
                             key={step}
@@ -5169,7 +5181,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {(["pending", "paid", "confirmed", "completed"] as const).map((step) => {
-                      const state = getTimelineStepState(activeTrade.status, step);
+                      const state = getTimelineStepState(tradeUiState?.bucket === "resolved" ? "completed" : tradeUiState?.bucket === "active" ? "confirmed" : tradeUiState?.bucket === "cancelled" ? "cancelled" : "pending", step);
                       return (
                         <div key={step} className="flex items-center gap-2 text-sm">
                           <span
@@ -5190,9 +5202,12 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: "create" | "browse" 
                     })}
 
                     {isTradeTerminal && (
-                      <Badge className={cn("border", getStatusPillClass(activeTrade.status))}>
-                        {getStatusBadge(activeTrade.status).props.children}
-                      </Badge>
+                      <StatusPill
+                        bucket={tradeUiState.bucket}
+                        bucketLabel={t(`p2p.status.bucket.${tradeUiState.bucket}`)}
+                        preciseLabel={tradeUiState.label}
+                        testId="trade-room-terminal-status-pill"
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -5710,7 +5725,7 @@ function DisputesTab() {
                                 {trade.counterpartyUsername}
                               </p>
                             </div>
-                            <Badge variant="outline">{getTradeStatusLabel(trade.status)}</Badge>
+                            <Badge variant="outline">{mapTradeUiState(trade).label}</Badge>
                           </div>
                         </div>
                       ))}
@@ -6045,10 +6060,10 @@ function DisputesTab() {
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusPill
-                          bucket={getDisputeStatusBucket(dispute.status)}
-                          bucketLabel={getDisputeStatusLabel(dispute.status)}
-                          preciseLabel={getDisputeStatusLabel(dispute.status)}
-                          testId={`badge-dispute-status-${dispute.id}`}
+                          bucket={mapTradeUiState(dispute.tradeAmount ? "pending" : "pending").bucket}
+                          bucketLabel={t(`p2p.status.bucket.${mapTradeUiState(dispute.tradeAmount ? "pending" : "pending").bucket}`)}
+                          preciseLabel={mapTradeUiState(dispute.tradeAmount ? "pending" : "pending").label}
+                          testId="trade-room-status-pill"
                         />
                         <Badge className={cn("border", getDisputeStagePillClass(dispute.stage))}>{t(`p2p.dispute.stage.${dispute.stage}`)}</Badge>
                         <ChevronRight className="h-4 w-4 text-slate-400" />

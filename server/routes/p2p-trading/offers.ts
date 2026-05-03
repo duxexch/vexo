@@ -602,11 +602,11 @@ export function registerOfferRoutes(app: Express) {
         return res.status(403).json({ error: "P2P trading is currently disabled" });
       }
 
-      const currencyControls = resolveP2PCurrencyControls(globalSettings);
+      const offerCurrencyControls = resolveP2PCurrencyControls(globalSettings);
       const normalizedOfferType = String(type || "").trim().toLowerCase();
       const allowedCurrenciesForType = normalizedOfferType === "sell"
-        ? currencyControls.p2pSellCurrencies
-        : currencyControls.p2pBuyCurrencies;
+        ? offerCurrencyControls.p2pSellCurrencies
+        : offerCurrencyControls.p2pBuyCurrencies;
 
       if (user.p2pBanned) {
         return res.status(403).json({
@@ -716,7 +716,7 @@ export function registerOfferRoutes(app: Express) {
         return res.status(validation.status).json({ error: validation.error });
       }
 
-      const currencyControls = resolveP2PCurrencyControls(globalSettings);
+      const validatedCurrencyControls = resolveP2PCurrencyControls(globalSettings);
       const normalizedCurrency = validation.normalizedCurrency;
       const normalizedFiatCurrency = validation.normalizedFiatCurrency;
       const normalizedDealKind = validation.dealKind;
