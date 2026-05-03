@@ -5,9 +5,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development DOTENV_CONFIG_PATH=.env tsx -r dotenv/config server/index.ts",
-    "build": "node scripts/check-p2p-abstraction.ts && tsx script/build.ts",
+    "build": "tsx scripts/check-p2p-abstraction.ts && tsx script/build.ts",
     "start": "cross-env NODE_ENV=production DOTENV_CONFIG_PATH=.env node -r dotenv/config dist/index.cjs",
-    "check": "node scripts/check-p2p-abstraction.ts && tsc",
+    "check": "tsx scripts/check-p2p-abstraction.ts && tsc",
     "check:types": "tsc --noEmit",
     "check:types:fast": "tsc --noEmit --incremental --tsBuildInfoFile .cache/tsc-fast.tsbuildinfo",
     "verify:fast": "node scripts/verify-fast.mjs",
