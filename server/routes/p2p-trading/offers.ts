@@ -7,7 +7,7 @@ import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { getEffectiveAllowedCurrencies, getWalletBalance } from "../../lib/wallet-balances";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 import { isEitherUserBlocked, getBlockedUserIds } from "../../lib/user-blocking";
 import { emitSystemAlert } from "../../lib/admin-alerts";
@@ -735,7 +735,21 @@ export function registerOfferRoutes(app: Express) {
         // sub → user_currency_wallets row, 0 if no row yet).
         const rawWalletBalance = (await getWalletBalance(req.user!.id, normalizedCurrency)) ?? 0;
         const frozenIncoming = await getFrozenIncomingSellBalance(req.user!.id, normalizedCurrency);
-        const availableToSell = Math.max(0, rawWalletBalance - frozenIncoming);
+        const reservedOutgoing = await db
+          .select({
+            total: sql<string>`coalesce(sum(cast(${p2pOffers.availableAmount} as numeric)), 0)`,
+          })
+          .from(p2pOffers)
+          .innerJoin(p2pTraderProfiles, eq(p2pOffers.userId, p2pTraderProfiles.userId))
+          .where(and(
+            eq(p2pOffers.userId, req.user!.id),
+            eq(p2pOffers.type, "sell"),
+            eq(p2pOffers.status, "active"),
+            eq(p2pOffers.cryptoCurrency, normalizedCurrency),
+          ))
+          .then((rows) => Number(rows[0]?.total || 0));
+
+        const availableToSell = Math.max(0, rawWalletBalance - frozenIncoming - reservedOutgoing);
 
         if (parsedAmount > availableToSell) {
           return res.status(400).json({

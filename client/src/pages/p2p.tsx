@@ -4402,7 +4402,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     </div>
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('p2p.totalPrice')}</p>
-                      <p className="mt-1 font-semibold text-slate-100" data-testid={`text-trade-total-${trade.id}`}>${trade.totalPrice || trade.fiatAmount || "0"}</p>
+                      <p className="mt-1 font-semibold text-slate-100" data-testid={`text-trade-total-${trade.id}`}>{formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, trade.offerFiatCurrency)}</p>
                     </div>
                   </div>
 
@@ -4450,7 +4450,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                       {trade.amount}
                     </TableCell>
                     <TableCell data-testid={`text-trade-total-${trade.id}`} className="text-slate-100 font-semibold">
-                      ${trade.totalPrice || trade.fiatAmount || "0"}
+                      {formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, trade.offerFiatCurrency)}
                     </TableCell>
                     <TableCell>
                       <StatusPill
@@ -4979,7 +4979,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">{t('p2p.totalPrice')}</span>
-                      <span className="font-medium">${activeTrade.totalPrice || activeTrade.fiatAmount || "0"}</span>
+                      <span className="font-medium">{formatFixedFiat(activeTrade.totalPrice || activeTrade.fiatAmount || "0", numberLocale, activeTrade.offerFiatCurrency)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">{t('p2p.paymentMethod')}</span>
@@ -5592,7 +5592,7 @@ function DisputesTab() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div>
-                              <p className="font-medium">{trade.amount} - ${trade.totalPrice}</p>
+                              <p className="font-medium">{trade.amount} - {formatFixedFiat(trade.totalPrice || trade.fiatAmount || "0", numberLocale, activeTrade?.offerFiatCurrency)}</p>
                               <p className="text-sm text-muted-foreground">{t('p2p.dispute.with')} {trade.counterpartyUsername}</p>
                             </div>
                             <Badge variant="outline">{getTradeStatusLabel(trade.status)}</Badge>
@@ -5780,7 +5780,7 @@ function DisputesTab() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{t('p2p.dispute.fiatAmount')}</span>
-                      <span className="font-medium">${selectedTrade?.totalPrice}</span>
+                      <span className="font-medium">{formatFixedFiat(selectedTrade?.totalPrice || selectedTrade?.fiatAmount || "0", numberLocale, selectedTrade?.offerFiatCurrency)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{t('p2p.dispute.counterparty')}</span>
