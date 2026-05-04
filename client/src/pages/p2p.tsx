@@ -47,6 +47,7 @@ import {
 import { mapOfferUiState, mapTradeEntityUiState, mapTradeUiState } from "@/p2p/state/stateMapper";
 import { useP2PUiState } from "@/p2p/hooks/useP2PUiState";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CreateOfferCards } from "@/p2p/components/create-offer/CreateOfferCards";
 import type { P2POffer as P2POfferRow } from "@shared/schema";
 
 // IMPORTANT: do not redeclare row-shape fields here. This type is derived from
@@ -2131,32 +2132,6 @@ function MyOffersTab() {
     },
   });
 
-  const openCreateOfferDialog = (dealKind: CreateOfferForm["dealKind"]) => {
-    form.reset({
-      type: "sell",
-      executionMode: dealKind === "digital_product" ? undefined : undefined,
-      dealKind,
-      digitalProductType: "",
-      exchangeOffered: "",
-      exchangeRequested: "",
-      supportMediationRequested: false,
-      requestedAdminFeePercentage: "",
-      visibility: "public",
-      targetUserId: "",
-      amount: "",
-      price: "",
-      currency: availableOfferCurrencies[0] || "USD",
-      fiatCurrency: availableQuoteCurrencies[0] || "USD",
-      minLimit: adminMinTradeAmount,
-      maxLimit: adminMaxTradeAmount,
-      paymentMethodIds: [],
-      paymentTimeLimit: "15",
-      terms: "",
-      autoReply: "",
-    });
-    setCreateOfferStep(1);
-    setIsCreateDialogOpen(true);
-  };
 
   const selectedOfferType = form.watch("type");
   const selectedDealKind = form.watch("dealKind");
@@ -3501,7 +3476,7 @@ function MyOffersTab() {
       {sortedOffers.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => openCreateOfferDialog("standard_asset") }} />
+            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => openCreateOffer("standard_asset") }} />
           </CardContent>
         </Card>
       ) : (
@@ -6458,14 +6433,6 @@ export default function P2PPage() {
     return dealKind;
   };
 
-  const openCreateStandardOffer = () => {
-    openCreateOffer("standard_asset");
-  };
-
-  const openCreateDigitalOffer = () => {
-    openCreateOffer("digital_product");
-  };
-
   return (
     <div className="min-h-[100svh] overflow-x-hidden bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-2 md:p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
       <div className="mb-4 flex items-start justify-between gap-2 flex-wrap">
@@ -6504,7 +6471,7 @@ export default function P2PPage() {
                 <p className="text-sm text-slate-400">{t('p2p.browseDescription')}</p>
               </div>
               <div className="flex gap-2">
-                <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => setActiveSection("create")} data-testid="button-browse-create">
+                <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openCreateOffer("standard_asset")} data-testid="button-browse-create">
                   {t('p2p.create')}
                 </Button>
                 <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => setActiveSection("manage")} data-testid="button-browse-manage">
@@ -6517,34 +6484,7 @@ export default function P2PPage() {
         </TabsContent>
 
         <TabsContent value="create">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Card className="border-slate-800 bg-slate-950/80 text-slate-100">
-              <CardHeader>
-                <CardTitle>{t('p2p.createStandardOffer')}</CardTitle>
-                <CardDescription>{t('p2p.intent.standardOfferDesc')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-slate-400">{t('p2p.intent.standardOfferHelp')}</p>
-                <Button className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={openCreateStandardOffer} data-testid="button-open-standard-create">
-                  {t('p2p.startStandardCreate')}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-800 bg-slate-950/80 text-slate-100">
-              <CardHeader>
-                <CardTitle>{t('p2p.createDigitalOffer')}</CardTitle>
-                <CardDescription>{t('p2p.intent.digitalOfferDesc')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-slate-400">{t('p2p.intent.digitalOfferHelp')}</p>
-                <Button className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={openCreateDigitalOffer} data-testid="button-open-digital-create">
-                  {t('p2p.startDigitalCreate')}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-          <MyOffersTab />
+          <CreateOfferCards />
         </TabsContent>
 
         <TabsContent value="manage">

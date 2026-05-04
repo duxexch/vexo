@@ -950,8 +950,6 @@ const en: Record<string, string> = {
   'p2p.noOffers': 'No offers available',
   'p2p.noOffersDesc': 'Check back later or create your own offer',
   'p2p.yourOffers': 'Your Offers',
-  'p2p.browseTitle': 'Browse P2P Offers',
-  'p2p.browseDescription': 'Find offers that match your currency, payment method, and preferred limits.',
   'p2p.create': 'Create',
   'p2p.manage': 'Manage',
   'p2p.createOfferDesc': 'Set your price, limits, and payment methods',
