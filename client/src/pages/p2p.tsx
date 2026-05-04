@@ -2745,30 +2745,6 @@ function MyOffersTab() {
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.yourOffers')}</h3>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              className="h-9 min-w-[9.5rem] bg-slate-900 text-brand-gold hover:bg-slate-900/90"
-              data-testid="button-create-standard-offer"
-              disabled={eligibilityLoading}
-              onClick={() => openCreateOfferDialog("standard_asset")}
-            >
-              <Plus className="h-4 w-4 me-1" />
-              {t('p2p.createStandardOffer')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 min-w-[9.5rem] border-slate-900 bg-white/90 text-slate-900 hover:bg-white"
-              data-testid="button-create-digital-offer"
-              disabled={eligibilityLoading}
-              onClick={() => openCreateOfferDialog("digital_product")}
-            >
-              <Scale className="h-4 w-4 me-1" />
-              {t('p2p.createDigitalOffer')}
-            </Button>
-          </div>
-
           <Dialog
             open={isCreateDialogOpen}
             onOpenChange={(open) => {
@@ -6477,14 +6453,17 @@ export default function P2PPage() {
   const [activeSection, setActiveSection] = useState<"browse" | "create" | "manage">("browse");
   const [activeManageTab, setActiveManageTab] = useState<"offers" | "trades" | "disputes">("offers");
 
-  const openCreateStandardOffer = () => {
+  const openCreateOffer = (dealKind: "standard_asset" | "digital_product") => {
     setActiveSection("create");
-    window.dispatchEvent(new CustomEvent("p2p-create-offer-request", { detail: { dealKind: "standard_asset" } }));
+    return dealKind;
+  };
+
+  const openCreateStandardOffer = () => {
+    openCreateOffer("standard_asset");
   };
 
   const openCreateDigitalOffer = () => {
-    setActiveSection("create");
-    window.dispatchEvent(new CustomEvent("p2p-create-offer-request", { detail: { dealKind: "digital_product" } }));
+    openCreateOffer("digital_product");
   };
 
   return (
