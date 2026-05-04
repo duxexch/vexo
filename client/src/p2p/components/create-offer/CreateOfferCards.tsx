@@ -302,9 +302,9 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                            <span className={cn("font-medium", createState.status === "editing" ? "text-foreground" : "text-muted-foreground")}>editing</span>
-                            <span className={cn("font-medium", createState.status === "submitting" ? "text-foreground" : "text-muted-foreground")}>submitting</span>
-                            <span className={cn("font-medium", createState.status === "success" ? "text-foreground" : "text-muted-foreground")}>success</span>
+                            <span className={cn("font-medium", createState.status === "editing" ? "text-foreground" : "text-muted-foreground")}>{t("p2p.createOffer.status.editing")}</span>
+                            <span className={cn("font-medium", createState.status === "submitting" ? "text-foreground" : "text-muted-foreground")}>{t("p2p.createOffer.status.submitting")}</span>
+                            <span className={cn("font-medium", createState.status === "success" ? "text-foreground" : "text-muted-foreground")}>{t("p2p.createOffer.status.success")}</span>
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
