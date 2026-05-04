@@ -74,6 +74,7 @@ const en: Record<string, string> = {
   'common.next': 'Next',
   'common.previous': 'Previous',
   'common.change': 'Change',
+  'common.currency': 'Currency',
   'common.files': 'files',
   'common.search': 'Search',
   'common.close': 'Close',
