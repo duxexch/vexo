@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle, Plus } from "lucide-react";
 
 const MAX_NEGOTIATED_ADMIN_FEE_RATE = 0.2;
+const DIGITAL_OFFER_DEFAULT_MIN_LIMIT = "1.00";
+const DIGITAL_OFFER_DEFAULT_MAX_LIMIT = "100000.00";
+const DIGITAL_OFFER_DEFAULT_AMOUNT = "100";
+const DIGITAL_OFFER_DEFAULT_PRICE = "1.00";
+const DIGITAL_OFFER_DEFAULT_PAYMENT_TIME_LIMIT = "15";
 
 export type CreateOfferDealKind = "standard_asset" | "digital_product";
 type CreateOfferType = "buy" | "sell";
@@ -74,7 +79,7 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
     const [minLimit, setMinLimit] = useState("");
     const [maxLimit, setMaxLimit] = useState("");
     const [paymentMethodIds, setPaymentMethodIds] = useState<string[]>([]);
-    const [paymentTimeLimit, setPaymentTimeLimit] = useState("15");
+    const [paymentTimeLimit, setPaymentTimeLimit] = useState(DIGITAL_OFFER_DEFAULT_PAYMENT_TIME_LIMIT);
     const [terms, setTerms] = useState("");
     const [autoReply, setAutoReply] = useState("");
 
@@ -104,12 +109,12 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
         setTargetUserId("");
         setCurrency(availableCurrencies[0] || "USD");
         setFiatCurrency(offerEligibility?.allowedCurrencies?.[0] || "USD");
-        setAmount("");
-        setPrice("");
-        setMinLimit(String(offerEligibility?.minTradeAmount || "10"));
-        setMaxLimit(String(offerEligibility?.maxTradeAmount || "100000"));
+        setAmount(dealKind === "digital_product" ? DIGITAL_OFFER_DEFAULT_AMOUNT : "");
+        setPrice(dealKind === "digital_product" ? DIGITAL_OFFER_DEFAULT_PRICE : "");
+        setMinLimit(String(offerEligibility?.minTradeAmount || DIGITAL_OFFER_DEFAULT_MIN_LIMIT));
+        setMaxLimit(String(offerEligibility?.maxTradeAmount || DIGITAL_OFFER_DEFAULT_MAX_LIMIT));
         setPaymentMethodIds([]);
-        setPaymentTimeLimit("15");
+        setPaymentTimeLimit(DIGITAL_OFFER_DEFAULT_PAYMENT_TIME_LIMIT);
         setTerms("");
         setAutoReply("");
 
@@ -225,6 +230,10 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
     const availableCurrencies = currentDealKind ? getAvailableCurrencies(currentDealKind) : [];
     const isDigital = currentDealKind === "digital_product";
     const canSubmit = Boolean(currentDealKind)
+        && type.trim().length > 0
+        && visibility.trim().length > 0
+        && currency.trim().length > 0
+        && fiatCurrency.trim().length > 0
         && amount.trim().length > 0
         && price.trim().length > 0
         && paymentMethodIds.length > 0
@@ -372,6 +381,12 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                                     </Select>
                                 </div>
 
+                                {executionMode === "instant" && (
+                                    <div className="rounded-md border border-emerald-300/50 bg-emerald-50/40 p-3 text-sm text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+                                        {t("p2p.executionMode.instantDescription")}
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="space-y-2">
                                         <Label>{t("p2p.digitalProductType")}</Label>
@@ -396,27 +411,28 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                                             onChange={(event) => setRequestedAdminFeePercentage(event.target.value)}
                                             placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
                                             data-testid="input-offer-requested-admin-fee"
+                                            disabled={executionMode === "instant"}
                                         />
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="space-y-2">
-                                        <Label>{t("p2p.buy")}</Label>
+                                        <Label>{t("p2p.offer.exchangeOfferedShort") || t("p2p.buy")}</Label>
                                         <Input
                                             value={exchangeOffered}
                                             onChange={(event) => setExchangeOffered(event.target.value)}
-                                            placeholder={t("p2p.buy")}
+                                            placeholder={t("p2p.offer.exchangeOfferedShort") || t("p2p.buy")}
                                             data-testid="input-offer-exchange-offered"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>{t("p2p.sell")}</Label>
+                                        <Label>{t("p2p.offer.exchangeRequestedShort") || t("p2p.sell")}</Label>
                                         <Input
                                             value={exchangeRequested}
                                             onChange={(event) => setExchangeRequested(event.target.value)}
-                                            placeholder={t("p2p.sell")}
+                                            placeholder={t("p2p.offer.exchangeRequestedShort") || t("p2p.sell")}
                                             data-testid="input-offer-exchange-requested"
                                         />
                                     </div>
@@ -431,12 +447,6 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                                         disabled={executionMode === "instant"}
                                     />
                                 </div>
-
-                                {executionMode === "instant" && (
-                                    <div className="rounded-md border border-emerald-300/50 bg-emerald-50/40 p-3 text-sm text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
-                                        {t("p2p.executionMode.instantDescription")}
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -478,7 +488,7 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                                 <MoneyInput
                                     value={amount}
                                     onChange={(event) => setAmount(event.target.value)}
-                                    placeholder="100"
+                                    placeholder={currentDealKind === "digital_product" ? DIGITAL_OFFER_DEFAULT_AMOUNT : "100"}
                                     data-testid="input-offer-amount"
                                 />
                             </div>
@@ -488,7 +498,7 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                                 <MoneyInput
                                     value={price}
                                     onChange={(event) => setPrice(event.target.value)}
-                                    placeholder="1.00"
+                                    placeholder={currentDealKind === "digital_product" ? DIGITAL_OFFER_DEFAULT_PRICE : "1.00"}
                                     data-testid="input-offer-price"
                                 />
                             </div>
@@ -497,11 +507,11 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>{t("p2p.minLimit")}</Label>
-                                <MoneyInput value={minLimit} onChange={(event) => setMinLimit(event.target.value)} placeholder={String(offerEligibility?.minTradeAmount || "10")} data-testid="input-offer-min" />
+                                <MoneyInput value={minLimit} onChange={(event) => setMinLimit(event.target.value)} placeholder={String(offerEligibility?.minTradeAmount || DIGITAL_OFFER_DEFAULT_MIN_LIMIT)} data-testid="input-offer-min" />
                             </div>
                             <div className="space-y-2">
                                 <Label>{t("p2p.maxLimit")}</Label>
-                                <MoneyInput value={maxLimit} onChange={(event) => setMaxLimit(event.target.value)} placeholder={String(offerEligibility?.maxTradeAmount || "100000")} data-testid="input-offer-max" />
+                                <MoneyInput value={maxLimit} onChange={(event) => setMaxLimit(event.target.value)} placeholder={String(offerEligibility?.maxTradeAmount || DIGITAL_OFFER_DEFAULT_MAX_LIMIT)} data-testid="input-offer-max" />
                             </div>
                         </div>
 
