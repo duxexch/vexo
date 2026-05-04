@@ -254,7 +254,7 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <p className="text-sm text-slate-400">{t("p2p.intent.standardOfferHelp")}</p>
-                        <Button className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openCreateOffer("standard_asset")} data-testid="button-open-standard-create">
+                        <Button type="button" className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openCreateOffer("standard_asset")} data-testid="button-open-standard-create">
                             {t("p2p.startStandardCreate")}
                         </Button>
                     </CardContent>
@@ -267,7 +267,7 @@ export function CreateOfferCards({ onCreated, initialDealKind }: CreateOfferCard
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <p className="text-sm text-slate-400">{t("p2p.intent.digitalOfferHelp")}</p>
-                        <Button className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => openCreateOffer("digital_product")} data-testid="button-open-digital-create">
+                        <Button type="button" className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => openCreateOffer("digital_product")} data-testid="button-open-digital-create">
                             {t("p2p.startDigitalCreate")}
                         </Button>
                     </CardContent>
