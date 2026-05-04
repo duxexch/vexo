@@ -1329,7 +1329,7 @@ function TradeOfferDialog({
   );
 }
 
-function MarketplaceTab() {
+function MarketplaceTab({ onCreateOffer }: { onCreateOffer: (dealKind: "standard_asset" | "digital_product") => void }) {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -2045,7 +2045,7 @@ function MarketplaceTab() {
   );
 }
 
-function MyOffersTab() {
+function MyOffersTab({ onCreateOffer }: { onCreateOffer: (dealKind: "standard_asset" | "digital_product") => void }) {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -3476,7 +3476,7 @@ function MyOffersTab() {
       {sortedOffers.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => openCreateOffer("standard_asset") }} />
+            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => onCreateOffer("standard_asset") }} />
           </CardContent>
         </Card>
       ) : (
@@ -6480,7 +6480,7 @@ export default function P2PPage() {
               </div>
             </div>
           </div>
-          <MarketplaceTab />
+          <MarketplaceTab onCreateOffer={openCreateOffer} />
         </TabsContent>
 
         <TabsContent value="create">
@@ -6494,7 +6494,7 @@ export default function P2PPage() {
               <TabsTrigger value="trades" data-testid="tab-manage-trades">{t('p2p.myTrades')}</TabsTrigger>
               <TabsTrigger value="disputes" data-testid="tab-manage-disputes">{t('p2p.disputes')}</TabsTrigger>
             </TabsList>
-            <TabsContent value="offers"><MyOffersTab /></TabsContent>
+            <TabsContent value="offers"><MyOffersTab onCreateOffer={openCreateOffer} /></TabsContent>
             <TabsContent value="trades"><MyTradesTab onSwitchTab={setActiveSection} /></TabsContent>
             <TabsContent value="disputes"><DisputesTab /></TabsContent>
           </Tabs>
