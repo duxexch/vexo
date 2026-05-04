@@ -28,6 +28,8 @@ export const disputeRules = [
 // ==================== HELPERS ====================
 
 export const PEER_NEGOTIATION_MINUTES = 10;
+export const P2P_DISPUTE_MINIMUM_REASONS = ["not_received", "invalid_delivery"] as const;
+export type P2PDisputeMinimumReason = (typeof P2P_DISPUTE_MINIMUM_REASONS)[number];
 
 /** Derive the client-facing "stage" from the DB status */
 export function deriveStage(status: string): "peer_negotiation" | "support_review" | "resolved" {

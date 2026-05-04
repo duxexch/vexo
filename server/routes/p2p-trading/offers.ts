@@ -82,6 +82,7 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string, cou
     status: offer.status,
     visibility,
     dealKind,
+    executionMode: offer.executionMode ? String(offer.executionMode) : null,
     digitalProductType: offer.digitalProductType ? String(offer.digitalProductType) : null,
     exchangeOffered: offer.exchangeOffered ? String(offer.exchangeOffered) : null,
     exchangeRequested: offer.exchangeRequested ? String(offer.exchangeRequested) : null,
@@ -587,6 +588,7 @@ export function registerOfferRoutes(app: Express) {
         exchangeRequested,
         supportMediationRequested,
         requestedAdminFeePercentage,
+        executionMode,
         visibility,
         targetUserId,
       } = req.body;
@@ -692,6 +694,7 @@ export function registerOfferRoutes(app: Express) {
         exchangeRequested,
         supportMediationRequested,
         requestedAdminFeePercentage,
+        executionMode,
         visibility,
         targetUserId,
         allowedCurrenciesForType,
@@ -736,10 +739,29 @@ export function registerOfferRoutes(app: Express) {
       const normalizedVisibility = validation.normalizedVisibility;
       const normalizedTargetUserId = validation.normalizedTargetUserId;
       const isPublicOffer = normalizedVisibility === "public";
+      const validatedExecutionMode = normalizedDealKind === "digital_product"
+        ? (validation.executionMode ?? null)
+        : null;
+      if (normalizedDealKind === "digital_product" && !validatedExecutionMode) {
+        return res.status(400).json({ error: "Execution mode is required for digital products" });
+      }
+
+      const isInstantDigitalOffer = normalizedDealKind === "digital_product" && validatedExecutionMode === "instant";
+      if (isInstantDigitalOffer) {
+        if (normalizedSupportMediationRequested || normalizedRequestedAdminFeePercentage) {
+          return res.status(400).json({ error: "Instant digital offers cannot request negotiation support or admin fee overrides" });
+        }
+      }
       const approvalMode = normalizedDealKind === "digital_product"
-        ? (globalSettings?.digitalOfferApprovalMode ?? "manual")
+        ? (isInstantDigitalOffer
+          ? "automatic"
+          : (globalSettings?.digitalOfferApprovalMode ?? "manual"))
         : (globalSettings?.standardOfferApprovalMode ?? "automatic");
+
       const initialStatus = isPublicOffer && approvalMode === "manual" ? "pending_approval" : "active";
+      if (normalizedDealKind === "digital_product" && isInstantDigitalOffer && initialStatus !== "active") {
+        return res.status(400).json({ error: "Instant digital offers must be active immediately" });
+      }
       const now = new Date();
       const approvedAt = initialStatus === "active" ? now : null;
       const submittedForReviewAt = isPublicOffer && initialStatus === "pending_approval" ? now : null;
@@ -751,11 +773,12 @@ export function registerOfferRoutes(app: Express) {
         status: initialStatus,
         visibility: normalizedVisibility as "public" | "private_friend",
         dealKind: normalizedDealKind,
+        executionMode: validatedExecutionMode,
         digitalProductType: normalizedDealKind === "digital_product" ? safeDigitalProductType : null,
         exchangeOffered: normalizedDealKind === "digital_product" ? safeExchangeOffered : null,
         exchangeRequested: normalizedDealKind === "digital_product" ? safeExchangeRequested : null,
-        supportMediationRequested: normalizedSupportMediationRequested,
-        requestedAdminFeePercentage: normalizedRequestedAdminFeePercentage,
+        supportMediationRequested: isInstantDigitalOffer ? false : normalizedSupportMediationRequested,
+        requestedAdminFeePercentage: isInstantDigitalOffer ? null : normalizedRequestedAdminFeePercentage,
         targetUserId: normalizedTargetUserId,
         cryptoCurrency: normalizedCurrency,
         fiatCurrency: normalizedFiatCurrency,
@@ -798,7 +821,11 @@ export function registerOfferRoutes(app: Express) {
           message: `${ownerP2PUsername} shared a private P2P offer with you.`,
           messageAr: `قام ${ownerP2PUsername} بمشاركة عرض P2P خاص معك.`,
           link: "/p2p",
-          metadata: JSON.stringify({ offerId: created.id, visibility: "private_friend" }),
+          metadata: JSON.stringify({
+            offerId: created.id,
+            visibility: "private_friend",
+            executionMode: validatedExecutionMode,
+          }),
         }, "private-offer-created");
       }
 
@@ -860,6 +887,10 @@ export function registerOfferRoutes(app: Express) {
 
       if (offer.dealKind !== "digital_product") {
         return res.status(400).json({ error: "Negotiation rounds are available only for digital-product offers" });
+      }
+
+      if (offer.executionMode === "instant") {
+        return res.status(400).json({ error: "Negotiation rounds are disabled for instant digital-product offers" });
       }
 
       const requesterId = req.user!.id;
@@ -948,6 +979,10 @@ export function registerOfferRoutes(app: Express) {
 
       if (offer.dealKind !== "digital_product") {
         return res.status(400).json({ error: "Negotiation rounds are available only for digital-product offers" });
+      }
+
+      if (offer.executionMode === "instant") {
+        return res.status(400).json({ error: "Negotiation rounds are disabled for instant digital-product offers" });
       }
 
       if (offer.status !== "active") {

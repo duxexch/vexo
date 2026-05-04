@@ -1493,6 +1493,8 @@ export const p2pOfferTypeEnum = pgEnum("p2p_offer_type", ["buy", "sell"]);
 export const p2pOfferStatusEnum = pgEnum("p2p_offer_status", ["pending_approval", "active", "paused", "completed", "cancelled", "rejected"]);
 export const p2pOfferVisibilityEnum = pgEnum("p2p_offer_visibility", ["public", "private_friend"]);
 export const p2pDealKindEnum = pgEnum("p2p_deal_kind", ["standard_asset", "digital_product"]);
+export const p2pExecutionModeEnum = pgEnum("p2p_execution_mode", ["instant", "negotiated"]);
+export type P2PExecutionMode = (typeof p2pExecutionModeEnum.enumValues)[number];
 export const p2pOfferNegotiationStatusEnum = pgEnum("p2p_offer_negotiation_status", ["pending", "accepted", "rejected"]);
 export const p2pTradeStatusEnum = pgEnum("p2p_trade_status", ["pending", "paid", "confirmed", "completed", "cancelled", "disputed"]);
 export const p2pDisputeStatusEnum = pgEnum("p2p_dispute_status", ["open", "investigating", "resolved", "closed"]);
@@ -1507,6 +1509,7 @@ export const p2pOffers = pgTable("p2p_offers", {
   status: p2pOfferStatusEnum("status").notNull().default("pending_approval"),
   visibility: p2pOfferVisibilityEnum("visibility").notNull().default("public"),
   dealKind: p2pDealKindEnum("deal_kind").notNull().default("standard_asset"),
+  executionMode: p2pExecutionModeEnum("execution_mode"),
   digitalProductType: text("digital_product_type"),
   exchangeOffered: text("exchange_offered"),
   exchangeRequested: text("exchange_requested"),
@@ -1547,6 +1550,22 @@ export const p2pOffers = pgTable("p2p_offers", {
   index("idx_p2p_offers_status").on(table.status),
   index("idx_p2p_offers_visibility").on(table.visibility),
   index("idx_p2p_offers_created_at").on(table.createdAt),
+  check(
+    "chk_p2p_offers_execution_mode_required_for_digital",
+    sql`${table.dealKind} <> 'digital_product' OR ${table.executionMode} IS NOT NULL`,
+  ),
+  check(
+    "chk_p2p_offers_execution_mode_null_for_standard",
+    sql`${table.dealKind} <> 'standard_asset' OR ${table.executionMode} IS NULL`,
+  ),
+  check(
+    "chk_p2p_offers_execution_mode_digital_values",
+    sql`${table.dealKind} <> 'digital_product' OR ${table.executionMode} IN ('instant', 'negotiated')`,
+  ),
+  check(
+    "chk_p2p_offers_execution_mode_values",
+    sql`${table.executionMode} IS NULL OR ${table.executionMode} IN ('instant', 'negotiated')`,
+  ),
 ]);
 
 // ==================== P2P OFFER NEGOTIATIONS ====================
@@ -1628,6 +1647,10 @@ export const p2pTrades = pgTable("p2p_trades", {
   index("idx_p2p_trades_status").on(table.status),
   index("idx_p2p_trades_freeze_until").on(table.freezeUntil),
   index("idx_p2p_trades_created_at").on(table.createdAt),
+  check(
+    "chk_p2p_trades_digital_execution_mode_consistency",
+    sql`${table.dealKind} <> 'digital_product' OR ${table.negotiationId} IS NOT NULL OR ${table.exchangeOffered} IS NOT NULL OR ${table.exchangeRequested} IS NOT NULL OR ${table.negotiatedTerms} IS NOT NULL OR ${table.supportMediationRequested} IN (true, false)`,
+  ),
 ]);
 
 // ==================== P2P ESCROW ====================

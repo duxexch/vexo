@@ -380,6 +380,7 @@ interface DisputeRule {
 const createOfferSchema = z.object({
   type: z.enum(["buy", "sell"]),
   dealKind: z.enum(["standard_asset", "digital_product"]),
+  executionMode: z.enum(["instant", "negotiated"]).optional(),
   digitalProductType: z.string().trim().max(120).optional(),
   exchangeOffered: z.string().trim().max(800).optional(),
   exchangeRequested: z.string().trim().max(800).optional(),
@@ -397,6 +398,40 @@ const createOfferSchema = z.object({
   paymentTimeLimit: z.string().min(1),
   terms: z.string().trim().min(1).max(1200),
   autoReply: z.string().trim().min(1).max(500),
+}).superRefine((data, ctx) => {
+  if (data.dealKind === "digital_product" && !data.executionMode) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["executionMode"],
+      message: "Execution mode is required for digital products",
+    });
+  }
+
+  if (data.dealKind === "digital_product" && data.executionMode === "instant") {
+    if (data.supportMediationRequested) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supportMediationRequested"],
+        message: "Instant digital offers cannot request mediation",
+      });
+    }
+
+    if (String(data.requestedAdminFeePercentage || "").trim().length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["requestedAdminFeePercentage"],
+        message: "Instant digital offers cannot request admin fee overrides",
+      });
+    }
+  }
+
+  if (data.dealKind === "standard_asset" && data.executionMode) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["executionMode"],
+      message: "Execution mode is only allowed for digital products",
+    });
+  }
 });
 
 const CREATE_OFFER_MODES = [
@@ -689,6 +724,7 @@ function TradeOfferDialog({
 
   const viewerUserId = user?.id || "";
   const isDigitalDeal = offer?.dealKind === "digital_product";
+  const isInstantDigitalDeal = isDigitalDeal && offer?.executionMode === "instant";
   const viewerIsOfferOwner = Boolean(offer && viewerUserId && offer.userId === viewerUserId);
 
   const { data: negotiations = [], isFetching: isNegotiationsLoading } = useQuery<P2POfferNegotiation[]>({
@@ -754,6 +790,11 @@ function TradeOfferDialog({
 
   useEffect(() => {
     if (!offer || offer.dealKind !== "digital_product") {
+      return;
+    }
+
+    if (offer.executionMode === "instant") {
+      setActiveCounterpartyUserId("");
       return;
     }
 
@@ -986,7 +1027,7 @@ function TradeOfferDialog({
       ? threadNegotiations.find((row) => row.id === options.negotiationIdOverride) || null
       : latestAcceptedNegotiation;
 
-    if (isDigitalDeal && !selectedNegotiation) {
+    if (isDigitalDeal && !isInstantDigitalDeal && !selectedNegotiation) {
       toast({
         title: t('common.error'),
         description: t('p2p.tradeInitiatedDesc'),
@@ -999,7 +1040,7 @@ function TradeOfferDialog({
       offerId: offer.id,
       amount: tradeAmount,
       paymentMethod: tradePaymentMethod,
-      negotiationId: isDigitalDeal ? selectedNegotiation?.id : undefined,
+      negotiationId: isDigitalDeal && !isInstantDigitalDeal ? selectedNegotiation?.id : undefined,
     });
   };
 
@@ -1053,7 +1094,7 @@ function TradeOfferDialog({
               )}
             </div>
 
-            {isDigitalDeal && (
+            {isDigitalDeal && !isInstantDigitalDeal && (
               <div className="space-y-3 rounded-lg border border-sky-300/50 bg-sky-50/40 p-3 dark:border-sky-500/30 dark:bg-sky-500/10">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold">{t('p2p.dealKind.digitalProduct')}</span>
@@ -2069,6 +2110,7 @@ function MyOffersTab() {
     defaultValues: {
       type: "sell",
       dealKind: "standard_asset",
+      executionMode: undefined,
       digitalProductType: "",
       exchangeOffered: "",
       exchangeRequested: "",
@@ -2092,6 +2134,7 @@ function MyOffersTab() {
   const openCreateOfferDialog = (dealKind: CreateOfferForm["dealKind"]) => {
     form.reset({
       type: "sell",
+      executionMode: dealKind === "digital_product" ? undefined : undefined,
       dealKind,
       digitalProductType: "",
       exchangeOffered: "",
@@ -2117,6 +2160,7 @@ function MyOffersTab() {
 
   const selectedOfferType = form.watch("type");
   const selectedDealKind = form.watch("dealKind");
+  const selectedExecutionMode = form.watch("executionMode");
   const selectedOfferVisibility = form.watch("visibility");
   const selectedOfferCurrency = normalizeCurrencyCodeValue(form.watch("currency"));
   const selectedFiatCurrency = normalizeCurrencyCodeValue(form.watch("fiatCurrency"));
@@ -2126,6 +2170,34 @@ function MyOffersTab() {
       form.setValue("targetUserId", "");
     }
   }, [form, selectedOfferVisibility]);
+
+  useEffect(() => {
+    if (selectedDealKind !== "digital_product") {
+      if (form.getValues("executionMode")) {
+        form.setValue("executionMode", undefined);
+      }
+      if (form.getValues("supportMediationRequested")) {
+        form.setValue("supportMediationRequested", false);
+      }
+      if (form.getValues("requestedAdminFeePercentage")) {
+        form.setValue("requestedAdminFeePercentage", "");
+      }
+      return;
+    }
+
+    if (!form.getValues("executionMode")) {
+      form.setValue("executionMode", "instant");
+    }
+
+    if (selectedExecutionMode === "instant") {
+      if (form.getValues("supportMediationRequested")) {
+        form.setValue("supportMediationRequested", false);
+      }
+      if (form.getValues("requestedAdminFeePercentage")) {
+        form.setValue("requestedAdminFeePercentage", "");
+      }
+    }
+  }, [form, selectedDealKind, selectedExecutionMode]);
 
   useEffect(() => {
     const errMsg = createOfferMutation.error?.message;
@@ -2778,27 +2850,57 @@ function MyOffersTab() {
                         <div className="space-y-4 rounded-lg border border-sky-300/50 bg-sky-50/40 p-3 dark:border-sky-500/30 dark:bg-sky-500/10">
                           <FormField
                             control={form.control}
-                            name="digitalProductType"
+                            name="executionMode"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>{t('p2p.type')}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    list="p2p-digital-product-type-options"
-                                    placeholder={t('p2p.digitalProductType')}
-                                    data-testid="input-offer-digital-product-type"
-                                  />
-                                </FormControl>
-                                <datalist id="p2p-digital-product-type-options">
-                                  {digitalProductTypes.map((productType) => (
-                                    <option key={productType} value={productType} />
-                                  ))}
-                                </datalist>
+                                <FormLabel>{t('p2p.executionMode')}</FormLabel>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-offer-execution-mode">
+                                      <SelectValue placeholder={t('p2p.executionMode')} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="instant">{t('p2p.executionMode.instant')}</SelectItem>
+                                    <SelectItem value="negotiated">{t('p2p.executionMode.negotiated')}</SelectItem>
+                                  </SelectContent>
+                                </Select>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
+
+                          {selectedExecutionMode === "instant" && (
+                            <div className="rounded-md border border-emerald-300/50 bg-emerald-50/40 p-3 text-sm text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+                              {t('p2p.executionMode.instantDescription')}
+                            </div>
+                          )}
+
+                          {selectedExecutionMode !== "instant" && (
+                            <FormField
+                              control={form.control}
+                              name="digitalProductType"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('p2p.type')}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      list="p2p-digital-product-type-options"
+                                      placeholder={t('p2p.digitalProductType')}
+                                      data-testid="input-offer-digital-product-type"
+                                    />
+                                  </FormControl>
+                                  <datalist id="p2p-digital-product-type-options">
+                                    {digitalProductTypes.map((productType) => (
+                                      <option key={productType} value={productType} />
+                                    ))}
+                                  </datalist>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
 
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <FormField
@@ -2830,44 +2932,46 @@ function MyOffersTab() {
                             />
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <FormField
-                              control={form.control}
-                              name="requestedAdminFeePercentage"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>{t('wallet.commission')}</FormLabel>
-                                  <FormControl>
-                                    <MoneyInput
-                                      {...field}
-                                      placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
-                                      data-testid="input-offer-requested-admin-fee"
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                          {selectedExecutionMode !== "instant" && (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <FormField
+                                control={form.control}
+                                name="requestedAdminFeePercentage"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t('wallet.commission')}</FormLabel>
+                                    <FormControl>
+                                      <MoneyInput
+                                        {...field}
+                                        placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
+                                        data-testid="input-offer-requested-admin-fee"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
 
-                            <FormField
-                              control={form.control}
-                              name="supportMediationRequested"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>{t('p2p.dispute.support')}</FormLabel>
-                                  <div className="flex h-10 items-center justify-between rounded-md border bg-background px-3">
-                                    <span className="text-sm text-muted-foreground">{t('p2p.dispute.support')}</span>
-                                    <Switch
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                      data-testid="switch-offer-support-mediation"
-                                    />
-                                  </div>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                              <FormField
+                                control={form.control}
+                                name="supportMediationRequested"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t('p2p.dispute.support')}</FormLabel>
+                                    <div className="flex h-10 items-center justify-between rounded-md border bg-background px-3">
+                                      <span className="text-sm text-muted-foreground">{t('p2p.dispute.support')}</span>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        data-testid="switch-offer-support-mediation"
+                                      />
+                                    </div>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2924,6 +3028,47 @@ function MyOffersTab() {
                             </FormItem>
                           )}
                         />
+                      )}
+
+                      {selectedExecutionMode !== "instant" && (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <FormField
+                            control={form.control}
+                            name="requestedAdminFeePercentage"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t('wallet.commission')}</FormLabel>
+                                <FormControl>
+                                  <MoneyInput
+                                    {...field}
+                                    placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
+                                    data-testid="input-offer-requested-admin-fee"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="supportMediationRequested"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t('p2p.dispute.support')}</FormLabel>
+                                <div className="flex h-10 items-center justify-between rounded-md border bg-background px-3">
+                                  <span className="text-sm text-muted-foreground">{t('p2p.dispute.support')}</span>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-offer-support-mediation"
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
                       )}
 
                       {selectedOfferType === "sell" && (

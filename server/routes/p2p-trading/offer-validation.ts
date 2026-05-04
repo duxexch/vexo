@@ -1,15 +1,26 @@
 import type { User } from "@shared/schema";
 import { sanitizePlainText } from "../../lib/input-security";
-import { normalizeP2PDealKind, type P2PInternalDealKind } from "@shared/p2p-enterprise";
+import {
+    assertP2PDealInvariant,
+    normalizeP2PDealKind,
+    type P2PInternalDealKind,
+    type P2PExecutionMode,
+} from "@shared/p2p-enterprise";
 
 export const ALLOWED_PAYMENT_TIME_LIMITS = new Set([15, 30, 45, 60]);
 export const MAX_NEGOTIATION_FIELD_LENGTH = 2000;
 export const MAX_NEGOTIATED_TERMS_LENGTH = 4000;
 export const MAX_NEGOTIATED_ADMIN_FEE_RATE = 0.2;
+export const P2P_DISPUTE_MINIMUM_REASONS = ["not_received", "invalid_delivery"] as const;
+export type P2PDisputeMinimumReason = (typeof P2P_DISPUTE_MINIMUM_REASONS)[number];
+export function isP2PDisputeMinimumReason(value: unknown): value is P2PDisputeMinimumReason {
+    return typeof value === "string" && (P2P_DISPUTE_MINIMUM_REASONS as readonly string[]).includes(value);
+}
 
 export interface OfferValidationResult {
     ok: true;
     dealKind: P2PInternalDealKind;
+    executionMode: P2PExecutionMode | null;
     normalizedCurrency: string;
     normalizedFiatCurrency: string;
     selectedPaymentMethodNames: string[];
@@ -57,6 +68,7 @@ export interface OfferValidationInput {
     exchangeRequested: unknown;
     supportMediationRequested: unknown;
     requestedAdminFeePercentage: unknown;
+    executionMode: unknown;
     visibility: unknown;
     targetUserId: unknown;
     allowedCurrenciesForType: string[];
@@ -256,7 +268,20 @@ function validateDigitalOfferFields(
     base: Exclude<ReturnType<typeof validateCommonOfferFields>, OfferValidationError>,
 ) {
     if (base.dealKind !== "digital_product") {
-        return base;
+        assertP2PDealInvariant({
+            dealKind: base.dealKind,
+            executionMode: null,
+        });
+
+        return {
+            ...base,
+            executionMode: null,
+        };
+    }
+
+    const executionModeRaw = typeof input.executionMode === "string" ? input.executionMode.trim() : "";
+    if (!executionModeRaw || !["instant", "negotiated"].includes(executionModeRaw)) {
+        return fail(400, "Execution mode is required for digital products");
     }
 
     if (!base.safeDigitalProductType) {
@@ -271,8 +296,35 @@ function validateDigitalOfferFields(
         return fail(400, "Exchange requested description is required");
     }
 
-    return base;
+    if (executionModeRaw === "instant") {
+        if (base.normalizedRequestedAdminFeePercentage !== null || base.normalizedSupportMediationRequested) {
+            return fail(400, "Instant digital offers cannot request negotiation support or admin fee overrides");
+        }
+
+        assertP2PDealInvariant({
+            dealKind: base.dealKind,
+            executionMode: "instant",
+        });
+
+        return {
+            ...base,
+            executionMode: "instant" as const,
+            normalizedSupportMediationRequested: false,
+            normalizedRequestedAdminFeePercentage: null,
+        };
+    }
+
+    assertP2PDealInvariant({
+        dealKind: base.dealKind,
+        executionMode: "negotiated",
+    });
+
+    return {
+        ...base,
+        executionMode: "negotiated" as const,
+    };
 }
+
 
 async function validateVisibility(
     input: OfferValidationInput,
@@ -314,6 +366,34 @@ async function validateVisibility(
     return { normalizedTargetUserId };
 }
 
+export function enforceInstantRules(input: {
+    executionMode: P2PExecutionMode | null;
+    supportMediationRequested: boolean;
+    requestedAdminFeePercentage: string | null;
+}): OfferValidationError | null {
+    if (input.executionMode !== "instant") {
+        return null;
+    }
+
+    if (input.supportMediationRequested || input.requestedAdminFeePercentage !== null) {
+        return fail(400, "Instant digital offers cannot request negotiation support or admin fee overrides");
+    }
+
+    return null;
+}
+
+export function enforceNegotiatedRules(input: {
+    executionMode: P2PExecutionMode | null;
+    supportMediationRequested: boolean;
+    requestedAdminFeePercentage: string | null;
+}): OfferValidationError | null {
+    if (input.executionMode !== "negotiated") {
+        return null;
+    }
+
+    return null;
+}
+
 export async function validateOfferCreation(input: OfferValidationInput): Promise<OfferValidationOutcome> {
     const commonValidation = validateCommonOfferFields(input);
     if (!commonValidation.ok) {
@@ -323,6 +403,28 @@ export async function validateOfferCreation(input: OfferValidationInput): Promis
     const digitalValidation = validateDigitalOfferFields(input, commonValidation);
     if (!digitalValidation.ok) {
         return digitalValidation;
+    }
+
+    if (digitalValidation.dealKind === "digital_product" && !digitalValidation.executionMode) {
+        return fail(400, "Execution mode is required for digital products");
+    }
+
+    const instantRulesError = enforceInstantRules({
+        executionMode: digitalValidation.executionMode,
+        supportMediationRequested: digitalValidation.normalizedSupportMediationRequested,
+        requestedAdminFeePercentage: digitalValidation.normalizedRequestedAdminFeePercentage,
+    });
+    if (instantRulesError) {
+        return instantRulesError;
+    }
+
+    const negotiatedRulesError = enforceNegotiatedRules({
+        executionMode: digitalValidation.executionMode,
+        supportMediationRequested: digitalValidation.normalizedSupportMediationRequested,
+        requestedAdminFeePercentage: digitalValidation.normalizedRequestedAdminFeePercentage,
+    });
+    if (negotiatedRulesError) {
+        return negotiatedRulesError;
     }
 
     const normalizedVisibility = typeof input.visibility === "string" && input.visibility.trim() === "private_friend"
@@ -337,6 +439,7 @@ export async function validateOfferCreation(input: OfferValidationInput): Promis
     return {
         ok: true,
         dealKind: digitalValidation.dealKind,
+        executionMode: digitalValidation.executionMode,
         normalizedCurrency: digitalValidation.normalizedCurrency,
         normalizedFiatCurrency: digitalValidation.normalizedFiatCurrency,
         selectedPaymentMethodNames: digitalValidation.selectedPaymentMethodNames,

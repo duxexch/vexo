@@ -1,6 +1,6 @@
 import {
   users, transactions,
-  p2pTrades, p2pOffers, p2pTraderProfiles, badgeCatalog, userBadges,
+  p2pTrades, p2pOffers, p2pOfferNegotiations, p2pTraderProfiles, badgeCatalog, userBadges,
   type P2PTrade,
 } from "@shared/schema";
 import { db } from "../../db";
@@ -165,6 +165,34 @@ export async function createP2PTradeAtomic(params: {
         updatedAt: new Date()
       })
       .where(eq(p2pOffers.id, params.offerId));
+
+    if (params.negotiationId) {
+      const [existingNegotiationTrade] = await tx
+        .select({ id: p2pTrades.id })
+        .from(p2pTrades)
+        .where(eq(p2pTrades.negotiationId, params.negotiationId))
+        .limit(1)
+        .for('update');
+
+      if (existingNegotiationTrade) {
+        return { success: false, error: 'Trade already exists for this negotiation' };
+      }
+
+      const [negotiation] = await tx
+        .select()
+        .from(p2pOfferNegotiations)
+        .where(eq(p2pOfferNegotiations.id, params.negotiationId))
+        .limit(1)
+        .for('update');
+
+      if (!negotiation) {
+        return { success: false, error: 'Negotiation not found' };
+      }
+
+      if (negotiation.status !== "accepted") {
+        return { success: false, error: 'Negotiation must be accepted before opening a trade' };
+      }
+    }
 
     // 5. Create the trade record (carry walletCurrency for the settle path)
     const [trade] = await tx.insert(p2pTrades).values({

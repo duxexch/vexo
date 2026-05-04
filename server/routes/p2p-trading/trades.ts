@@ -16,12 +16,14 @@ import {
   getP2PVerificationRequirementsErrorMessage,
   resolveP2PVerificationRequirements,
 } from "./helpers";
+import { P2P_DISPUTE_MINIMUM_REASONS } from "./offer-validation";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import {
   mapTradeStatusToEnterpriseAccountingState,
   mapTradeStatusToEnterpriseBusinessState,
   mapTradeStatusToEnterpriseOperationalState,
 } from "./enterprise-bridge";
+import { scheduleAutoDisputeCheck } from "../p2p-disputes/create";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
 import { isEitherUserBlocked } from "../../lib/user-blocking";
@@ -278,6 +280,14 @@ export function registerTradeRoutes(app: Express) {
           return res.status(404).json({ error: "Offer not found" });
         }
 
+        const isDigitalOffer = offer.dealKind === "digital_product";
+        const isInstantDigitalOffer = isDigitalOffer && offer.executionMode === "instant";
+        const isNegotiatedDigitalOffer = isDigitalOffer && offer.executionMode === "negotiated";
+
+        if (isDigitalOffer && !offer.executionMode) {
+          return res.status(400).json({ error: "Execution mode is required for digital products" });
+        }
+
         if (offer.status !== 'active') {
           if (offer.status === "pending_approval") {
             return res.status(400).json({ error: "Offer is pending admin approval" });
@@ -302,78 +312,84 @@ export function registerTradeRoutes(app: Express) {
         let autoAcceptedNegotiationProposerId: string | null = null;
         const normalizedNegotiationId = typeof negotiationId === "string" ? negotiationId.trim() : "";
 
-        if (offer.dealKind === "digital_product") {
-          if (!normalizedNegotiationId) {
-            return res.status(400).json({ error: "Accepted negotiation ID is required for digital product deals" });
-          }
-
-          const negotiation = await storage.getP2POfferNegotiation(normalizedNegotiationId);
-          if (!negotiation || negotiation.offerId !== offer.id) {
-            return res.status(404).json({ error: "Negotiation round not found" });
-          }
-
-          if (negotiation.offerOwnerId !== offer.userId) {
-            return res.status(400).json({ error: "Negotiation round does not match offer owner" });
-          }
-
-          if (!negotiation.counterpartyUserId || negotiation.counterpartyUserId === offer.userId) {
-            return res.status(400).json({ error: "Negotiation round has invalid counterparty" });
-          }
-
-          const requesterIsParticipant = req.user!.id === offer.userId || req.user!.id === negotiation.counterpartyUserId;
-          if (!requesterIsParticipant) {
-            return res.status(403).json({ error: "Only negotiation participants can open this secured trade" });
-          }
-
-          let activeNegotiation = negotiation;
-          if (activeNegotiation.status === "pending") {
-            if (activeNegotiation.proposerId === req.user!.id) {
-              return res.status(403).json({ error: "Proposer cannot open secured trade from own pending negotiation" });
+        if (isDigitalOffer) {
+          if (isInstantDigitalOffer) {
+            if (normalizedNegotiationId) {
+              return res.status(400).json({ error: "Negotiation IDs are not allowed for instant digital-product offers" });
+            }
+          } else if (isNegotiatedDigitalOffer) {
+            if (!normalizedNegotiationId) {
+              return res.status(400).json({ error: "Accepted negotiation ID is required for negotiated digital product deals" });
             }
 
-            const acceptedNegotiation = await storage.updateP2POfferNegotiation(activeNegotiation.id, {
-              status: "accepted",
-              respondedBy: req.user!.id,
-              respondedAt: new Date(),
-              rejectionReason: null,
-            });
-
-            if (!acceptedNegotiation) {
-              return res.status(409).json({ error: "Negotiation state changed, please retry" });
+            const negotiation = await storage.getP2POfferNegotiation(normalizedNegotiationId);
+            if (!negotiation || negotiation.offerId !== offer.id) {
+              return res.status(404).json({ error: "Negotiation round not found" });
             }
 
-            autoAcceptedNegotiationProposerId = activeNegotiation.proposerId;
-            activeNegotiation = acceptedNegotiation;
-          }
+            if (negotiation.offerOwnerId !== offer.userId) {
+              return res.status(400).json({ error: "Negotiation round does not match offer owner" });
+            }
 
-          if (activeNegotiation.status !== "accepted") {
-            return res.status(400).json({ error: "Only accepted negotiation rounds can open a secured trade" });
-          }
+            if (!negotiation.counterpartyUserId || negotiation.counterpartyUserId === offer.userId) {
+              return res.status(400).json({ error: "Negotiation round has invalid counterparty" });
+            }
 
-          tradeCounterpartyUserId = activeNegotiation.counterpartyUserId;
-          negotiatedDealContext = {
-            id: activeNegotiation.id,
-            exchangeOffered: activeNegotiation.exchangeOffered,
-            exchangeRequested: activeNegotiation.exchangeRequested,
-            proposedTerms: activeNegotiation.proposedTerms,
-            supportMediationRequested: activeNegotiation.supportMediationRequested,
-            adminFeePercentage: activeNegotiation.adminFeePercentage,
-          };
+            const requesterIsParticipant = req.user!.id === offer.userId || req.user!.id === negotiation.counterpartyUserId;
+            if (!requesterIsParticipant) {
+              return res.status(403).json({ error: "Only negotiation participants can open this secured trade" });
+            }
 
-          if (autoAcceptedNegotiationProposerId) {
-            const usernamesByUserId = await getP2PUsernameMap([req.user!.id]);
-            const responderUsername = usernamesByUserId.get(req.user!.id) || req.user!.username;
+            let activeNegotiation = negotiation;
+            if (activeNegotiation.status === "pending") {
+              if (activeNegotiation.proposerId === req.user!.id) {
+                return res.status(403).json({ error: "Proposer cannot open secured trade from own pending negotiation" });
+              }
 
-            await notifyWithLog(autoAcceptedNegotiationProposerId, {
-              type: "success",
-              priority: "high",
-              title: "Deal Terms Accepted",
-              titleAr: "تم قبول شروط الصفقة",
-              message: `${responderUsername} accepted your proposed terms and opened the secured trade.`,
-              messageAr: `وافق ${responderUsername} على الشروط المقترحة وفتح الصفقة المؤمنة.`,
-              link: "/p2p",
-              metadata: JSON.stringify({ offerId: offer.id, negotiationId: negotiatedDealContext.id }),
-            }, "trade-create:auto-accept-negotiation");
+              const acceptedNegotiation = await storage.updateP2POfferNegotiation(activeNegotiation.id, {
+                status: "accepted",
+                respondedBy: req.user!.id,
+                respondedAt: new Date(),
+                rejectionReason: null,
+              });
+
+              if (!acceptedNegotiation) {
+                return res.status(409).json({ error: "Negotiation state changed, please retry" });
+              }
+
+              autoAcceptedNegotiationProposerId = activeNegotiation.proposerId;
+              activeNegotiation = acceptedNegotiation;
+            }
+
+            if (activeNegotiation.status !== "accepted") {
+              return res.status(400).json({ error: "Only accepted negotiation rounds can open a secured trade" });
+            }
+
+            tradeCounterpartyUserId = activeNegotiation.counterpartyUserId;
+            negotiatedDealContext = {
+              id: activeNegotiation.id,
+              exchangeOffered: activeNegotiation.exchangeOffered,
+              exchangeRequested: activeNegotiation.exchangeRequested,
+              proposedTerms: activeNegotiation.proposedTerms,
+              supportMediationRequested: activeNegotiation.supportMediationRequested,
+              adminFeePercentage: activeNegotiation.adminFeePercentage,
+            };
+
+            if (autoAcceptedNegotiationProposerId) {
+              const usernamesByUserId = await getP2PUsernameMap([req.user!.id]);
+              const responderUsername = usernamesByUserId.get(req.user!.id) || req.user!.username;
+
+              await notifyWithLog(autoAcceptedNegotiationProposerId, {
+                type: "success",
+                priority: "high",
+                title: "Deal Terms Accepted",
+                titleAr: "تم قبول شروط الصفقة",
+                message: `${responderUsername} accepted your proposed terms and opened the secured trade.`,
+                messageAr: `وافق ${responderUsername} على الشروط المقترحة وفتح الصفقة المؤمنة.`,
+                link: "/p2p",
+                metadata: JSON.stringify({ offerId: offer.id, negotiationId: negotiatedDealContext.id }),
+              }, "trade-create:auto-accept-negotiation");
+            }
           }
         }
 
@@ -492,48 +508,31 @@ export function registerTradeRoutes(app: Express) {
         const sellerId = isBuyer ? offer.userId : tradeCounterpartyUserId;
 
         let result;
+        const tradePayload = {
+          offerId,
+          buyerId,
+          sellerId,
+          amount: amount.toString(),
+          fiatAmount: fiatAmount.toFixed(2),
+          price: offer.price,
+          paymentMethod: matchedPaymentMethod,
+          platformFee: platformFee.toFixed(8),
+          expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
+          dealKind: offer.dealKind,
+          digitalProductType: offer.digitalProductType ?? null,
+          exchangeOffered: negotiatedDealContext?.exchangeOffered ?? offer.exchangeOffered ?? null,
+          exchangeRequested: negotiatedDealContext?.exchangeRequested ?? offer.exchangeRequested ?? null,
+          negotiatedTerms: negotiatedDealContext?.proposedTerms ?? offer.terms,
+          supportMediationRequested:
+            negotiatedDealContext?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
+          negotiatedAdminFeePercentage: negotiatedDealContext?.adminFeePercentage ?? null,
+          negotiationId: negotiatedDealContext?.id ?? null,
+        };
+
         if (currencyType === 'project') {
-          result = await storage.createP2PTradeProjectCurrencyAtomic({
-            offerId,
-            buyerId,
-            sellerId,
-            amount: amount.toString(),
-            fiatAmount: fiatAmount.toFixed(2),
-            price: offer.price,
-            paymentMethod: matchedPaymentMethod,
-            platformFee: platformFee.toFixed(8),
-            expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
-            dealKind: offer.dealKind,
-            digitalProductType: offer.digitalProductType ?? null,
-            exchangeOffered: negotiatedDealContext?.exchangeOffered ?? offer.exchangeOffered ?? null,
-            exchangeRequested: negotiatedDealContext?.exchangeRequested ?? offer.exchangeRequested ?? null,
-            negotiatedTerms: negotiatedDealContext?.proposedTerms ?? offer.terms,
-            supportMediationRequested:
-              negotiatedDealContext?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
-            negotiatedAdminFeePercentage: negotiatedDealContext?.adminFeePercentage ?? null,
-            negotiationId: negotiatedDealContext?.id ?? null,
-          });
+          result = await storage.createP2PTradeProjectCurrencyAtomic(tradePayload);
         } else {
-          result = await storage.createP2PTradeAtomic({
-            offerId,
-            buyerId,
-            sellerId,
-            amount: amount.toString(),
-            fiatAmount: fiatAmount.toFixed(2),
-            price: offer.price,
-            paymentMethod: matchedPaymentMethod,
-            platformFee: platformFee.toFixed(8),
-            expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
-            dealKind: offer.dealKind,
-            digitalProductType: offer.digitalProductType ?? null,
-            exchangeOffered: negotiatedDealContext?.exchangeOffered ?? offer.exchangeOffered ?? null,
-            exchangeRequested: negotiatedDealContext?.exchangeRequested ?? offer.exchangeRequested ?? null,
-            negotiatedTerms: negotiatedDealContext?.proposedTerms ?? offer.terms,
-            supportMediationRequested:
-              negotiatedDealContext?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
-            negotiatedAdminFeePercentage: negotiatedDealContext?.adminFeePercentage ?? null,
-            negotiationId: negotiatedDealContext?.id ?? null,
-          });
+          result = await storage.createP2PTradeAtomic(tradePayload);
         }
 
         if (!result.success) {
@@ -541,6 +540,14 @@ export function registerTradeRoutes(app: Express) {
         }
 
         const trade = result.trade!;
+
+        if (isInstantDigitalOffer) {
+          scheduleAutoDisputeCheck({
+            tradeId: trade.id,
+            initiatorId: req.user!.id,
+            respondentId: trade.sellerId === req.user!.id ? trade.buyerId : trade.sellerId,
+          });
+        }
 
         await createP2PTradeAuditLog({
           tradeId: trade.id,

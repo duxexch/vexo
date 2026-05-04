@@ -2,6 +2,8 @@ export type P2POfferKind = "standard" | "digital";
 
 export type P2PInternalDealKind = "standard_asset" | "digital_product";
 
+export type P2PExecutionMode = "instant" | "negotiated";
+
 export type P2PDigitalTradeType =
     | "account_sale"
     | "asset_exchange"
@@ -141,6 +143,29 @@ export interface P2PRiskScore {
     signals: Record<string, unknown>;
     actionRecommendation: P2PActionRecommendation;
     createdAt: string;
+}
+
+export interface P2PDealInvariant {
+    dealKind: P2PInternalDealKind;
+    executionMode?: P2PExecutionMode | null;
+}
+
+export function isP2PExecutionMode(value: unknown): value is P2PExecutionMode {
+    return value === "instant" || value === "negotiated";
+}
+
+export function assertP2PDealInvariant(input: P2PDealInvariant): void {
+    if (input.dealKind === "digital_product" && !input.executionMode) {
+        throw new Error("executionMode is required for digital_product deals");
+    }
+
+    if (input.executionMode !== undefined && input.executionMode !== null && !isP2PExecutionMode(input.executionMode)) {
+        throw new Error("executionMode must be either instant or negotiated when provided");
+    }
+
+    if (input.dealKind === "standard_asset" && input.executionMode !== undefined && input.executionMode !== null) {
+        throw new Error("executionMode must be null for standard_asset deals");
+    }
 }
 
 const validBusinessTransitions: Record<P2PBusinessState, P2PBusinessState[]> = {

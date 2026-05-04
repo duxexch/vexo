@@ -10,10 +10,98 @@ import { emitDisputeAlert } from "../../lib/admin-alerts";
 import { sendNotification } from "../../websocket";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage, formatDispute } from "./helpers";
+import { P2P_DISPUTE_MINIMUM_REASONS } from "../p2p-trading/offer-validation";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 
 const MAX_ACTIVE_DISPUTES_PER_USER = 10;
+const AUTO_DISPUTE_CHECK_DELAY_MS = 15_000;
+const AUTO_DISPUTE_CHECK_TIMEOUT_MS = 120_000;
+const AUTO_DISPUTE_CHECK_REASON = P2P_DISPUTE_MINIMUM_REASONS[0];
+
+export function scheduleAutoDisputeCheck(input: {
+  tradeId: string;
+  initiatorId: string;
+  respondentId: string;
+  reason?: string;
+  description?: string;
+}): void {
+  setTimeout(async () => {
+    try {
+      const [trade] = await db
+        .select({
+          id: p2pTrades.id,
+          buyerId: p2pTrades.buyerId,
+          sellerId: p2pTrades.sellerId,
+          status: p2pTrades.status,
+        })
+        .from(p2pTrades)
+        .where(eq(p2pTrades.id, input.tradeId))
+        .limit(1);
+
+      if (!trade || trade.status === "completed" || trade.status === "cancelled") {
+        return;
+      }
+
+      const [existingDispute] = await db
+        .select({ id: p2pDisputes.id })
+        .from(p2pDisputes)
+        .where(and(
+          eq(p2pDisputes.tradeId, input.tradeId),
+          or(
+            eq(p2pDisputes.status, "open"),
+            eq(p2pDisputes.status, "investigating"),
+          ),
+        ))
+        .limit(1);
+
+      if (existingDispute) {
+        return;
+      }
+
+      const safeReason = P2P_DISPUTE_MINIMUM_REASONS.includes(input.reason as typeof AUTO_DISPUTE_CHECK_REASON)
+        ? (input.reason as typeof AUTO_DISPUTE_CHECK_REASON)
+        : AUTO_DISPUTE_CHECK_REASON;
+      const safeDescription = sanitizePlainText(
+        input.description || `Auto dispute check triggered for instant trade ${input.tradeId}.`,
+        { maxLength: 2000 },
+      ).trim();
+
+      const [dispute] = await db
+        .insert(p2pDisputes)
+        .values({
+          tradeId: input.tradeId,
+          initiatorId: input.initiatorId,
+          respondentId: input.respondentId,
+          reason: safeReason,
+          description: safeDescription,
+          status: "open",
+        })
+        .returning();
+
+      await db
+        .update(p2pTrades)
+        .set({ status: "disputed", updatedAt: new Date() })
+        .where(eq(p2pTrades.id, input.tradeId));
+
+      await db.insert(p2pTransactionLogs).values({
+        tradeId: input.tradeId,
+        disputeId: dispute.id,
+        userId: input.initiatorId,
+        action: "dispute_opened",
+        description: `Auto-dispute check opened dispute on trade ${input.tradeId}`,
+        descriptionAr: `فحص النزاع التلقائي فتح نزاعًا على الصفقة ${input.tradeId}`,
+        ipAddress: "",
+        userAgent: "",
+      });
+    } catch (error) {
+      console.warn("[P2P Disputes] Auto-dispute check failed", {
+        tradeId: input.tradeId,
+        error: getErrorMessage(error),
+      });
+    }
+  }, Math.min(AUTO_DISPUTE_CHECK_DELAY_MS, AUTO_DISPUTE_CHECK_TIMEOUT_MS));
+}
 
 /** POST /api/p2p/disputes — Create a new dispute on a trade */
 export function registerCreateRoutes(app: Express) {
@@ -50,6 +138,10 @@ export function registerCreateRoutes(app: Express) {
 
       if (!tradeId || !reason) {
         return res.status(400).json({ error: "tradeId and reason are required" });
+      }
+
+      if (req.headers["x-auto-dispute-check"] === "true" && !P2P_DISPUTE_MINIMUM_REASONS.includes(reason)) {
+        return res.status(400).json({ error: "Invalid auto-dispute reason" });
       }
 
       // SECURITY: Sanitize text inputs to prevent stored XSS

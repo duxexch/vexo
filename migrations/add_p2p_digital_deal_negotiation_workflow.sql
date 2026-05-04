@@ -4,6 +4,10 @@ BEGIN
     CREATE TYPE p2p_deal_kind AS ENUM ('standard_asset', 'digital_product');
   END IF;
 
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'p2p_execution_mode') THEN
+    CREATE TYPE p2p_execution_mode AS ENUM ('instant', 'negotiated');
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'p2p_offer_negotiation_status') THEN
     CREATE TYPE p2p_offer_negotiation_status AS ENUM ('pending', 'accepted', 'rejected');
   END IF;
@@ -12,6 +16,7 @@ $$;
 
 ALTER TABLE p2p_offers
   ADD COLUMN IF NOT EXISTS deal_kind p2p_deal_kind NOT NULL DEFAULT 'standard_asset',
+  ADD COLUMN IF NOT EXISTS execution_mode p2p_execution_mode,
   ADD COLUMN IF NOT EXISTS digital_product_type text,
   ADD COLUMN IF NOT EXISTS exchange_offered text,
   ADD COLUMN IF NOT EXISTS exchange_requested text,
@@ -32,6 +37,36 @@ ALTER TABLE p2p_offers
   );
 
 ALTER TABLE p2p_offers
+  DROP CONSTRAINT IF EXISTS chk_p2p_offers_execution_mode_required_for_digital;
+
+ALTER TABLE p2p_offers
+  ADD CONSTRAINT chk_p2p_offers_execution_mode_required_for_digital
+  CHECK (
+    deal_kind <> 'digital_product'
+    OR execution_mode IS NOT NULL
+  );
+
+ALTER TABLE p2p_offers
+  DROP CONSTRAINT IF EXISTS chk_p2p_offers_execution_mode_null_for_standard;
+
+ALTER TABLE p2p_offers
+  ADD CONSTRAINT chk_p2p_offers_execution_mode_null_for_standard
+  CHECK (
+    deal_kind <> 'standard_asset'
+    OR execution_mode IS NULL
+  );
+
+ALTER TABLE p2p_offers
+  DROP CONSTRAINT IF EXISTS chk_p2p_offers_execution_mode_values;
+
+ALTER TABLE p2p_offers
+  ADD CONSTRAINT chk_p2p_offers_execution_mode_values
+  CHECK (
+    execution_mode IS NULL
+    OR execution_mode IN ('instant', 'negotiated')
+  );
+
+ALTER TABLE p2p_offers
   DROP CONSTRAINT IF EXISTS chk_p2p_offers_digital_required_fields;
 
 ALTER TABLE p2p_offers
@@ -39,7 +74,8 @@ ALTER TABLE p2p_offers
   CHECK (
     deal_kind <> 'digital_product'
     OR (
-      digital_product_type IS NOT NULL
+      execution_mode IS NOT NULL
+      AND digital_product_type IS NOT NULL
       AND length(trim(digital_product_type)) > 0
       AND exchange_offered IS NOT NULL
       AND length(trim(exchange_offered)) > 0
@@ -102,6 +138,7 @@ ALTER TABLE p2p_trades
   );
 
 CREATE INDEX IF NOT EXISTS idx_p2p_offers_deal_kind ON p2p_offers(deal_kind);
+CREATE INDEX IF NOT EXISTS idx_p2p_offers_execution_mode ON p2p_offers(execution_mode);
 
 CREATE INDEX IF NOT EXISTS idx_p2p_offer_negotiations_offer_id
   ON p2p_offer_negotiations(offer_id);
