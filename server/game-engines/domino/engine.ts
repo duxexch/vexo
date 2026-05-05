@@ -28,6 +28,7 @@ export class DominoEngine implements GameEngine {
       gameOver: false, scores: {},
       targetScore: 101,
       roundNumber: 1,
+      anchorTileId: undefined,
     });
   }
 
@@ -446,6 +447,7 @@ export class DominoEngine implements GameEngine {
       gameOver: false,
       targetScore: normalizedTargetScore,
       roundNumber: safeRoundNumber,
+      anchorTileId: undefined,
       scores,
       winner: undefined,
       winningTeam: undefined,
@@ -905,6 +907,7 @@ export class DominoEngine implements GameEngine {
         state.board.push(tile);
         state.leftEnd = tile.left;
         state.rightEnd = tile.right;
+        state.anchorTileId = tile.id;
       } else {
         const targetValue = end === 'left' ? state.leftEnd : state.rightEnd;
         let placedTile = tile;

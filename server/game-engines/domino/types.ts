@@ -20,6 +20,12 @@ export interface DominoState {
   gameOver: boolean;
   targetScore: number;
   roundNumber: number;
+  /**
+   * Explicit anchor tile for render/layout.
+   * This is the first tile played in the round and should be used instead of
+   * inferring the center from array order when reconstructing the board UI.
+   */
+  anchorTileId?: string;
   winner?: string | null;
   winningTeam?: number;
   isDraw?: boolean;

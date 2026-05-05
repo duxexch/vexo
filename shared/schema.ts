@@ -3669,6 +3669,7 @@ export type LiveGameSession = typeof liveGameSessions.$inferSelect;
 
 export const gameMoves = pgTable("game_moves", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moveId: text("move_id").notNull(),
   sessionId: varchar("session_id").notNull().references(() => liveGameSessions.id),
   playerId: varchar("player_id").notNull().references(() => users.id),
   moveNumber: integer("move_number").notNull(),
@@ -3680,6 +3681,7 @@ export const gameMoves = pgTable("game_moves", {
   timeTaken: integer("time_taken"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
+  uniqueIndex("idx_moves_session_move_id").on(table.sessionId, table.moveId),
   index("idx_moves_session").on(table.sessionId),
   index("idx_moves_player").on(table.playerId),
   index("idx_moves_number").on(table.sessionId, table.moveNumber),

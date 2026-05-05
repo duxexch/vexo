@@ -237,6 +237,7 @@ async function tryHandleTimeoutAutoMove(sessionId: string, room: GameRoom, curre
     }
 
     const nextTurnNumber = (lockedSession.turnNumber || 0) + 1;
+    const moveId = `${sessionId}:${nextTurnNumber}:${currentPlayerId}:timeout`;
 
     await tx
       .update(liveGameSessions)
@@ -249,6 +250,7 @@ async function tryHandleTimeoutAutoMove(sessionId: string, room: GameRoom, curre
 
     await tx.insert(gameMoves).values({
       sessionId,
+      moveId,
       playerId: currentPlayerId,
       moveNumber: nextTurnNumber,
       moveType: autoMove.type || 'move',

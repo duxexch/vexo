@@ -57,6 +57,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
     ? payload.idempotencyKey.trim().slice(0, 128)
     : '';
   const eventId = normalizedIdempotencyKey || randomUUID();
+  const moveId = normalizedIdempotencyKey || eventId;
   const idempotencyReference = normalizedIdempotencyKey
     ? `live_game_move_idem:${sessionId}:${userId}:${normalizedIdempotencyKey}`
     : `live_game_move_evt:${sessionId}:${userId}:${eventId}`;
@@ -201,6 +202,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
 
       await tx.insert(gameMoves).values({
         sessionId: sessionId,
+        moveId,
         playerId: userId,
         moveNumber: newTurnNumber,
         moveType: payload.move.type || 'move',

@@ -61,6 +61,43 @@ function verifyBoardChain(board: DominoTile[]): DominoIntegrityIssue | null {
   return null;
 }
 
+function getCanonicalTileId(tile: DominoTile): string {
+  return typeof tile.id === 'string' && tile.id.length > 0
+    ? tile.id
+    : canonicalTileId(tile);
+}
+
+function findAnchorTileId(state: DominoState): string | null {
+  if (typeof state.anchorTileId === 'string' && state.anchorTileId.length > 0) {
+    return state.anchorTileId;
+  }
+
+  if (state.board.length === 0) {
+    return null;
+  }
+
+  const firstTile = state.board[0];
+  return getCanonicalTileId(firstTile);
+}
+
+function validateDominoChain(board: DominoTile[]): DominoIntegrityIssue | null {
+  for (let i = 1; i < board.length; i += 1) {
+    const prev = board[i - 1];
+    const curr = board[i];
+    const match =
+      prev.right === curr.left ||
+      prev.right === curr.right ||
+      prev.left === curr.left ||
+      prev.left === curr.right;
+
+    if (!match) {
+      return { code: 'broken_board_chain', message: `Invalid domino chain at index ${i}` };
+    }
+  }
+
+  return null;
+}
+
 export function validateDominoStateIntegrity(state: DominoState): DominoIntegrityIssue | null {
   if (!Array.isArray(state.playerOrder) || state.playerOrder.length < 2 || state.playerOrder.length > 4) {
     return { code: 'invalid_player_order', message: 'Player order must contain 2-4 players' };
@@ -165,9 +202,19 @@ export function validateDominoStateIntegrity(state: DominoState): DominoIntegrit
     return null;
   }
 
-  const chainIssue = verifyBoardChain(state.board);
+  const chainIssue = validateDominoChain(state.board) ?? verifyBoardChain(state.board);
   if (chainIssue) {
     return chainIssue;
+  }
+
+  const anchorTileId = findAnchorTileId(state);
+  if (!anchorTileId) {
+    return { code: 'missing_anchor_tile', message: 'Board anchor tile is missing' };
+  }
+
+  const anchorIndex = state.board.findIndex((tile) => getCanonicalTileId(tile) === anchorTileId);
+  if (anchorIndex === -1) {
+    return { code: 'missing_anchor_tile', message: `Anchor tile ${anchorTileId} is not present on board` };
   }
 
   const first = state.board[0];
@@ -177,6 +224,10 @@ export function validateDominoStateIntegrity(state: DominoState): DominoIntegrit
       code: 'board_end_mismatch',
       message: `Board ends mismatch. leftEnd=${state.leftEnd}, rightEnd=${state.rightEnd}`,
     };
+  }
+
+  if (state.anchorTileId && getCanonicalTileId(state.board[anchorIndex]) !== state.anchorTileId) {
+    return { code: 'invalid_anchor_tile', message: 'Anchor tile does not match board contents' };
   }
 
   return null;

@@ -151,6 +151,7 @@ interface GameState {
   boardTiles: { tile: DominoTile; rotation: number }[];
   leftEnd: number;
   rightEnd: number;
+  anchorTileId?: string;
   boneyard: number;
   lastAction?: { type: string; playerId: string; tile?: DominoTile; end?: string }; // C7-F11: includes played tile info
   scores?: Record<string, number>;
@@ -298,6 +299,9 @@ function normalizeGameState(rawState: unknown): GameState {
 
   const playerOrder = (Array.isArray(rawState.playerOrder) ? rawState.playerOrder : [])
     .filter((entry): entry is string => typeof entry === "string");
+  const anchorTileId = typeof rawState.anchorTileId === "string" && rawState.anchorTileId.length > 0
+    ? rawState.anchorTileId
+    : undefined;
 
   const validMoves: NonNullable<GameState["validMoves"]> = [];
   for (const move of (Array.isArray(rawState.validMoves) ? rawState.validMoves : [])) {
@@ -340,6 +344,7 @@ function normalizeGameState(rawState: unknown): GameState {
     boardTiles,
     leftEnd: toFiniteNumber(rawState.leftEnd, fallbackLeftEnd),
     rightEnd: toFiniteNumber(rawState.rightEnd, fallbackRightEnd),
+    anchorTileId,
     boneyard: toFiniteNumber(rawState.boneyard, INITIAL_STATE.boneyard),
   };
 
@@ -1764,6 +1769,13 @@ export function DominoBoard({
   const anchorTileIndex = useMemo(() => {
     if (state.boardTiles.length === 0) {
       return -1;
+    }
+
+    if (state.anchorTileId) {
+      const anchorIndexFromState = state.boardTiles.findIndex((entry) => tileSignature(entry.tile) === state.anchorTileId);
+      if (anchorIndexFromState >= 0) {
+        return anchorIndexFromState;
+      }
     }
 
     if (!anchorTileKey) return 0;

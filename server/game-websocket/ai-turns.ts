@@ -290,6 +290,7 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
                 }
 
                 const nextTurnNumber = (lockedSession.turnNumber || 0) + 1;
+                const moveId = `${sessionId}:${nextTurnNumber}:${activePlayerId!}`;
 
                 await tx
                     .update(liveGameSessions)
@@ -302,6 +303,7 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
 
                 await tx.insert(gameMoves).values({
                     sessionId,
+                    moveId,
                     playerId: activePlayerId!,
                     moveNumber: nextTurnNumber,
                     moveType: decision.move.type || 'move',
