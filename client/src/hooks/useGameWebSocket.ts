@@ -37,6 +37,7 @@ export interface ChessGameState {
   isStalemate: boolean;
   isDraw: boolean;
   lastMove?: { from: string; to: string };
+  lastUpdateAt?: number;
   validMoves: string[];
   capturedPieces: { white: string[]; black: string[] };
   moveHistory: { notation: string; player: 'w' | 'b'; moveNumber: number }[];
@@ -158,6 +159,7 @@ interface WebSocketPayload {
   winner?: string | null;
   reason?: string;
   lowestPips?: number;
+  lastUpdateAt?: number;
   [key: string]: unknown;
 }
 

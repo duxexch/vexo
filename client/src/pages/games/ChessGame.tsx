@@ -7,6 +7,7 @@ import { ChessControls, DrawOfferDialog } from '@/components/games/chess/ChessCo
 import { ChessChat } from '@/components/games/chess/ChessChat';
 import { ChessCapturedPieces } from '@/components/games/chess/ChessCapturedPieces';
 import { ChessThemeSelector } from '@/components/games/chess/ChessThemeSelector';
+import { ChessThemeProvider } from '@/components/games/chess/ChessThemeContext';
 import { GameFullscreenActionDock, type GameFullscreenActionItem } from '@/components/games/GameFullscreenActionDock';
 import { GiftAnimation } from '@/components/games/GiftAnimation';
 import { GameStartCinematic } from '@/components/games/GameStartCinematic';
@@ -62,35 +63,39 @@ function fenToPosition(fen: string): Record<string, ChessPiece> {
   return position;
 }
 
-/** Ticking timer hook — counts down locally using Date.now() for accuracy */
-function useTickingTime(serverTime: number, isActive: boolean): number {
-  const [display, setDisplay] = useState(serverTime);
-  const startRef = useRef<{ at: number; value: number } | null>(null);
+function useAuthoritativeTimer(timeMs: number, lastUpdateAt: number | undefined, isActive: boolean, serverNow?: number): number {
+  const [now, setNow] = useState(Date.now());
+  const clockOffsetRef = useRef(0);
 
-  // Reset when server sends new time
   useEffect(() => {
-    setDisplay(serverTime);
-    if (isActive) {
-      startRef.current = { at: Date.now(), value: serverTime };
+    if (typeof serverNow === 'number') {
+      clockOffsetRef.current = Date.now() - serverNow;
     }
-  }, [serverTime]);
+    setNow(Date.now());
+  }, [timeMs, lastUpdateAt, isActive, serverNow]);
 
-  // Start/stop ticking
   useEffect(() => {
-    if (!isActive) {
-      startRef.current = null;
-      return;
-    }
-    startRef.current = { at: Date.now(), value: display };
-    const interval = setInterval(() => {
-      if (!startRef.current) return;
-      const elapsed = (Date.now() - startRef.current.at) / 1000;
-      setDisplay(Math.max(0, startRef.current.value - elapsed));
-    }, 100);
-    return () => clearInterval(interval);
+    if (!isActive) return;
+
+    let frame = 0;
+    const loop = () => {
+      setNow(Date.now());
+      frame = requestAnimationFrame(loop);
+    };
+
+    frame = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [isActive]);
 
-  return display;
+  if (!isActive) return timeMs;
+  if (!lastUpdateAt) return timeMs;
+
+  const correctedNow = now - clockOffsetRef.current;
+  const elapsed = correctedNow - lastUpdateAt;
+  return Math.max(0, Math.min(timeMs, timeMs - elapsed));
 }
 
 export default function ChessGame() {
@@ -143,6 +148,7 @@ export default function ChessGame() {
   } = useGameWebSocket(sessionId || null);
 
   const chessState = gameState as import('../../hooks/useGameWebSocket').ChessGameState | null;
+  const serverNow = chessState?.lastUpdateAt;
 
   const isValidChessState = useMemo(() => {
     if (!chessState) return false;
@@ -161,15 +167,56 @@ export default function ChessGame() {
   const isGameActive = !gameResult && gameState && isValidChessState &&
     !chessState?.isCheckmate && !chessState?.isStalemate && !chessState?.isDraw;
 
-  // Ticking timers — count down locally between server updates
-  const tickingWhiteTime = useTickingTime(
-    chessState?.whiteTime ?? 0,
-    !!isGameActive && chessState?.currentTurn === 'w'
+  const whiteTimeBaseMs = (chessState?.whiteTime ?? 0) * 1000;
+  const blackTimeBaseMs = (chessState?.blackTime ?? 0) * 1000;
+  const lastUpdateAt = chessState?.lastUpdateAt;
+
+  const tickingWhiteTime = useAuthoritativeTimer(
+    whiteTimeBaseMs,
+    lastUpdateAt,
+    !!isGameActive && chessState?.currentTurn === 'w',
+    serverNow
   );
-  const tickingBlackTime = useTickingTime(
-    chessState?.blackTime ?? 0,
-    !!isGameActive && chessState?.currentTurn === 'b'
+  const tickingBlackTime = useAuthoritativeTimer(
+    blackTimeBaseMs,
+    lastUpdateAt,
+    !!isGameActive && chessState?.currentTurn === 'b',
+    serverNow
   );
+
+  const [isMovePending, setIsMovePending] = useState(false);
+  const currentLastMove = chessState?.lastMove;
+
+  useEffect(() => {
+    setIsMovePending(false);
+  }, [currentLastMove?.from, currentLastMove?.to]);
+
+  useEffect(() => {
+    if (!isMovePending) return;
+    const timeout = setTimeout(() => {
+      setIsMovePending(false);
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [isMovePending]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log({
+        now: Date.now(),
+        lastUpdateAt,
+      });
+      (window as unknown as { __CHESS_DEBUG__?: Record<string, unknown> }).__CHESS_DEBUG__ = {
+        state: chessState,
+        lastMove: chessState?.lastMove,
+        validMoves: chessState?.validMoves,
+        timers: {
+          whiteTime: chessState?.whiteTime,
+          blackTime: chessState?.blackTime,
+          lastUpdateAt: chessState?.lastUpdateAt,
+        },
+      };
+    }
+  }, [chessState, lastUpdateAt]);
 
   // ── Sound effects ──
   useEffect(() => {
@@ -332,284 +379,286 @@ export default function ChessGame() {
     : (chessState?.capturedPieces?.black || []);
 
   return (
-    <div
-      ref={fullscreenContainerRef}
-      className={`vex-arcade-stage container mx-auto min-h-[100svh] max-w-7xl px-3 sm:px-4 pt-3 sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
-    >
-      {/* ── Cinematic Game Start ── */}
-      {showCinematic && !gameResult && (
-        <GameStartCinematic
-          gameType="chess"
-          player={{ id: String(user?.id || ''), username: user?.username || '' }}
-          opponent={opponent ? { id: opponent.id, username: opponent.username } : undefined}
-          playerSide={playerColor as 'w' | 'b'}
-          spectatorCount={spectatorCount}
-          onComplete={() => setShowCinematic(false)}
-        />
-      )}
+    <ChessThemeProvider theme={boardTheme}>
+      <div
+        ref={fullscreenContainerRef}
+        className={`vex-arcade-stage container mx-auto min-h-[100svh] max-w-7xl px-3 sm:px-4 pt-3 sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
+      >
+        {/* ── Cinematic Game Start ── */}
+        {showCinematic && !gameResult && (
+          <GameStartCinematic
+            gameType="chess"
+            player={{ id: String(user?.id || ''), username: user?.username || '' }}
+            opponent={opponent ? { id: opponent.id, username: opponent.username } : undefined}
+            playerSide={playerColor as 'w' | 'b'}
+            spectatorCount={spectatorCount}
+            onComplete={() => setShowCinematic(false)}
+          />
+        )}
 
-      {/* ── Header ── */}
-      <div className={`vex-arcade-header mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3 ${isGameFullscreen ? 'hidden' : ''}`}>
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation('/games')}
-            aria-label="Go back"
-            data-testid="button-back"
-            className="vex-arcade-btn vex-arcade-btn--icon shrink-0 min-h-[44px] min-w-[44px]"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <Swords className="w-5 h-5 text-primary shrink-0" />
-              {t('chess.title')}
-            </h1>
-            {opponent && (
-              <p className="text-muted-foreground text-sm truncate">
-                vs {opponent.username}
-              </p>
-            )}
+        {/* ── Header ── */}
+        <div className={`vex-arcade-header mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3 ${isGameFullscreen ? 'hidden' : ''}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLocation('/games')}
+              aria-label="Go back"
+              data-testid="button-back"
+              className="vex-arcade-btn vex-arcade-btn--icon shrink-0 min-h-[44px] min-w-[44px]"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                <Swords className="w-5 h-5 text-primary shrink-0" />
+                {t('chess.title')}
+              </h1>
+              {opponent && (
+                <p className="text-muted-foreground text-sm truncate">
+                  vs {opponent.username}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-          <Badge
-            variant={connectionStatus === 'connected' ? 'default' : 'secondary'}
-            className="gap-1"
-            role="status"
-            aria-live="polite"
-          >
-            {connectionStatus === 'connected' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-            <span className="hidden sm:inline">{connectionStatus === 'connected' ? t('common.live') : t('common.offline')}</span>
-          </Badge>
-          <Badge variant={isSpectator ? 'outline' : 'default'}>
-            {isSpectator
-              ? (language === 'ar' ? 'مشاهد' : 'Spectator')
-              : (language === 'ar' ? 'لاعب' : 'Player')}
-          </Badge>
-          {spectatorCount > 0 && (
-            <Badge variant="outline" className="gap-1">
-              <Users className="w-3 h-3" />
-              {spectatorCount}
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+            <Badge
+              variant={connectionStatus === 'connected' ? 'default' : 'secondary'}
+              className="gap-1"
+              role="status"
+              aria-live="polite"
+            >
+              {connectionStatus === 'connected' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              <span className="hidden sm:inline">{connectionStatus === 'connected' ? t('common.live') : t('common.offline')}</span>
             </Badge>
-          )}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              void toggleFullscreen();
-            }}
-            aria-label={t('common.view')}
-            className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
-            data-testid="button-toggle-fullscreen"
-          >
-            <Maximize2 className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share" className="vex-arcade-btn hidden sm:flex">
-            <Share2 className="w-4 h-4 me-1.5" />
-            {t('chess.share')}
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Game Result Banner ── */}
-      {gameResult && (
-        <div className={`vex-arcade-panel mb-4 p-4 rounded-xl border-2 text-center ${gameResult.winner === user?.id
-          ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/50'
-          : gameResult.winner === null
-            ? 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/50'
-            : 'bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/50'
-          }`}>
-          <div className="flex items-center justify-center gap-2 mb-1">
-            {gameResult.winner === user?.id ? (
-              <Trophy className="w-6 h-6 text-yellow-500" />
-            ) : gameResult.winner === null ? (
-              <HandshakeIcon className="w-6 h-6 text-blue-500" />
-            ) : (
-              <Frown className="w-6 h-6 text-red-500" />
+            <Badge variant={isSpectator ? 'outline' : 'default'}>
+              {isSpectator
+                ? (language === 'ar' ? 'مشاهد' : 'Spectator')
+                : (language === 'ar' ? 'لاعب' : 'Player')}
+            </Badge>
+            {spectatorCount > 0 && (
+              <Badge variant="outline" className="gap-1">
+                <Users className="w-3 h-3" />
+                {spectatorCount}
+              </Badge>
             )}
-            <h2 className="text-xl font-bold">
-              {gameResult.winner === user?.id
-                ? t('chess.youWon')
-                : gameResult.winner === null
-                  ? t('chess.draw')
-                  : t('chess.youLost')}
-            </h2>
-          </div>
-          <p className="text-muted-foreground text-sm">{gameResult.reason}</p>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <Button
               variant="outline"
-              size="sm"
-              className="vex-arcade-btn w-full sm:w-auto"
-              onClick={() => setLocation('/games')}
-              data-testid="button-back-to-games"
+              size="icon"
+              onClick={() => {
+                void toggleFullscreen();
+              }}
+              aria-label={t('common.view')}
+              className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
+              data-testid="button-toggle-fullscreen"
             >
-              <ArrowLeft className="w-4 h-4 me-1.5" />
-              {t('chess.backToGames')}
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share" className="vex-arcade-btn hidden sm:flex">
+              <Share2 className="w-4 h-4 me-1.5" />
+              {t('chess.share')}
             </Button>
           </div>
         </div>
-      )}
 
-      {/* ── Main Layout ── */}
-      <div className={isGameFullscreen ? 'flex flex-col gap-4 items-center' : 'grid lg:grid-cols-[1fr_280px] gap-4 lg:gap-6'}>
-        {/* Left: Board area */}
-        <div className="flex flex-col items-center">
-          {/* Opponent info bar */}
-          {gameState && playerColor && (
-            <div className="w-full max-w-[560px] flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${opponentColor === 'w'
-                  ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
-                  : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
-                  }`}>
-                  {opponentColor === 'w' ? '♔' : '♚'}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{opponent?.username || (opponentColor === 'w' ? t('chess.white') : t('chess.black'))}</p>
-                  <ChessCapturedPieces captured={capturedByOpponent} color={opponentColor} compact opponentCaptured={capturedByMe} />
-                </div>
-              </div>
-              {chessState && (
-                <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === opponentColor && isGameActive
-                  ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                  : 'text-muted-foreground'
-                  }`}>
-                  {formatTimerBrief(opponentColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
-                </div>
+        {/* ── Game Result Banner ── */}
+        {gameResult && (
+          <div className={`vex-arcade-panel mb-4 p-4 rounded-xl border-2 text-center ${gameResult.winner === user?.id
+            ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/50'
+            : gameResult.winner === null
+              ? 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/50'
+              : 'bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/50'
+            }`}>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              {gameResult.winner === user?.id ? (
+                <Trophy className="w-6 h-6 text-yellow-500" />
+              ) : gameResult.winner === null ? (
+                <HandshakeIcon className="w-6 h-6 text-blue-500" />
+              ) : (
+                <Frown className="w-6 h-6 text-red-500" />
               )}
+              <h2 className="text-xl font-bold">
+                {gameResult.winner === user?.id
+                  ? t('chess.youWon')
+                  : gameResult.winner === null
+                    ? t('chess.draw')
+                    : t('chess.youLost')}
+              </h2>
             </div>
-          )}
-
-          {/* Board */}
-          {gameState && playerColor && (
-            <ChessBoard
-              gameState={chessState?.fen}
-              currentTurn={chessState?.currentTurn}
-              myColor={playerColor === 'w' ? 'white' : 'black'}
-              isMyTurn={!!isGameActive && chessState!.currentTurn === playerColor && canPlayActions}
-              isSpectator={isSpectator}
-              authoritativeValidMoves={chessState?.validMoves}
-              onMove={handleMove}
-              status={gameResult ? "finished" : chessState!.isCheckmate || chessState!.isStalemate || chessState!.isDraw ? "finished" : "active"}
-            />
-          )}
-
-          {/* Player info bar */}
-          {gameState && playerColor && (
-            <div className="w-full max-w-[560px] flex items-center justify-between mt-2 px-1">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${playerColor === 'w'
-                  ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
-                  : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
-                  }`}>
-                  {playerColor === 'w' ? '♔' : '♚'}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate flex items-center gap-1">
-                    {user?.username || (playerColor === 'w' ? t('chess.white') : t('chess.black'))}
-                  </p>
-                  <ChessCapturedPieces captured={capturedByMe} color={playerColor} compact opponentCaptured={capturedByOpponent} />
-                </div>
-              </div>
-              {chessState && (
-                <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === playerColor && isGameActive
-                  ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                  : 'text-muted-foreground'
-                  }`}>
-                  {formatTimerBrief(playerColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
-                </div>
-              )}
+            <p className="text-muted-foreground text-sm">{gameResult.reason}</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="vex-arcade-btn w-full sm:w-auto"
+                onClick={() => setLocation('/games')}
+                data-testid="button-back-to-games"
+              >
+                <ArrowLeft className="w-4 h-4 me-1.5" />
+                {t('chess.backToGames')}
+              </Button>
             </div>
-          )}
-
-          {/* Controls */}
-          <div className="mt-3">
-            <ChessControls
-              onResign={resign}
-              onOfferDraw={offerDraw}
-              drawOffered={drawOffered}
-              isGameActive={!!isGameActive}
-              canPlayActions={canPlayActions}
-              onOpenThemes={() => setShowThemes(true)}
-            />
-          </div>
-        </div>
-
-        {/* Right: Sidebar */}
-        {!isGameFullscreen && (
-          <div className="space-y-4 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
-            {/* Timer cards for desktop */}
-            {gameState && playerColor && (
-              <ChessTimer
-                whiteTime={tickingWhiteTime}
-                blackTime={tickingBlackTime}
-                currentTurn={chessState!.currentTurn}
-                isGameActive={!!isGameActive}
-                playerColor={playerColor}
-              />
-            )}
-
-            {/* Move list */}
-            {gameState && (
-              <ChessMoveList
-                moves={(chessState?.moveHistory || []).map((m) => ({
-                  moveNumber: m.moveNumber,
-                  notation: m.notation,
-                  player: m.player
-                }))}
-              />
-            )}
-
-            {/* Chat */}
-            {user && (
-              <ChessChat
-                messages={chatMessages}
-                onSendMessage={sendChat}
-                currentUserId={user.id}
-              />
-            )}
           </div>
         )}
-      </div>
 
-      <GameFullscreenActionDock
-        active={isGameFullscreen}
-        actions={fullscreenActions}
-        onExit={() => {
-          void exitFullscreen();
-        }}
-        exitLabel={t('common.close')}
-        dir={dir}
-      />
+        {/* ── Main Layout ── */}
+        <div className={isGameFullscreen ? 'flex flex-col gap-4 items-center' : 'grid lg:grid-cols-[1fr_280px] gap-4 lg:gap-6'}>
+          {/* Left: Board area */}
+          <div className="flex flex-col items-center">
+            {/* Opponent info bar */}
+            {gameState && playerColor && (
+              <div className="w-full max-w-[560px] flex items-center justify-between mb-2 px-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${opponentColor === 'w'
+                    ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
+                    : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
+                    }`}>
+                    {opponentColor === 'w' ? '♔' : '♚'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{opponent?.username || (opponentColor === 'w' ? t('chess.white') : t('chess.black'))}</p>
+                    <ChessCapturedPieces captured={capturedByOpponent} color={opponentColor} compact opponentCaptured={capturedByMe} />
+                  </div>
+                </div>
+                {chessState && (
+                  <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === opponentColor && isGameActive
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                    : 'text-muted-foreground'
+                    }`}>
+                    {formatTimerBrief(opponentColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
+                  </div>
+                )}
+              </div>
+            )}
 
-      {/* ── Modals ── */}
-      <DrawOfferDialog
-        isOpen={canPlayActions && drawOfferReceived}
-        onAccept={() => respondDraw(true)}
-        onDecline={() => respondDraw(false)}
-        opponentName={opponent?.username || 'Opponent'}
-      />
+            {/* Board */}
+            {gameState && playerColor && (
+              <ChessBoard
+                gameState={chessState?.fen}
+                currentTurn={chessState?.currentTurn}
+                myColor={playerColor === 'w' ? 'white' : 'black'}
+                isMyTurn={!!isGameActive && chessState!.currentTurn === playerColor && canPlayActions}
+                isSpectator={isSpectator}
+                authoritativeValidMoves={chessState?.validMoves}
+                onMove={handleMove}
+                status={gameResult ? "finished" : chessState!.isCheckmate || chessState!.isStalemate || chessState!.isDraw ? "finished" : "active"}
+              />
+            )}
 
-      <GiftAnimation
-        gift={lastGift ? { id: Date.now().toString(), ...lastGift } : null}
-        onComplete={clearLastGift}
-      />
+            {/* Player info bar */}
+            {gameState && playerColor && (
+              <div className="w-full max-w-[560px] flex items-center justify-between mt-2 px-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${playerColor === 'w'
+                    ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
+                    : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
+                    }`}>
+                    {playerColor === 'w' ? '♔' : '♚'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate flex items-center gap-1">
+                      {user?.username || (playerColor === 'w' ? t('chess.white') : t('chess.black'))}
+                    </p>
+                    <ChessCapturedPieces captured={capturedByMe} color={playerColor} compact opponentCaptured={capturedByOpponent} />
+                  </div>
+                </div>
+                {chessState && (
+                  <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === playerColor && isGameActive
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                    : 'text-muted-foreground'
+                    }`}>
+                    {formatTimerBrief(playerColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
+                  </div>
+                )}
+              </div>
+            )}
 
-      {showThemes && (
-        <ChessThemeSelector
-          currentTheme={boardTheme}
-          onSelectTheme={(theme) => {
-            setBoardTheme(theme);
-            setShowThemes(false);
+            {/* Controls */}
+            <div className="mt-3">
+              <ChessControls
+                onResign={resign}
+                onOfferDraw={offerDraw}
+                drawOffered={drawOffered}
+                isGameActive={!!isGameActive}
+                canPlayActions={canPlayActions}
+                onOpenThemes={() => setShowThemes(true)}
+              />
+            </div>
+          </div>
+
+          {/* Right: Sidebar */}
+          {!isGameFullscreen && (
+            <div className="space-y-4 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+              {/* Timer cards for desktop */}
+              {gameState && playerColor && (
+                <ChessTimer
+                  whiteTime={tickingWhiteTime}
+                  blackTime={tickingBlackTime}
+                  currentTurn={chessState!.currentTurn}
+                  isGameActive={!!isGameActive}
+                  playerColor={playerColor}
+                />
+              )}
+
+              {/* Move list */}
+              {gameState && (
+                <ChessMoveList
+                  moves={(chessState?.moveHistory || []).map((m) => ({
+                    moveNumber: m.moveNumber,
+                    notation: m.notation,
+                    player: m.player
+                  }))}
+                />
+              )}
+
+              {/* Chat */}
+              {user && (
+                <ChessChat
+                  messages={chatMessages}
+                  onSendMessage={sendChat}
+                  currentUserId={user.id}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        <GameFullscreenActionDock
+          active={isGameFullscreen}
+          actions={fullscreenActions}
+          onExit={() => {
+            void exitFullscreen();
           }}
-          onClose={() => setShowThemes(false)}
+          exitLabel={t('common.close')}
+          dir={dir}
         />
-      )}
-    </div>
+
+        {/* ── Modals ── */}
+        <DrawOfferDialog
+          isOpen={canPlayActions && drawOfferReceived}
+          onAccept={() => respondDraw(true)}
+          onDecline={() => respondDraw(false)}
+          opponentName={opponent?.username || 'Opponent'}
+        />
+
+        <GiftAnimation
+          gift={lastGift ? { id: Date.now().toString(), ...lastGift } : null}
+          onComplete={clearLastGift}
+        />
+
+        {showThemes && (
+          <ChessThemeSelector
+            currentTheme={boardTheme}
+            onSelectTheme={(theme) => {
+              setBoardTheme(theme);
+              setShowThemes(false);
+            }}
+            onClose={() => setShowThemes(false)}
+          />
+        )}
+      </div>
+    </ChessThemeProvider>
   );
 }
 

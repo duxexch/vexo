@@ -2,7 +2,7 @@ export interface GameEngine {
   gameType: string;
   minPlayers: number;
   maxPlayers: number;
-  
+
   createInitialState(): string;
   initializeWithPlayers(...args: unknown[]): string;
   validateMove(state: string, playerId: string, move: MoveData): ValidationResult;
@@ -57,7 +57,7 @@ export interface GameStatus {
 export interface PlayerView {
   board?: unknown;
   hand?: unknown[];
-  validMoves?: MoveData[];
+  validMoves?: unknown;
   scores?: { [playerId: string]: number };
   currentTurn?: string;
   gamePhase?: string;
