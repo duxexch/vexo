@@ -1,0 +1,13 @@
+- [x] Inspect Game WS move ordering/idempotency/authority/correlationId/replay shadow
+- [x] Inspect Game WS join/spectate/getState/resign/timeout auto-move/game-over
+- [x] Inspect Socket.IO /chat presence (viewer_count/viewer_list) + spectator cap
+- [x] Inspect Socket.IO /rtc signaling contract + rate limiting + missed-call logic
+- [x] Inspect Voice WS signaling (rate limiting, pricing gate, ICE validation) + telemetry
+- [ ] Inspect persistence/snapshot persistence beyond “gameState in liveGameSessions” (if periodic snapshots exist)
+- [ ] Inspect remaining unified challenge→join→session→engine init→broadcast→close flow for non-SAM9 paths (not only SAM9 create route)
+- [ ] Inspect metrics/dashboard/alert wiring (where is emitted to Prometheus/Datadog/etc.) for event lag/reconnect/forfeit
+- [ ] Inspect anti-cheat Level 2/3 hooks (anomaly detection / ML) existence
+- [ ] Inspect backpressure/coalescing/debounce for presence updates (chat viewer broadcasts) beyond viewer list fan-out
+- [ ] Inspect scaling/partition strategy (sessionId→shard/worker mapping, sticky sessions)
+- [ ] Produce final “implemented vs missing” report aligned to the plan stages
+- [ ] Run verification (tests/tsc) after understanding gaps (if changes needed)
