@@ -388,6 +388,15 @@ export function useGameWebSocket(sessionId: string | null) {
         setIsMovePending(false);
         break;
 
+      case 'move_accepted':
+        // Production tracing ACK: clear pending immediately even if game_update arrives slightly later.
+        if (message.payload.turnNumber !== undefined) {
+          setTurnNumber(message.payload.turnNumber);
+        }
+        movePendingSinceRef.current = null;
+        setIsMovePending(false);
+        break;
+
       case 'move_made':
       case 'game_move': // F3: handle challenge-ws game_move messages
         {
