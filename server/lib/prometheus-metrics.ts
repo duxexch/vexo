@@ -22,6 +22,13 @@ export const wsReconnectTotal = new client.Counter({
     registers: [registry],
 });
 
+export const wsMoveRateLimitedTotal = new client.Counter({
+    name: "ws_move_rate_limited_total",
+    help: "Total WS make_move requests rejected due to rate limiting",
+    labelNames: ["scope"],
+    registers: [registry],
+});
+
 // -----------------------
 // Express /metrics handler
 // -----------------------

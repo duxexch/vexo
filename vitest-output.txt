@@ -1,0 +1,1397 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90mC:/Users/cex/Desktop/vixo[39m
+
+ [31m❯[39m tests/call-permission-prompt.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/permissions-banner-modal-overlap.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/native-call-permissions-kind.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 13[2mms[22m[39m
+[31m     [31m×[31m voice: only the microphone permanent-denial flag matters[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m video: BOTH the microphone and camera permanent-denial flags route to the modal's Open Settings state[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m voice: only flags the microphone as required[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m video: flags either microphone OR camera as required[39m[32m 1[2mms[22m[39m
+ [31m❯[39m tests/permissions-policy-header-smoke.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m tests/domino-runtime-validation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at Module.useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:323:19)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at Module.useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:323:19)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+[90mstderr[2m | tests/call-permission-native-android-ordering.test.tsx[2m > [22m[2museCallSession on native Android — call-permission ordering[2m > [22m[2minvokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia
+[22m[39mThe above error occurred in the <CallSessionHarness> component:
+
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:271:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at Module.useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:323:19)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at Module.useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:323:19)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+[90mstderr[2m | tests/call-permission-native-android-ordering.test.tsx[2m > [22m[2museCallSession on native Android — call-permission ordering[2m > [22m[2mopens the rationale modal with permanentlyDenied:true when the plugin reports microphonePermanentlyDenied
+[22m[39mThe above error occurred in the <CallSessionHarness> component:
+
+    at CallSessionHarness (C:/Users/cex/Desktop/vixo/tests/call-permission-native-android-ordering.test.tsx:271:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:68:32)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:68:32)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+[90mstderr[2m | tests/call-permission-native-android-ordering.test.tsx[2m > [22m[2mVoiceChat on native Android — call-permission ordering[2m > [22m[2minvokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia when the in-match voice toggle goes live
+[22m[39mThe above error occurred in the <VoiceChat> component:
+
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:33:3)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:68:32)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:68:32)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+[90mstderr[2m | tests/call-permission-native-android-ordering.test.tsx[2m > [22m[2mVoiceChat on native Android — call-permission ordering[2m > [22m[2mopens the rationale modal with permanentlyDenied:true and skips getUserMedia when the plugin reports microphonePermanentlyDenied
+[22m[39mThe above error occurred in the <VoiceChat> component:
+
+    at VoiceChat (C:/Users/cex/Desktop/vixo/client/src/components/games/VoiceChat.tsx:33:3)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+ [31m❯[39m tests/call-permission-native-android-ordering.test.tsx [2m([22m[2m4 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 70[2mms[22m[39m
+[31m     [31m×[31m invokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia[39m[32m 36[2mms[22m[39m
+[31m     [31m×[31m opens the rationale modal with permanentlyDenied:true when the plugin reports microphonePermanentlyDenied[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m invokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia when the in-match voice toggle goes live[39m[32m 19[2mms[22m[39m
+[31m     [31m×[31m opens the rationale modal with permanentlyDenied:true and skips getUserMedia when the plugin reports microphonePermanentlyDenied[39m[32m 6[2mms[22m[39m
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+Error: Uncaught [Error: No QueryClient set, use QueryClientProvider to set one]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: No QueryClient set, use QueryClientProvider to set one
+    at useQueryClient (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:15:11)
+    at useBaseQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:29:18)
+    at useQuery (file:///C:/Users/cex/Desktop/vixo/node_modules/@tanstack/react-query/build/modern/useQuery.js:7:10)
+    at useIceServers (C:/Users/cex/Desktop/vixo/client/src/hooks/use-ice-servers.ts:39:31)
+    at useCallSession (C:/Users/cex/Desktop/vixo/client/src/hooks/use-call-session.tsx:101:32)
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:23:16)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick (accept) → real useCallSession claims the challenge invite
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick (decline) → real useCallSession resets the challenge invite
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick (accept) → real PrivateCallLayer claims the DM invite
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick (decline) → real PrivateCallLayer tears down the DM invite
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick targeting a callId neither manager owns → both refuse
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mSW notificationclick (accept) routes to the correct manager when both have invites
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mlegacy SW action 'open_call' is treated as accept (back-compat with old service workers)
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mdispatchCallAction hangup → real useCallSession tears down the active challenge call (active → ended)
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mdispatchCallAction hangup → real PrivateCallLayer tears down the active DM call (active → idle)
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mdispatchCallAction hangup with mismatched callId → real useCallSession refuses to hang up the active challenge call
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstderr[2m | tests/call-actions-react-tree.test.tsx[2m > [22m[2mcall-action bridge — real production tree[2m > [22m[2mdispatchCallAction hangup with mismatched callId → neither manager tears down (no cross-manager false claim)
+[22m[39mThe above error occurred in the <CallSessionProvider> component:
+
+    at CallSessionProvider (C:/Users/cex/Desktop/vixo/client/src/components/calls/CallSessionProvider.tsx:18:32)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at TooltipProvider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-tooltip/dist/index.mjs:29:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+ [31m❯[39m tests/call-actions-react-tree.test.tsx [2m([22m[2m11 tests[22m[2m | [22m[31m11 failed[39m[2m)[22m[32m 154[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick (accept) → real useCallSession claims the challenge invite[39m[32m 36[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick (decline) → real useCallSession resets the challenge invite[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick (accept) → real PrivateCallLayer claims the DM invite[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick (decline) → real PrivateCallLayer tears down the DM invite[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick targeting a callId neither manager owns → both refuse[39m[32m 16[2mms[22m[39m
+[31m     [31m×[31m SW notificationclick (accept) routes to the correct manager when both have invites[39m[32m 18[2mms[22m[39m
+[31m     [31m×[31m legacy SW action 'open_call' is treated as accept (back-compat with old service workers)[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m dispatchCallAction hangup → real useCallSession tears down the active challenge call (active → ended)[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m dispatchCallAction hangup → real PrivateCallLayer tears down the active DM call (active → idle)[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m dispatchCallAction hangup with mismatched callId → real useCallSession refuses to hang up the active challenge call[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m dispatchCallAction hangup with mismatched callId → neither manager tears down (no cross-manager false claim)[39m[32m 16[2mms[22m[39m
+ [31m❯[39m tests/admin-balance-adjust-rollback-realdb.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/chat-viewer-list-filter.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/tournament-refund-picker.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/tournament-refunds-endpoint.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/wallet-balances-concurrency.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/wallet-conversion-quote.test.ts [2m([22m[2m0 test[22m[2m)[22m
+Error: Uncaught [Error: useI18n must be used within an I18nProvider]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: useI18n must be used within an I18nProvider
+    at useI18n (C:/Users/cex/Desktop/vixo/client/src/lib/i18n.tsx:280:11)
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:688:17)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+Error: Uncaught [Error: useI18n must be used within an I18nProvider]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: useI18n must be used within an I18nProvider
+    at useI18n (C:/Users/cex/Desktop/vixo/client/src/lib/i18n.tsx:280:11)
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:688:17)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+Error: Uncaught [Error: useI18n must be used within an I18nProvider]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: useI18n must be used within an I18nProvider
+    at useI18n (C:/Users/cex/Desktop/vixo/client/src/lib/i18n.tsx:280:11)
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:688:17)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+Error: Uncaught [Error: useI18n must be used within an I18nProvider]
+    at reportException (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:353:9)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4213:16)
+    at invokeGuardedCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4277:31)
+    at beginWork$1 (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:27490:7)
+    at performUnitOfWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:26599:12) Error: useI18n must be used within an I18nProvider
+    at useI18n (C:/Users/cex/Desktop/vixo/client/src/lib/i18n.tsx:280:11)
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:688:17)
+    at renderWithHooks (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\cex\Desktop\vixo\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+    at invokeEventListeners (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (C:\Users\cex\Desktop\vixo\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+[90mstderr[2m | tests/game-chat-viewer-pill.test.tsx[2m > [22m[2mChatViewerCountPill — Task #75 UI contract[2m > [22m[2mopens the popover on click and renders profile-linked rows for every visible viewer
+[22m[39mThe above error occurred in the <ViewerActionMenu> component:
+
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:870:29)
+    at li
+    at ul
+    at div
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-scroll-area/dist/index.mjs:94:13
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-scroll-area/dist/index.mjs:32:7
+    at C:/Users/cex/Desktop/vixo/client/src/components/ui/scroll-area.tsx:11:56
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popper/dist/index.mjs:54:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs:24:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-focus-scope/dist/index.mjs:15:5
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:206:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:165:59
+    at Presence (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-presence/dist/index.mjs:19:11)
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:115:64
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-portal/dist/index.mjs:11:22
+    at Presence (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-presence/dist/index.mjs:19:11)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at PopoverPortal (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:107:11)
+    at C:/Users/cex/Desktop/vixo/client/src/components/ui/popover.tsx:14:60
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at Popper (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popper/dist/index.mjs:30:11)
+    at Popover (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:30:5)
+    at ChatViewerCountPill (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:643:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+The above error occurred in the <ViewerActionMenu> component:
+
+    at ViewerActionMenu (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:870:29)
+    at li
+    at ul
+    at div
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-scroll-area/dist/index.mjs:94:13
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-scroll-area/dist/index.mjs:32:7
+    at C:/Users/cex/Desktop/vixo/client/src/components/ui/scroll-area.tsx:11:56
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at div
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popper/dist/index.mjs:54:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs:24:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-focus-scope/dist/index.mjs:15:5
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:206:7
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:165:59
+    at Presence (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-presence/dist/index.mjs:19:11)
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:115:64
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:33:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-slot/dist/index.mjs:9:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-primitive/dist/index.mjs:27:13
+    at file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-portal/dist/index.mjs:11:22
+    at Presence (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-presence/dist/index.mjs:19:11)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at PopoverPortal (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:107:11)
+    at C:/Users/cex/Desktop/vixo/client/src/components/ui/popover.tsx:14:60
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at Provider (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-context/dist/index.mjs:27:15)
+    at Popper (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popper/dist/index.mjs:30:11)
+    at Popover (file:///C:/Users/cex/Desktop/vixo/node_modules/@radix-ui/react-popover/dist/index.mjs:30:5)
+    at ChatViewerCountPill (C:/Users/cex/Desktop/vixo/client/src/components/games/GameChat.tsx:643:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+ [31m❯[39m tests/game-chat-viewer-pill.test.tsx [2m([22m[2m4 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 379[2mms[22m[39m
+     [32m✓[39m shows the count + inline avatars and a +N overflow chip when spectators exceed the visible cap[32m 113[2mms[22m[39m
+[31m     [31m×[31m opens the popover on click and renders profile-linked rows for every visible viewer[39m[32m 247[2mms[22m[39m
+     [32m✓[39m hides the avatar stack when the visible viewer list is empty but still shows the count[32m 7[2mms[22m[39m
+     [32m✓[39m renders Arabic copy when the language prop is 'ar'[32m 10[2mms[22m[39m
+ [31m❯[39m tests/wallet-conversion-reverse.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/tournament-utils-normalize-defaults.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m tests/wallet-routing-end-to-end.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m server/storage/__tests__/direct-messages.history.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m server/storage/__tests__/legacy-chat-history.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m tests/realtime-runtime-validation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+[90mstderr[2m | tests/admin-balance-adjust-dialog.test.tsx[2m > [22m[2mAdmin per-currency Adjust → AdminBalanceAdjustDialog wiring[2m > [22m[2mclicking Adjust on the EGP row opens the dialog with EGP pre-selected
+[22m[39mWarning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+ [32m✓[39m tests/dm-load-older-strip.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m tests/spectator-panel-viewer-pill.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 346[2mms[22m[39m
+ [32m✓[39m tests/wallet-withdraw-dialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 859[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps confirm disabled when amount exceeds the SELECTED wallet's balance (SAR=50) [33m 561[2mms[22m[39m
+[90mstderr[2m | tests/admin-balance-adjust-dialog.test.tsx[2m > [22m[2mAdmin per-currency Adjust → AdminBalanceAdjustDialog wiring[2m > [22m[2mre-seeds when a different row is clicked after closing the dialog
+[22m[39mWarning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+ [32m✓[39m tests/admin-balance-adjust-dialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 963[2mms[22m[39m
+     [33m[2m✓[22m[39m clicking Adjust on the EGP row opens the dialog with EGP pre-selected [33m 533[2mms[22m[39m
+     [33m[2m✓[22m[39m re-seeds when a different row is clicked after closing the dialog [33m 428[2mms[22m[39m
+ [32m✓[39m tests/wallet-withdraw-currency-switcher.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1043[2mms[22m[39m
+     [33m[2m✓[22m[39m switching from USD to SAR clears the amount and updates available-balance [33m 1041[2mms[22m[39m
+ [32m✓[39m tests/p2p-create-offer-currency.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 827[2mms[22m[39m
+ [32m✓[39m tests/money-input.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 306[2mms[22m[39m
+ [32m✓[39m tests/permissions-section-ios-safari.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 332[2mms[22m[39m
+ [32m✓[39m tests/chat-composer-ime.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 298[2mms[22m[39m
+ [32m✓[39m tests/dm-scroll-anchor-prepend.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 183[2mms[22m[39m
+ [32m✓[39m tests/permission-row.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 181[2mms[22m[39m
+ [32m✓[39m tests/wallet-conversion-routes-http.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+ [32m✓[39m client/src/hooks/__tests__/keyboard-config-contract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m tests/tournament-refund-banner.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m tests/tournament-registration-state-badge.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 95[2mms[22m[39m
+ [32m✓[39m client/src/hooks/__tests__/use-keyboard-inset.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m client/src/hooks/__tests__/capacitor-config-contract.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/admin-theme-apply.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m client/src/hooks/__tests__/use-keyboard-inset-helpers.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/admin-balance-adjust-validation.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 298[2mms[22m[39m
+ [32m✓[39m tests/permission-catalogue.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m tests/wallet-balances.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m tests/pwa-detect.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+[90mstderr[2m | tests/tournament-listing-states.test.ts
+[22m[39m{"timestamp":"2026-05-06T21:32:03.922Z","level":"ERROR","message":"Failed to seed multiplayer games","error":{"name":"ReferenceError","message":"Cannot access 'rowsRef' before initialization","stack":"ReferenceError: Cannot access 'rowsRef' before initialization\n    at Object.select (C:/Users/cex/Desktop/vixo/tests/tournament-listing-states.test.ts:50:34)\n    at Object.listMultiplayerGames (C:/Users/cex/Desktop/vixo/server/storage/games.ts:92:13)\n    at seedMultiplayerGames (C:/Users/cex/Desktop/vixo/server/storage/index.ts:80:39)\n    at C:/Users/cex/Desktop/vixo/server/storage/index.ts:443:1\n    at processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at VitestModuleEvaluator._runInlinedModule (file:///C:/Users/cex/Desktop/vixo/node_modules/vitest/dist/module-evaluator.js:206:4)\n    at VitestModuleRunner.directRequest (file:///C:/Users/cex/Desktop/vixo/node_modules/vite/dist/node/module-runner.js:1146:59)\n    at VitestModuleRunner.cachedRequest (file:///C:/Users/cex/Desktop/vixo/node_modules/vite/dist/node/module-runner.js:1053:73)\n    at C:/Users/cex/Desktop/vixo/server/websocket/challenge-games/join-leave.ts:3:1\n    at VitestModuleEvaluator._runInlinedModule (file:///C:/Users/cex/Desktop/vixo/node_modules/vitest/dist/module-evaluator.js:206:4)"}}
+
+ [32m✓[39m tests/numerals.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/wallet-conversion-pairing.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/voice-websocket-runtime.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m tests/tournament-registration-state.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/chat-viewer-list-broadcast.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/tournament-withdraw-eligibility.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/permissions-policy-header.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/tournament-listing-states.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 100[2mms[22m[39m
+ [32m✓[39m tests/p2p-seal-integrity.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/casual-match-viewer-broadcast.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/wallet-currency-limit.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 14 [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/admin-balance-adjust-rollback-realdb.test.ts[2m [ tests/admin-balance-adjust-rollback-realdb.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m tests/admin-balance-adjust-rollback-realdb.test.ts:[2m52:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/call-permission-prompt.test.tsx[2m [ tests/call-permission-prompt.test.tsx ][22m
+[31m[1mError[22m: Failed to resolve import "@/components/calls/CallPermissionPrompt" from "tests/call-permission-prompt.test.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/cex/Desktop/vixo/tests/call-permission-prompt.test.tsx[39m:64:0
+[33m  20 |  const __vi_import_0__ = await import("react/jsx-dev-runtime");
+  21 |  const __vi_import_1__ = await import("@testing-library/react");
+  22 |  const __vi_import_2__ = await import("@/components/calls/CallPermissionPrompt");
+     |                                       ^
+  23 |  
+  24 |  import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";[39m
+[90m [2m❯[22m TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/config.js:[2m29003:43[22m[39m
+[90m [2m❯[22m TransformPluginContext.error node_modules/vite/dist/node/chunks/config.js:[2m29000:14[22m[39m
+[90m [2m❯[22m normalizeUrl node_modules/vite/dist/node/chunks/config.js:[2m27123:18[22m[39m
+[90m [2m❯[22m node_modules/vite/dist/node/chunks/config.js:[2m27181:32[22m[39m
+[90m [2m❯[22m TransformPluginContext.transform node_modules/vite/dist/node/chunks/config.js:[2m27149:4[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/config.js:[2m28801:14[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/config.js:[2m22670:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/chat-viewer-list-filter.test.ts[2m [ tests/chat-viewer-list-filter.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/socketio/challenge-chat-bridge.ts:[2m3:1[22m[39m
+[90m [2m❯[22m tests/chat-viewer-list-filter.test.ts:[2m2:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/permissions-banner-modal-overlap.test.tsx[2m [ tests/permissions-banner-modal-overlap.test.tsx ][22m
+[31m[1mError[22m: Failed to resolve import "@/components/PermissionsBanner" from "tests/permissions-banner-modal-overlap.test.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/cex/Desktop/vixo/tests/permissions-banner-modal-overlap.test.tsx[39m:67:0
+[33m  23 |  const __vi_import_1__ = await import("@testing-library/react");
+  24 |  const __vi_import_2__ = await import("@/components/ui/dialog");
+  25 |  const __vi_import_3__ = await import("@/components/PermissionsBanner");
+     |                                       ^
+  26 |  
+  27 |  import { afterEach, describe, expect, it, vi } from "vitest";[39m
+[90m [2m❯[22m TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/config.js:[2m29003:43[22m[39m
+[90m [2m❯[22m TransformPluginContext.error node_modules/vite/dist/node/chunks/config.js:[2m29000:14[22m[39m
+[90m [2m❯[22m normalizeUrl node_modules/vite/dist/node/chunks/config.js:[2m27123:18[22m[39m
+[90m [2m❯[22m node_modules/vite/dist/node/chunks/config.js:[2m27181:32[22m[39m
+[90m [2m❯[22m TransformPluginContext.transform node_modules/vite/dist/node/chunks/config.js:[2m27149:4[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/config.js:[2m28801:14[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/config.js:[2m22670:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/permissions-policy-header-smoke.test.ts[2m [ tests/permissions-policy-header-smoke.test.ts ][22m
+[31m[1mSyntaxError[22m: Invalid or unexpected token[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tournament-refund-picker.test.ts[2m [ tests/tournament-refund-picker.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/routes/tournaments/listing.ts:[2m2:1[22m[39m
+[90m [2m❯[22m tests/tournament-refund-picker.test.ts:[2m2:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tournament-refunds-endpoint.test.ts[2m [ tests/tournament-refunds-endpoint.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m tests/tournament-refunds-endpoint.test.ts:[2m50:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tournament-utils-normalize-defaults.test.ts[2m [ tests/tournament-utils-normalize-defaults.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/lib/tournament-utils.ts:[2m12:1[22m[39m
+[90m [2m❯[22m tests/tournament-utils-normalize-defaults.test.ts:[2m2:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/wallet-balances-concurrency.test.ts[2m [ tests/wallet-balances-concurrency.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m tests/wallet-balances-concurrency.test.ts:[2m29:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/wallet-conversion-quote.test.ts[2m [ tests/wallet-conversion-quote.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/lib/currency-conversion.ts:[2m17:1[22m[39m
+[90m [2m❯[22m tests/wallet-conversion-quote.test.ts:[2m2:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/wallet-conversion-reverse.test.ts[2m [ tests/wallet-conversion-reverse.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m tests/wallet-conversion-reverse.test.ts:[2m34:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/wallet-routing-end-to-end.test.ts[2m [ tests/wallet-routing-end-to-end.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m tests/wallet-routing-end-to-end.test.ts:[2m69:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m server/storage/__tests__/direct-messages.history.test.ts[2m [ server/storage/__tests__/direct-messages.history.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/storage/__tests__/direct-messages.history.test.ts:[2m37:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m server/storage/__tests__/legacy-chat-history.test.ts[2m [ server/storage/__tests__/legacy-chat-history.test.ts ][22m
+[31m[1mError[22m: DATABASE_URL must be set. Did you forget to provision a database?[39m
+[36m [2m❯[22m server/db.ts:[2m9:9[22m[39m
+    [90m  7|[39m
+    [90m  8|[39m [35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) {
+    [90m  9|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m         [31m^[39m
+    [90m 10|[39m     "DATABASE_URL must be set. Did you forget to provision a database?…
+    [90m 11|[39m   )[33m;[39m
+[90m [2m❯[22m server/storage/__tests__/legacy-chat-history.test.ts:[2m33:1[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/34]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 20 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick (accept) → real useCallSession claims the challenge invite
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick (decline) → real useCallSession resets the challenge invite
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick (accept) → real PrivateCallLayer claims the DM invite
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick (decline) → real PrivateCallLayer tears down the DM invite
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick targeting a callId neither manager owns → both refuse
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mSW notificationclick (accept) routes to the correct manager when both have invites
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mlegacy SW action 'open_call' is treated as accept (back-compat with old service workers)
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mdispatchCallAction hangup → real useCallSession tears down the active challenge call (active → ended)
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mdispatchCallAction hangup → real PrivateCallLayer tears down the active DM call (active → idle)
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mdispatchCallAction hangup with mismatched callId → real useCallSession refuses to hang up the active challenge call
+[41m[1m FAIL [22m[49m tests/call-actions-react-tree.test.tsx[2m > [22mcall-action bridge — real production tree[2m > [22mdispatchCallAction hangup with mismatched callId → neither manager tears down (no cross-manager false claim)
+[31m[1mError[22m: No QueryClient set, use QueryClientProvider to set one[39m
+[90m [2m❯[22m useQueryClient node_modules/@tanstack/react-query/src/QueryClientProvider.tsx:[2m18:10[22m[39m
+[90m [2m❯[22m useBaseQuery node_modules/@tanstack/react-query/src/useBaseQuery.ts:[2m53:17[22m[39m
+[90m [2m❯[22m useQuery node_modules/@tanstack/react-query/src/useQuery.ts:[2m46:9[22m[39m
+[36m [2m❯[22m useIceServers client/src/hooks/use-ice-servers.ts:[2m39:31[22m[39m
+    [90m 37|[39m
+    [90m 38|[39m [35mexport[39m [35mfunction[39m [34museIceServers[39m()[33m:[39m [33mUseIceServersResult[39m {
+    [90m 39|[39m   [35mconst[39m { data[33m,[39m isLoading } [33m=[39m useQuery[33m<[39m[33mIceServersResponse[39m[33m>[39m({
+    [90m   |[39m                               [31m^[39m
+    [90m 40|[39m     queryKey[33m:[39m [[32m"/api/rtc/ice-servers"[39m][33m,[39m
+    [90m 41|[39m     queryFn[33m:[39m fetchIceServers[33m,[39m
+[90m [2m❯[22m useCallSession client/src/hooks/use-call-session.tsx:[2m101:32[22m[39m
+[90m [2m❯[22m CallSessionProvider client/src/components/calls/CallSessionProvider.tsx:[2m23:16[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:[2m15486:18[22m[39m
+[90m [2m❯[22m mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:[2m20103:13[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom.development.js:[2m21626:16[22m[39m
+[90m [2m❯[22m beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:[2m27465:14[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/call-permission-native-android-ordering.test.tsx[2m > [22museCallSession on native Android — call-permission ordering[2m > [22minvokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia
+[41m[1m FAIL [22m[49m tests/call-permission-native-android-ordering.test.tsx[2m > [22museCallSession on native Android — call-permission ordering[2m > [22mopens the rationale modal with permanentlyDenied:true when the plugin reports microphonePermanentlyDenied
+[31m[1mError[22m: No QueryClient set, use QueryClientProvider to set one[39m
+[90m [2m❯[22m useQueryClient node_modules/@tanstack/react-query/src/QueryClientProvider.tsx:[2m18:10[22m[39m
+[90m [2m❯[22m useBaseQuery node_modules/@tanstack/react-query/src/useBaseQuery.ts:[2m53:17[22m[39m
+[90m [2m❯[22m useQuery node_modules/@tanstack/react-query/src/useQuery.ts:[2m46:9[22m[39m
+[36m [2m❯[22m useIceServers client/src/hooks/use-ice-servers.ts:[2m39:31[22m[39m
+    [90m 37|[39m
+    [90m 38|[39m [35mexport[39m [35mfunction[39m [34museIceServers[39m()[33m:[39m [33mUseIceServersResult[39m {
+    [90m 39|[39m   [35mconst[39m { data[33m,[39m isLoading } [33m=[39m useQuery[33m<[39m[33mIceServersResponse[39m[33m>[39m({
+    [90m   |[39m                               [31m^[39m
+    [90m 40|[39m     queryKey[33m:[39m [[32m"/api/rtc/ice-servers"[39m][33m,[39m
+    [90m 41|[39m     queryFn[33m:[39m fetchIceServers[33m,[39m
+[90m [2m❯[22m Module.useCallSession client/src/hooks/use-call-session.tsx:[2m101:32[22m[39m
+[90m [2m❯[22m CallSessionHarness tests/call-permission-native-android-ordering.test.tsx:[2m323:19[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:[2m15486:18[22m[39m
+[90m [2m❯[22m mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:[2m20103:13[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom.development.js:[2m21626:16[22m[39m
+[90m [2m❯[22m beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:[2m27465:14[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/call-permission-native-android-ordering.test.tsx[2m > [22mVoiceChat on native Android — call-permission ordering[2m > [22minvokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia when the in-match voice toggle goes live
+[41m[1m FAIL [22m[49m tests/call-permission-native-android-ordering.test.tsx[2m > [22mVoiceChat on native Android — call-permission ordering[2m > [22mopens the rationale modal with permanentlyDenied:true and skips getUserMedia when the plugin reports microphonePermanentlyDenied
+[31m[1mError[22m: No QueryClient set, use QueryClientProvider to set one[39m
+[90m [2m❯[22m useQueryClient node_modules/@tanstack/react-query/src/QueryClientProvider.tsx:[2m18:10[22m[39m
+[90m [2m❯[22m useBaseQuery node_modules/@tanstack/react-query/src/useBaseQuery.ts:[2m53:17[22m[39m
+[90m [2m❯[22m useQuery node_modules/@tanstack/react-query/src/useQuery.ts:[2m46:9[22m[39m
+[36m [2m❯[22m useIceServers client/src/hooks/use-ice-servers.ts:[2m39:31[22m[39m
+    [90m 37|[39m
+    [90m 38|[39m [35mexport[39m [35mfunction[39m [34museIceServers[39m()[33m:[39m [33mUseIceServersResult[39m {
+    [90m 39|[39m   [35mconst[39m { data[33m,[39m isLoading } [33m=[39m useQuery[33m<[39m[33mIceServersResponse[39m[33m>[39m({
+    [90m   |[39m                               [31m^[39m
+    [90m 40|[39m     queryKey[33m:[39m [[32m"/api/rtc/ice-servers"[39m][33m,[39m
+    [90m 41|[39m     queryFn[33m:[39m fetchIceServers[33m,[39m
+[90m [2m❯[22m VoiceChat client/src/components/games/VoiceChat.tsx:[2m68:32[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:[2m15486:18[22m[39m
+[90m [2m❯[22m mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:[2m20103:13[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom.development.js:[2m21626:16[22m[39m
+[90m [2m❯[22m beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:[2m27465:14[22m[39m
+[90m [2m❯[22m performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:[2m26599:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/game-chat-viewer-pill.test.tsx[2m > [22mChatViewerCountPill — Task #75 UI contract[2m > [22mopens the popover on click and renders profile-linked rows for every visible viewer
+[31m[1mError[22m: useI18n must be used within an I18nProvider[39m
+[36m [2m❯[22m useI18n client/src/lib/i18n.tsx:[2m280:11[22m[39m
+    [90m278|[39m   [35mconst[39m context [33m=[39m [34museContext[39m([33mI18nContext[39m)[33m;[39m
+    [90m279|[39m   [35mif[39m ([33m![39mcontext) {
+    [90m280|[39m     [35mthrow[39m [35mnew[39m [33mError[39m([32m'useI18n must be used within an I18nProvider'[39m)[33m;[39m
+    [90m   |[39m           [31m^[39m
+    [90m281|[39m   }
+    [90m282|[39m   [35mreturn[39m context[33m;[39m
+[90m [2m❯[22m ViewerActionMenu client/src/components/games/GameChat.tsx:[2m688:17[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:[2m15486:18[22m[39m
+[90m [2m❯[22m mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:[2m20103:13[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom.development.js:[2m21626:16[22m[39m
+[90m [2m❯[22m beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:[2m27465:14[22m[39m
+[90m [2m❯[22m performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:[2m26599:12[22m[39m
+[90m [2m❯[22m workLoopSync node_modules/react-dom/cjs/react-dom.development.js:[2m26505:5[22m[39m
+[90m [2m❯[22m renderRootSync node_modules/react-dom/cjs/react-dom.development.js:[2m26473:7[22m[39m
+[90m [2m❯[22m recoverFromConcurrentError node_modules/react-dom/cjs/react-dom.development.js:[2m25889:20[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/native-call-permissions-kind.test.ts[2m > [22misPermanentlyDeniedForCall[2m > [22mvoice: only the microphone permanent-denial flag matters
+[31m[1mTypeError[22m: isPermanentlyDeniedForCall is not a function[39m
+[36m [2m❯[22m tests/native-call-permissions-kind.test.ts:[2m34:7[22m[39m
+    [90m 32|[39m   it("voice: only the microphone permanent-denial flag matters", () =>…
+    [90m 33|[39m     [34mexpect[39m(
+    [90m 34|[39m       [34misPermanentlyDeniedForCall[39m(
+    [90m   |[39m       [31m^[39m
+    [90m 35|[39m         [32m"voice"[39m[33m,[39m
+    [90m 36|[39m         [34mstatus[39m({ microphonePermanentlyDenied[33m:[39m [35mtrue[39m })[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/native-call-permissions-kind.test.ts[2m > [22misPermanentlyDeniedForCall[2m > [22mvideo: BOTH the microphone and camera permanent-denial flags route to the modal's Open Settings state
+[31m[1mTypeError[22m: isPermanentlyDeniedForCall is not a function[39m
+[36m [2m❯[22m tests/native-call-permissions-kind.test.ts:[2m51:7[22m[39m
+    [90m 49|[39m   it("video: BOTH the microphone and camera permanent-denial flags rou…
+    [90m 50|[39m     [34mexpect[39m(
+    [90m 51|[39m       [34misPermanentlyDeniedForCall[39m(
+    [90m   |[39m       [31m^[39m
+    [90m 52|[39m         [32m"video"[39m[33m,[39m
+    [90m 53|[39m         [34mstatus[39m({ microphonePermanentlyDenied[33m:[39m [35mtrue[39m })[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/native-call-permissions-kind.test.ts[2m > [22misMissingForCall[2m > [22mvoice: only flags the microphone as required
+[31m[1mTypeError[22m: isMissingForCall is not a function[39m
+[36m [2m❯[22m tests/native-call-permissions-kind.test.ts:[2m78:7[22m[39m
+    [90m 76|[39m   [34mit[39m([32m"voice: only flags the microphone as required"[39m[33m,[39m () [33m=>[39m {
+    [90m 77|[39m     [34mexpect[39m(
+    [90m 78|[39m       [34misMissingForCall[39m([32m"voice"[39m[33m,[39m [34mstatus[39m({ microphone[33m:[39m [32m"denied"[39m }))[33m,[39m
+    [90m   |[39m       [31m^[39m
+    [90m 79|[39m     )[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m 80|[39m     expect(isMissingForCall("voice", status({ microphone: "prompt" }))…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/34]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/native-call-permissions-kind.test.ts[2m > [22misMissingForCall[2m > [22mvideo: flags either microphone OR camera as required
+[31m[1mTypeError[22m: isMissingForCall is not a function[39m
+[36m [2m❯[22m tests/native-call-permissions-kind.test.ts:[2m88:7[22m[39m
+    [90m 86|[39m   [34mit[39m([32m"video: flags either microphone OR camera as required"[39m[33m,[39m () [33m=>[39m {
+    [90m 87|[39m     [34mexpect[39m(
+    [90m 88|[39m       [34misMissingForCall[39m([32m"video"[39m[33m,[39m [34mstatus[39m({ microphone[33m:[39m [32m"denied"[39m }))[33m,[39m
+    [90m   |[39m       [31m^[39m
+    [90m 89|[39m     )[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m 90|[39m     expect(isMissingForCall("video", status({ camera: "denied" }))).to…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/34]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m18 failed[39m[22m[2m | [22m[1m[32m36 passed[39m[22m[90m (54)[39m
+[2m      Tests [22m [1m[31m20 failed[39m[22m[2m | [22m[1m[32m299 passed[39m[22m[90m (319)[39m
+[2m   Start at [22m 00:31:47
+[2m   Duration [22m 18.26s[2m (transform 22.71s, setup 17.69s, import 34.98s, tests 7.60s, environment 72.48s)[22m
+

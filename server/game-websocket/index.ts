@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { Server } from 'http';
-import { moveRateLimiter, resignRateLimiter } from '../lib/rate-limiter';
+import { moveRateLimiter, resignRateLimiter, sessionMoveRateLimiter, sessionUserMoveRateLimiter } from '../lib/rate-limiter';
 import { redisRateLimit } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { checkWsUpgradeRateLimit, isWsOriginAllowed, rejectWsUpgrade } from '../lib/ws-upgrade-guard';
@@ -13,7 +14,8 @@ import { handleGetState, handleResign, handleOfferDraw, handleRespondDraw } from
 import { handleLeaveGame, handleDisconnect } from './timers-disconnect';
 import { handleSetSpeedMode } from './speed-mode';
 import { createGameWsProtocolError, validateGameMessage, type ValidatedGameMessage } from './validation';
-import { wsEventLagMs } from '../lib/prometheus-metrics';
+import { wsEventLagMs, wsMoveRateLimitedTotal } from '../lib/prometheus-metrics';
+import { appendGameEvent, finalizeGameEvent } from '../lib/game-events';
 
 export { rooms, userConnections } from './types';
 
@@ -143,16 +145,111 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
     case 'spectate':
       await handleSpectate(ws, message.payload);
       break;
-    case 'make_move':
-      if (ws.userId) {
-        const moveRL = moveRateLimiter.check(ws.userId);
-        if (!moveRL.allowed) {
-          send(ws, { type: 'error', payload: { error: 'Too many moves, slow down', code: 'rate_limit', retryAfterMs: moveRL.retryAfterMs } });
-          break;
-        }
+    case 'make_move': {
+      if (!ws.userId || !ws.sessionId) {
+        // If we don't have enough identity context, let move handler enforce session/auth.
+        await handleMakeMove(ws, message.payload);
+        break;
       }
+
+      // Cache for TS narrowing so we never pass possibly-undefined values
+      const sessionId: string = ws.sessionId;
+      const userId: string = ws.userId;
+
+      const { idempotencyKey } = message.payload;
+
+      const normalizedIdempotencyKey =
+        typeof idempotencyKey === 'string' ? idempotencyKey.trim().slice(0, 128) : '';
+
+      const attemptId = randomUUID();
+      const correlationId = normalizedIdempotencyKey
+        ? `live_game_move_corr:${sessionId}:${userId}:${normalizedIdempotencyKey}`.slice(0, 128)
+        : attemptId;
+
+      const logThrottledMove = async (scope: 'user' | 'session' | 'session_user', retryAfterMs: number | undefined) => {
+        const eventId = randomUUID();
+        const idempotencyKeyForAudit = `live_game_move_rl:${sessionId}:${userId}:${scope}:${correlationId}`.slice(0, 128);
+
+        let recordId: string | undefined;
+
+        try {
+          const result = await appendGameEvent({
+            eventId,
+            idempotencyKey: idempotencyKeyForAudit,
+            sessionId,
+            source: 'live_game_ws',
+            eventType: 'move_rate_limited',
+            actorId: userId,
+            actorType: 'player',
+            moveType: typeof message.payload.move?.type === 'string' ? message.payload.move.type : 'move',
+            payload: {
+              scope,
+              retryAfterMs: retryAfterMs ?? null,
+              correlationId,
+              attemptId,
+            },
+          });
+
+          recordId = result.recordId;
+
+          await finalizeGameEvent(recordId, 'rejected', 'rate_limit');
+        } catch (err) {
+          // Never fail closed for audit logging
+          logger.warn(`[GameWS][RateLimitAudit] Failed to append throttled move audit for session=${sessionId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      };
+
+      const moveRL = moveRateLimiter.check(userId);
+      if (!moveRL.allowed) {
+        wsMoveRateLimitedTotal.inc({ scope: 'user' });
+        await logThrottledMove('user', moveRL.retryAfterMs);
+        send(ws, {
+          type: 'error',
+          payload: {
+            error: 'Too many moves, slow down',
+            code: 'rate_limit',
+            retryAfterMs: moveRL.retryAfterMs,
+            correlationId,
+          },
+        });
+        break;
+      }
+
+      const sessionRL = sessionMoveRateLimiter.check(sessionId);
+      if (!sessionRL.allowed) {
+        wsMoveRateLimitedTotal.inc({ scope: 'session' });
+        await logThrottledMove('session', sessionRL.retryAfterMs);
+        send(ws, {
+          type: 'error',
+          payload: {
+            error: 'Too many moves in this match, slow down',
+            code: 'rate_limit',
+            retryAfterMs: sessionRL.retryAfterMs,
+            correlationId,
+          },
+        });
+        break;
+      }
+
+      const sessionUserRL = sessionUserMoveRateLimiter.check(sessionId, userId);
+      if (!sessionUserRL.allowed) {
+        wsMoveRateLimitedTotal.inc({ scope: 'session_user' });
+        await logThrottledMove('session_user', sessionUserRL.retryAfterMs);
+        send(ws, {
+          type: 'error',
+          payload: {
+            error: 'Too many moves from this player in this match, slow down',
+            code: 'rate_limit',
+            retryAfterMs: sessionUserRL.retryAfterMs,
+            correlationId,
+          },
+        });
+        break;
+      }
+
       await handleMakeMove(ws, message.payload);
       break;
+    }
     case 'chat':
       await handleChat(ws, message.payload);
       break;

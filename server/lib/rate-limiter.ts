@@ -59,10 +59,31 @@ export const giftRateLimiter = {
   reset: resetRateLimit
 };
 
-// Game move rate limiter: prevent move spam (10 moves per 2 seconds)
+/**
+ * Game move rate limiters
+ * - moveRateLimiter: per-user global (prevents per-user spam)
+ * - sessionMoveRateLimiter: per-session global (prevents flooding the same room)
+ * - sessionUserMoveRateLimiter: per-session + per-user (prevents multi-connection spam)
+ */
+
+// Game move rate limiter: prevent move spam per user (10 moves per 2 seconds)
 export const moveRateLimiter = {
   check: (userId: string) => checkRateLimit(`move:${userId}`, { maxMessages: 10, windowMs: 2000 }),
   reset: (userId: string) => resetRateLimit(`move:${userId}`)
+};
+
+// Prevent move spam for a single session (20 moves per 2 seconds total across all players)
+export const sessionMoveRateLimiter = {
+  check: (sessionId: string) => checkRateLimit(`move:session:${sessionId}`, { maxMessages: 20, windowMs: 2000 }),
+  reset: (sessionId: string) => resetRateLimit(`move:session:${sessionId}`)
+};
+
+// Prevent move spam for a single user inside a session (10 moves per 2 seconds)
+export const sessionUserMoveRateLimiter = {
+  check: (sessionId: string, userId: string) =>
+    checkRateLimit(`move:session-user:${sessionId}:${userId}`, { maxMessages: 10, windowMs: 2000 }),
+  reset: (sessionId: string, userId: string) =>
+    resetRateLimit(`move:session-user:${sessionId}:${userId}`)
 };
 
 // WebSocket connection rate limiter: prevent connection flooding (5 connections per 10 seconds)
