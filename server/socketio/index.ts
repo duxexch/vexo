@@ -250,6 +250,22 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
   /* ---------------------------- /chat namespace --------------------------- */
   const chatNs: ChatNamespace = io.of(SOCKETIO_NS_CHAT) as unknown as ChatNamespace;
 
+  // Presence fan-out control: viewer_list is best-effort and non-gating.
+  // Debounce per-room so join/leave churn doesn't create broadcast storms.
+  const viewerListDebounceMs = 200;
+  const pendingViewerListUpdates = new Map<string, NodeJS.Timeout>();
+
+  function scheduleViewerListUpdate(roomId: string): void {
+    if (pendingViewerListUpdates.has(roomId)) return;
+
+    const t = setTimeout(() => {
+      pendingViewerListUpdates.delete(roomId);
+      void broadcastChallengeViewerList(chatNs, roomId);
+    }, viewerListDebounceMs);
+
+    pendingViewerListUpdates.set(roomId, t);
+  }
+
   chatNs.use(async (socket, next) => {
     const auth = await authenticateHandshake(socket);
     if (!auth) return next(new Error("auth_required"));

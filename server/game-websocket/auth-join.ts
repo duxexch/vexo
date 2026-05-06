@@ -16,6 +16,7 @@ import { rooms, userConnections, disconnectedPlayers, TURN_TIMEOUT_MS, turnTimer
 import { send, sendError, broadcastToRoom, getPlayerList } from './utils';
 import { processAdaptiveAiTurns } from './ai-turns';
 import { startTurnTimer } from './timers-disconnect';
+import { wsReconnectTotal } from '../lib/prometheus-metrics';
 
 export async function handleAuthenticate(ws: AuthenticatedWebSocket, payload: { token: string }) {
   try {
@@ -112,6 +113,7 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
     const disconnectKey = `${sessionId}:${ws.userId}`;
     const pendingDisconnect = disconnectedPlayers.get(disconnectKey);
     if (pendingDisconnect) {
+      wsReconnectTotal.inc();
       clearTimeout(pendingDisconnect.timer);
       disconnectedPlayers.delete(disconnectKey);
       logger.info(`[WS] Player ${ws.userId} reconnected to session ${sessionId} — forfeit cancelled`);

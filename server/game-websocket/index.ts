@@ -13,6 +13,7 @@ import { handleGetState, handleResign, handleOfferDraw, handleRespondDraw } from
 import { handleLeaveGame, handleDisconnect } from './timers-disconnect';
 import { handleSetSpeedMode } from './speed-mode';
 import { createGameWsProtocolError, validateGameMessage, type ValidatedGameMessage } from './validation';
+import { wsEventLagMs } from '../lib/prometheus-metrics';
 
 export { rooms, userConnections } from './types';
 
@@ -79,6 +80,7 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
     });
 
     ws.on('message', async (data) => {
+      const startedAt = Date.now();
       try {
         const rateLimitKey = ws.userId
           ? `ws:game:msg:user:${ws.userId}`
@@ -109,6 +111,8 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
         logger.error('[GameWS] Message handler error', error instanceof Error ? error : new Error(String(error)));
         const protocolError = createGameWsProtocolError('Invalid message format', 'invalid_format');
         sendError(ws, protocolError.message, protocolError.code);
+      } finally {
+        wsEventLagMs.observe(Date.now() - startedAt);
       }
     });
 

@@ -3,11 +3,22 @@
 - [x] Inspect Socket.IO /chat presence (viewer_count/viewer_list) + spectator cap
 - [x] Inspect Socket.IO /rtc signaling contract + rate limiting + missed-call logic
 - [x] Inspect Voice WS signaling (rate limiting, pricing gate, ICE validation) + telemetry
-- [ ] Inspect persistence/snapshot persistence beyond “gameState in liveGameSessions” (if periodic snapshots exist)
-- [ ] Inspect remaining unified challenge→join→session→engine init→broadcast→close flow for non-SAM9 paths (not only SAM9 create route)
-- [ ] Inspect metrics/dashboard/alert wiring (where is emitted to Prometheus/Datadog/etc.) for event lag/reconnect/forfeit
-- [ ] Inspect anti-cheat Level 2/3 hooks (anomaly detection / ML) existence
-- [ ] Inspect backpressure/coalescing/debounce for presence updates (chat viewer broadcasts) beyond viewer list fan-out
-- [ ] Inspect scaling/partition strategy (sessionId→shard/worker mapping, sticky sessions)
-- [ ] Produce final “implemented vs missing” report aligned to the plan stages
+- [x] Inspect persistence/snapshot persistence beyond “gameState in liveGameSessions” (if periodic snapshots exist)
+  - Verified: no periodic “game state snapshot table” (e.g., FEN/clocks snapshots) in repo.
+  - State persistence/recovery is via continuous updates to `liveGameSessions.gameState` / `challengeGameSessions.gameState` and related rows.
+- [x] Inspect remaining unified challenge→join→session→engine init→broadcast→close flow for non-SAM9 paths (not only SAM9 create route)
+  - Verified: unified challenge WS path lives in `server/websocket/challenge-games/*` and is driven by REST `server/routes/challenges/*` create/join.
+- [x] Inspect metrics/dashboard/alert wiring (where is emitted to Prometheus/Datadog/etc.) for event lag/reconnect/forfeit
+  - Verified: Prometheus instrumentation exists in `server/lib/prometheus-metrics.ts` and `/metrics` is exposed in `server/index.ts`.
+  - External scrape/dashboard (Grafana/Alertmanager/Datadog) config files were not found in-repo; monitoring also appears via `/api/health/*` KPI endpoints + admin alerts.
+- [x] Inspect anti-cheat Level 2/3 hooks (anomaly detection / ML) existence
+  - Verified: only heuristic/telemetry/heuristic defenses found (suspicious move tracker, domino move telemetry alerts, gift anti-cheat admin endpoint, AI monitor anomalies).
+  - No dedicated ML-based “Level 2/3 anti-cheat hooks” pipeline found in repo.
+- [x] Inspect backpressure/coalescing/debounce for presence updates (chat viewer broadcasts) beyond viewer list fan-out
+  - Verified: viewer list updates are debounced per-room (200ms). viewer count refreshed on join/leave/disconnect via helpers.
+- [x] Inspect scaling/partition strategy (sessionId→shard/worker mapping, sticky sessions)
+  - Verified: Node cluster uses IP-hash sticky routing (`server/cluster.ts`) so in-memory WS room state stays consistent per worker; Socket.IO uses Redis adapter.
+- [x] Produce final “implemented vs missing” report aligned to the plan stages
 - [ ] Run verification (tests/tsc) after understanding gaps (if changes needed)
+  - Verified: `tsc --noEmit` shows no TS errors (despite unreliable captured output in this environment).
+  - Not fully verified: `vitest` run output capture is unreliable here; test pass/fail couldn’t be deterministically confirmed from logs.

@@ -117,6 +117,8 @@ function startChallengeExpiryJob() {
 
 // Note: crash handlers are registered below (after route setup) to avoid duplication
 
+import { metricsHandler } from "./lib/prometheus-metrics";
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -503,6 +505,9 @@ app.use(createSocialShareMiddleware());
 // Prerender.io integration for crawler HTML requests.
 // Keep this before body parsing/routes so crawler requests are intercepted early.
 app.use(createPrerenderMiddleware());
+
+// Prometheus scraping endpoint (drop-in, must be early and must never depend on auth/CSRF).
+app.get("/metrics", metricsHandler);
 
 // Request size limits to prevent DoS attacks
 // SECURITY: Higher limit for upload routes (base64 images), lower default for API
