@@ -77,6 +77,9 @@ export interface JoinGamePayload {
 export interface MakeMovePayload {
   sessionId: string;
   move: MoveData;
+  expectedTurn?: number;
+  idempotencyKey?: string;
+  correlationId?: string;
 }
 
 export interface ChatPayload {

@@ -756,12 +756,17 @@ export function useGameWebSocket(sessionId: string | null) {
     setIsMovePending(true);
     movePendingSinceRef.current = Date.now();
 
+    const idempotencyKey = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     wsRef.current.send(JSON.stringify({
       type: 'make_move',
       payload: {
         sessionId: sessionIdRef.current,
         move,
-        expectedTurn: turnNumberRef.current
+        expectedTurn: turnNumberRef.current,
+        idempotencyKey
       }
     }));
     return true;

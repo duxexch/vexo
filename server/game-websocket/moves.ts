@@ -28,7 +28,14 @@ const GAME_MOVE_IDEMPOTENCY_STRICT = process.env.GAME_MOVE_IDEMPOTENCY_STRICT !=
 const GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL = process.env.GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL !== 'false';
 const GAME_REPLAY_SHADOW_ENABLED = process.env.GAME_REPLAY_SHADOW_ENABLED !== 'false';
 
-export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move: MoveData; expectedTurn?: number; idempotencyKey?: string }) {
+interface HandleMakeMovePayload {
+  move: MoveData;
+  expectedTurn?: number;
+  idempotencyKey?: string;
+  correlationId?: string;
+}
+
+export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: HandleMakeMovePayload) {
   if (!ws.userId || !ws.sessionId) {
     sendError(ws, 'Not in a game');
     return;
@@ -56,7 +63,15 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
   const normalizedIdempotencyKey = typeof payload.idempotencyKey === 'string'
     ? payload.idempotencyKey.trim().slice(0, 128)
     : '';
-  const eventId = normalizedIdempotencyKey || randomUUID();
+  if (GAME_MOVE_IDEMPOTENCY_STRICT && !normalizedIdempotencyKey) {
+    sendError(ws, 'Missing idempotency key for move submission', 'IDEMPOTENCY_KEY_REQUIRED');
+    return;
+  }
+
+  const correlationId = typeof payload.correlationId === 'string' && payload.correlationId.trim().length > 0
+    ? payload.correlationId.trim().slice(0, 128)
+    : randomUUID();
+  const eventId = normalizedIdempotencyKey || correlationId;
   const moveId = normalizedIdempotencyKey || eventId;
   const idempotencyReference = normalizedIdempotencyKey
     ? `live_game_move_idem:${sessionId}:${userId}:${normalizedIdempotencyKey}`
@@ -105,6 +120,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
             errorKey: 'game.duplicateMove',
             code: 'duplicate_event',
             requiresSync: false,
+            correlationId,
           }
         });
         return;
@@ -128,6 +144,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
         errorKey: 'game.eventLogUnavailable',
         code: 'event_log_unavailable',
         requiresSync: true,
+        correlationId,
       }
     });
     return;
@@ -334,7 +351,8 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
         payload: {
           error: 'Game state has changed. Syncing...',
           errorKey: 'game.turnMismatch',
-          requiresSync: true
+          requiresSync: true,
+          correlationId
         }
       });
       await syncRoom();
@@ -342,13 +360,13 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
       const moveErr = error as Error & { validationError?: string; errorKey?: string };
       send(ws, {
         type: 'move_rejected',
-        payload: { error: moveErr.validationError, errorKey: moveErr.errorKey }
+        payload: { error: moveErr.validationError, errorKey: moveErr.errorKey, correlationId }
       });
     } else if (errorMessage === 'MOVE_APPLY_FAILED') {
       const applyErr = error as Error & { applyError?: string };
       send(ws, {
         type: 'move_rejected',
-        payload: { error: applyErr.applyError }
+        payload: { error: applyErr.applyError, correlationId }
       });
     } else {
       sendError(ws, 'Failed to save move. Please try again.');
