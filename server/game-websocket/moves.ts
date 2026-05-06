@@ -21,7 +21,10 @@ import { startTurnTimer, clearTurnTimer } from './timers-disconnect';
 import { getErrorMessage } from './types';
 import { processAdaptiveAiTurns } from './ai-turns';
 import { appendGameEvent, finalizeGameEvent } from '../lib/game-events';
-import { runReplayShadowValidation } from '../lib/game-replay-shadow';
+import { runReplayShadowValidation, runSessionReplayValidation } from '../lib/game-replay-shadow';
+import { evaluateAndRecordSubmission, evaluateAndRecordInvalid } from '../lib/game-level1-anomaly';
+import { gameLevel1AnomalyTotal } from '../lib/prometheus-metrics';
+import { persistGameSessionSnapshotIfDue } from '../lib/game-session-snapshots';
 
 const GAME_EVENT_LOG_ENABLED = process.env.GAME_EVENT_LOG_ENABLED !== 'false';
 const GAME_MOVE_IDEMPOTENCY_STRICT = process.env.GAME_MOVE_IDEMPOTENCY_STRICT !== 'false';
@@ -115,6 +118,8 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
         payload: {
           move: payload.move as unknown as Record<string, unknown>,
           expectedTurn: payload.expectedTurn ?? null,
+          correlationId,
+          attemptId,
         },
       });
 
@@ -183,6 +188,38 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
         errorKey: 'game.eventLogUnavailable',
         code: 'event_log_unavailable',
         requiresSync: true,
+        correlationId,
+      }
+    });
+    return;
+  }
+
+  // Level-1 anomaly detection (rule-based) — CIS Security Control (Abuse/Malicious activity)
+  const submissionAnomaly = evaluateAndRecordSubmission({
+    sessionId,
+    userId,
+    now: Date.now(),
+  });
+
+  if (submissionAnomaly.blocked) {
+    for (const anomalyType of submissionAnomaly.anomalies) {
+      gameLevel1AnomalyTotal.inc({ anomalyType, result: 'blocked' });
+    }
+
+    await finalizeGameEvent(
+      moveEventRecordId,
+      'rejected',
+      `level1_submission:${submissionAnomaly.anomalies[0] || 'anomaly'}`.slice(0, 64),
+    );
+
+    send(ws, {
+      type: 'move_rejected',
+      payload: {
+        error: 'Move rejected due to suspicious activity',
+        errorKey: 'game.level1Anomaly',
+        code: 'level1_anomaly',
+        requiresSync: true,
+        retryAfterMs: submissionAnomaly.blockMs,
         correlationId,
       }
     });
@@ -263,6 +300,8 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
         moveNumber: newTurnNumber,
         moveType: payload.move.type || 'move',
         moveData: JSON.stringify(sanitizedMove),
+        previousState: dbState,
+        newState: applyResult.newState,
         isValid: true
       });
 
@@ -304,6 +343,20 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
     });
 
     logger.info(`[WS] Move committed: session=${sessionId}, turn=${result.turnNumber}, player=${userId}, correlationId=${correlationId}`);
+
+    // CIS snapshots (forensics / crash recovery / replay baselines)
+    // Persist best-effort on a cadence decided by `persistGameSessionSnapshotIfDue`.
+    try {
+      await persistGameSessionSnapshotIfDue({
+        sessionId,
+        turnNumber: result.turnNumber,
+        stateJson: result.newState,
+        correlationId,
+      });
+    } catch (e) {
+      // Never fail the move commit on snapshot persistence.
+      logger.warn(`[Snapshot] Failed to persist snapshot for session=${sessionId} turn=${result.turnNumber}: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
     // Explicit success ACK for tracing/debugging (only the move sender)
     send(ws, {
@@ -355,6 +408,103 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
         status: gameStatus,
         stateJson: result.newState,
       });
+
+      // Snapshot + replay verification (CIS Forensics)
+      // We now store per-move previousState/newState in game_moves, so we can:
+      // - pick an initialState from the earliest move snapshot
+      // - replay the move sequence through engine.validateMove/applyMove
+      // - compare with the committed final state
+      try {
+        const committedState = result.newState;
+        const moves = await storage.getGameMoves(sessionId);
+
+        if (moves.length > 0) {
+          const first = moves[0];
+          const initialState = first.previousState || engine.createInitialState();
+
+          const events = moves.map((m) => {
+            const parsedMove = (() => {
+              try {
+                return JSON.parse(m.moveData) as unknown;
+              } catch {
+                return null;
+              }
+            })();
+
+            return {
+              actorId: m.playerId,
+              payload: {
+                move: parsedMove,
+              },
+            };
+          });
+
+          const replayResult = runSessionReplayValidation(
+            {
+              scope: 'live',
+              gameType: room.gameType,
+              initialState,
+              events,
+              committedState,
+              sessionId,
+              turnNumber: result.turnNumber,
+            },
+            engine,
+          );
+
+          // CIS evidence: always record replay verification result (pass/fail).
+          const replayEventId = randomUUID();
+          const replayCorrelationId = `live_game_session_replay:${sessionId}:${result.turnNumber}:${replayEventId}`.slice(0, 128);
+
+          let recordId: string | undefined;
+
+          try {
+            const errCode = `replay_drift:${replayResult.reason}`.slice(0, 64);
+
+            const eventResult = await appendGameEvent({
+              eventId: replayEventId,
+              idempotencyKey: `live_game_session_replay_idem:${sessionId}:${result.turnNumber}:${replayEventId}`.slice(0, 128),
+              sessionId,
+              source: 'live_game_ws',
+              eventType: 'session_replay_verification',
+              actorId: userId,
+              actorType: 'system',
+              moveType: 'replay',
+              payload: {
+                correlationId: replayCorrelationId,
+                drift: replayResult.drift,
+                reason: replayResult.reason,
+                expectedHash: replayResult.expectedHash ?? null,
+                replayHash: replayResult.replayHash ?? null,
+              },
+            });
+
+            recordId = eventResult.recordId;
+
+            if (replayResult.drift) {
+              await finalizeGameEvent(recordId, 'rejected', errCode);
+            } else {
+              await finalizeGameEvent(recordId, 'applied');
+            }
+          } catch (e) {
+            logger.warn(`[ReplayVerify] Failed to append replay verification event for session=${sessionId}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+
+          if (replayResult.drift) {
+            logger.warn('[ReplayVerify] Drift detected', {
+              sessionId,
+              gameType: room.gameType,
+              correlationId: replayCorrelationId,
+              reason: replayResult.reason,
+              expectedHash: replayResult.expectedHash,
+              replayHash: replayResult.replayHash,
+            });
+          }
+        }
+      } catch (e) {
+        logger.warn(`[ReplayVerify] Session replay verification failed for session=${sessionId}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       await handleGameOver(room, gameStatus);
     } else {
       // Start turn timer for the next player
@@ -371,7 +521,25 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
     await finalizeGameEvent(moveEventRecordId, 'applied');
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error);
-    await finalizeGameEvent(moveEventRecordId, 'rejected', errorMessage.slice(0, 64));
+
+    // If the move was invalid, apply Level-1 invalid-move spam detection.
+    let errorCodeFinal = errorMessage.slice(0, 64);
+    if (errorMessage === 'INVALID_MOVE') {
+      const invalidAnomaly = evaluateAndRecordInvalid({
+        sessionId,
+        userId,
+        now: Date.now(),
+      });
+
+      if (invalidAnomaly.blocked) {
+        for (const anomalyType of invalidAnomaly.anomalies) {
+          gameLevel1AnomalyTotal.inc({ anomalyType, result: 'blocked' });
+        }
+        errorCodeFinal = `level1_invalid:${invalidAnomaly.anomalies[0] || 'anomaly'}`.slice(0, 64);
+      }
+    }
+
+    await finalizeGameEvent(moveEventRecordId, 'rejected', errorCodeFinal);
 
     console.error('[WS] Move transaction failed:', error);
 
@@ -415,7 +583,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
       const moveErr = error as Error & { validationError?: string; errorKey?: string };
       send(ws, {
         type: 'move_rejected',
-        payload: { error: moveErr.validationError, errorKey: moveErr.errorKey, correlationId }
+        payload: { error: moveErr.validationError, errorKey: moveErr.errorKey, requiresSync: true, correlationId }
       });
     } else if (errorMessage === 'MOVE_APPLY_FAILED') {
       const applyErr = error as Error & { applyError?: string };

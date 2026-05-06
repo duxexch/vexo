@@ -22,6 +22,19 @@ export interface AuthenticatedWebSocket extends WebSocket {
   isSpectator?: boolean;
   isAlive?: boolean;
   spectatorId?: string;
+
+  /**
+   * Server-controlled correlation id for the currently processed inbound
+   * WS message, propagated to outgoing accepted/rejected messages.
+   * Set/reset by server/game-websocket/index.ts message loop.
+   */
+  correlationId?: string;
+
+  /**
+   * Server-controlled physical attempt id for tracing (not for idempotency).
+   * Set/reset by server/game-websocket/index.ts message loop.
+   */
+  attemptId?: string;
 }
 
 export interface GameRoom {
@@ -31,6 +44,16 @@ export interface GameRoom {
   gameType: string;
   gameState: string;
   turnTimeLimitMs?: number;
+
+  /**
+   * Operational correlation/attempt ids for server-emitted broadcast events.
+   * Set by the handler that is servicing an inbound WS message (or by the
+   * timer/auto-move path) so every broadcast can carry a consistent
+   * correlationId for incident traceability.
+   */
+  operationCorrelationId?: string;
+  operationAttemptId?: string;
+
   /**
    * Per-player AI think-time multiplier (e.g. 1 for Normal, 0.65 for Fast,
    * 0.4 for Turbo). Reported by clients via `set_speed_mode`. The effective

@@ -29,6 +29,13 @@ export const wsMoveRateLimitedTotal = new client.Counter({
     registers: [registry],
 });
 
+export const gameLevel1AnomalyTotal = new client.Counter({
+    name: "game_level1_anomaly_total",
+    help: "Total Game WS Level-1 anomaly detections (and blocks) recorded",
+    labelNames: ["anomalyType", "result"],
+    registers: [registry],
+});
+
 // -----------------------
 // Express /metrics handler
 // -----------------------

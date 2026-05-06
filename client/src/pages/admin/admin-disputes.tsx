@@ -199,11 +199,14 @@ export default function AdminDisputesPage() {
     if (!activeDispute || !resolution || !resolutionType) return;
     if (resolutionType === "resolved" && !winnerId) return;
 
+    const activeDisputeId = String(activeDispute.id ?? "");
+    if (!activeDisputeId) return;
+
     resolveMutation.mutate({
-      id: activeDispute.id,
+      id: activeDisputeId,
       status: resolutionType,
       resolution,
-      winnerId: resolutionType === "resolved" ? winnerId : undefined,
+      winnerId: resolutionType === "resolved" ? winnerId : "",
     });
   };
 
@@ -478,18 +481,18 @@ export default function AdminDisputesPage() {
                         {resolutionType === "resolved" && (
                           <div className="space-y-2">
                             <Label>Winner</Label>
-                            <Select value={winnerId} onValueChange={setWinnerId}>
+                            <Select value={winnerId} onValueChange={(v) => setWinnerId(v ?? "")}>
                               <SelectTrigger data-testid="select-dispute-winner">
                                 <SelectValue placeholder="Select winner" />
                               </SelectTrigger>
                               <SelectContent>
                                 {activeDispute.initiatorId && (
-                                  <SelectItem value={activeDispute.initiatorId}>
+                                  <SelectItem value={String(activeDispute.initiatorId)}>
                                     {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
                                   </SelectItem>
                                 )}
                                 {activeDispute.respondentId && (
-                                  <SelectItem value={activeDispute.respondentId}>
+                                  <SelectItem value={String(activeDispute.respondentId)}>
                                     {activeDispute.respondentName || activeDispute.respondentId} (respondent)
                                   </SelectItem>
                                 )}

@@ -5,6 +5,7 @@ import type { AuthenticatedWebSocket } from './types';
 import { rooms } from './types';
 import { send, sendError, broadcastToRoom, getPlayerList, determineWinnerOnForfeit } from './utils';
 import { handleGameOver } from './game-over';
+import { restoreGameStateFromSnapshotsIfMissingInDb } from '../lib/game-session-snapshots';
 
 export async function handleGetState(ws: AuthenticatedWebSocket, payload: { sessionId: string }) {
   try {
@@ -21,6 +22,16 @@ export async function handleGetState(ws: AuthenticatedWebSocket, payload: { sess
       return;
     }
 
+    // Crash recovery: restore gameState from snapshots if missing.
+    const effectiveGameState = await restoreGameStateFromSnapshotsIfMissingInDb({
+      sessionId: payload.sessionId,
+      currentTurnNumber: session.turnNumber ?? 0,
+      existingGameState: session.gameState ?? null,
+    });
+
+    const normalizedGameState =
+      effectiveGameState ?? session.gameState ?? getGameEngine(session.gameType)?.createInitialState() ?? '{}';
+
     // SECURITY: If user hasn't joined this session, verify they are authorized
     if (!ws.sessionId) {
       const room = rooms.get(payload.sessionId);
@@ -35,15 +46,15 @@ export async function handleGetState(ws: AuthenticatedWebSocket, payload: { sess
 
     let room = rooms.get(payload.sessionId);
 
-    if (room && session.gameState) {
-      room.gameState = session.gameState;
-    } else if (!room) {
+    if (room) {
+      room.gameState = normalizedGameState;
+    } else {
       room = {
         sessionId: payload.sessionId,
         players: new Map(),
         spectators: new Map(),
         gameType: session.gameType,
-        gameState: session.gameState || getGameEngine(session.gameType)?.createInitialState() || '{}'
+        gameState: normalizedGameState,
       };
       rooms.set(payload.sessionId, room);
     }

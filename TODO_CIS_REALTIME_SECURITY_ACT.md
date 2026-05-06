@@ -65,25 +65,25 @@
   - [ ] snapshot cadence (e.g., every N moves or every T seconds)
   - [ ] snapshot metadata: sessionId, turnNumber/orderingIndex, timestamp, correlationId
   - [ ] persistence schema + storage implementation
-- [ ] Implement replayable match baseline:
-  - [ ] initial state persisted
-  - [ ] move sequence persisted with orderingIndex
-- [ ] Add replay verification pipeline:
-  - [ ] run replay shadow at intervals or on session close
-  - [ ] record verification result (pass/fail + mismatch details)
+- [x] Implement replayable match baseline:
+  - [x] initial state derived from stored per-move `previousState`
+  - [x] move sequence persisted with orderingIndex (`move_number`)
+- [x] Add replay verification pipeline:
+  - [x] run replay verification on session close (game over)
+  - [x] record verification result (pass/fail + drift reason) as `game_events` (`session_replay_verification`)
 - [ ] Add crash recovery test:
   - [ ] simulate server crash and confirm state restoration via snapshots
 
 ## 6) Anti-cheat Security Controls (CIS Abuse/Malicious Activity)
 - [x] Move-level server validation exists (engine.validateMove + applyMove)
-- [ ] Implement Level 1 anomaly detection rules (rule-based):
-  - [ ] moves/sec unusually high per user/session
+- [x] Implement Level 1 anomaly detection rules (rule-based):
+  - [x] moves/sec unusually high per user/session
   - [ ] repeated duplicates spike (idempotency abuse)
-  - [ ] timing anomalies (turn execution too fast/regular)
+  - [x] timing anomalies (turn execution too fast/regular)
   - [ ] impossible sequence patterns (engine-internal invariants)
-- [ ] Log and metric every anomaly:
-  - [ ] increment counters
-  - [ ] create audit entries for anomalies/reject reasons
+- [x] Log and metric every anomaly:
+  - [x] increment counters
+  - [x] create audit entries for anomalies/reject reasons
 - [ ] Add thresholds configuration + safe defaults + per-game override support
 
 ## 7) Operational Playbooks & Runbooks (CIS Operational Readiness)
@@ -103,6 +103,7 @@
   - [ ] idempotency strict/relaxed behavior
   - [ ] turn mismatch/out-of-order behavior
   - [x] sessionMoveRateLimiter/sessionUserMoveRateLimiter quota behavior
+  - [x] Level-1 anomaly detector rule tests
   - [ ] snapshot serialization integrity
 - [ ] Integration tests:
   - [ ] concurrent move submissions and duplicate handling

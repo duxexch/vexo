@@ -17,6 +17,7 @@ import { send, sendError, broadcastToRoom, getPlayerList } from './utils';
 import { processAdaptiveAiTurns } from './ai-turns';
 import { startTurnTimer } from './timers-disconnect';
 import { wsReconnectTotal } from '../lib/prometheus-metrics';
+import { restoreGameStateFromSnapshotsIfMissingInDb } from '../lib/game-session-snapshots';
 
 export async function handleAuthenticate(ws: AuthenticatedWebSocket, payload: { token: string }) {
   try {
@@ -81,6 +82,16 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
       return;
     }
 
+    // Crash recovery: if live_game_sessions.game_state is missing,
+    // restore it from the latest game_session_snapshots row.
+    const restored = await restoreGameStateFromSnapshotsIfMissingInDb({
+      sessionId,
+      currentTurnNumber: session.turnNumber ?? 0,
+      existingGameState: session.gameState ?? null,
+    });
+
+    const effectiveGameState = restored ?? session.gameState ?? getGameEngine(session.gameType)?.createInitialState() ?? '{}';
+
     const isPlayer = [session.player1Id, session.player2Id, session.player3Id, session.player4Id].includes(ws.userId);
 
     if (!isPlayer) {
@@ -96,12 +107,14 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
         players: new Map(),
         spectators: new Map(),
         gameType: session.gameType,
-        gameState: session.gameState || getGameEngine(session.gameType)?.createInitialState() || '{}',
+        gameState: effectiveGameState,
         turnTimeLimitMs,
       };
       rooms.set(sessionId, room);
-    } else if (!room.turnTimeLimitMs) {
-      room.turnTimeLimitMs = TURN_TIMEOUT_MS;
+    } else {
+      // If room already exists, keep it in sync with recovered DB state.
+      if (effectiveGameState) room.gameState = effectiveGameState;
+      if (!room.turnTimeLimitMs) room.turnTimeLimitMs = TURN_TIMEOUT_MS;
     }
 
     room.players.set(ws.userId, ws);

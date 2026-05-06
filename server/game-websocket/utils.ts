@@ -54,25 +54,97 @@ export function getPlayerList(room: GameRoom): { id: string; username?: string }
 }
 
 export function send(ws: WebSocket, message: WebSocketMessage) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+  if (ws.readyState !== WebSocket.OPEN) return;
+
+  const authenticated = ws as AuthenticatedWebSocket | undefined;
+  const correlationId = authenticated?.correlationId;
+  const sessionId = authenticated?.sessionId;
+
+  // Best-effort correlation/session propagation for all outgoing
+  // accepted/rejected messages.
+  const payload = (message as { payload?: unknown }).payload;
+
+  let enriched: WebSocketMessage = message;
+
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const payloadObj = payload as Record<string, unknown>;
+
+    // Server-controlled: always overwrite any client-injected values.
+    if (typeof correlationId === 'string') {
+      payloadObj.correlationId = correlationId;
+    }
+    if (typeof sessionId === 'string') {
+      payloadObj.sessionId = sessionId;
+    }
+
+    enriched = { ...message, payload: payloadObj };
   }
+
+  ws.send(JSON.stringify(enriched));
 }
 
-export function sendError(ws: WebSocket, message: string, code?: string) {
+export function sendError(
+  ws: WebSocket,
+  message: string,
+  code?: string,
+  details?: Record<string, unknown>,
+) {
   if (ws.readyState !== WebSocket.OPEN) return;
+
+  const authenticated = ws as AuthenticatedWebSocket | undefined;
+  const correlationId = authenticated?.correlationId;
+  const sessionId = authenticated?.sessionId;
+
+  const errorKey = typeof code === 'string' && code.trim().length > 0 ? code : 'unknown';
+
   ws.send(JSON.stringify({
     type: 'error',
-    payload: { message, code },
+    payload: {
+      status: 'rejected',
+      errorKey,
+      code: code ?? 'error',
+      reason: message,
+      sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+      correlationId: typeof correlationId === 'string' ? correlationId : undefined,
+      ...(details ?? {}),
+    },
     // Backward-compatible top-level fields for older clients.
     error: message,
     code,
   }));
 }
 
+function tryEnrichBroadcastPayloadWithIds(
+  room: GameRoom,
+  message: WebSocketMessage,
+): WebSocketMessage {
+  const payload = (message as { payload?: unknown }).payload;
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return message;
+  }
+
+  const payloadObj = payload as Record<string, unknown>;
+
+  // Server-controlled: always overwrite any client-injected values.
+  if (typeof room.operationCorrelationId === 'string') {
+    payloadObj.correlationId = room.operationCorrelationId;
+  }
+  if (typeof room.operationAttemptId === 'string') {
+    payloadObj.attemptId = room.operationAttemptId;
+  }
+
+  // Always stamp sessionId for forensic correlation, even if the handler
+  // doesn't explicitly include it.
+  payloadObj.sessionId = room.sessionId;
+
+  return { ...message, payload: payloadObj };
+}
+
 export function broadcastToRoom(room: GameRoom, message: WebSocketMessage, excludeUserId?: string) {
-  // Pre-serialize once instead of per-recipient
-  const serialized = JSON.stringify(message);
+  const enriched = tryEnrichBroadcastPayloadWithIds(room, message);
+  const serialized = JSON.stringify(enriched);
+
   for (const [userId, ws] of room.players) {
     if (userId !== excludeUserId && ws.readyState === WebSocket.OPEN) {
       ws.send(serialized);
@@ -119,8 +191,9 @@ export async function broadcastToRoomFiltered(
 
   const checkMap = new Map(recipientChecks.map(c => [c.recipientId, c]));
 
-  // Pre-serialize message once
-  const serialized = JSON.stringify(message);
+  // Pre-serialize message once (with forensic correlation/session ids)
+  const enriched = tryEnrichBroadcastPayloadWithIds(room, message);
+  const serialized = JSON.stringify(enriched);
 
   for (const [recipientId, ws] of recipientEntries) {
     const check = checkMap.get(recipientId);

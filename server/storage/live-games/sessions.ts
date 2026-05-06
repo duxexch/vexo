@@ -110,3 +110,72 @@ export async function getGameChatMessages(sessionId: string, limit: number = 100
     .orderBy(desc(gameChatMessages.createdAt))
     .limit(limit);
 }
+
+// ==================== GAME SESSION SNAPSHOTS (forensics / recovery) ====================
+
+export async function upsertGameSessionSnapshot(input: {
+  sessionId: string;
+  orderingIndex: number;
+  stateJson: string; // stored as JSONB in `game_session_snapshots.state`
+  correlationId?: string;
+}): Promise<void> {
+  // Idempotent: unique(session_id, ordering_index) enforced by migration.
+  await db.execute(sql`
+    INSERT INTO game_session_snapshots (session_id, ordering_index, state, correlation_id)
+    VALUES (
+      ${input.sessionId},
+      ${input.orderingIndex},
+      CAST(${input.stateJson} AS jsonb),
+      ${input.correlationId ?? null}
+    )
+    ON CONFLICT (session_id, ordering_index) DO NOTHING
+  `);
+}
+
+export async function getGameSessionSnapshots(sessionId: string): Promise<Array<{
+  orderingIndex: number;
+  stateJson: string;
+  correlationId: string | null;
+  createdAt: Date;
+}>> {
+  const rows = await db.execute(sql`
+    SELECT ordering_index, state::text AS state_json, correlation_id, created_at
+    FROM game_session_snapshots
+    WHERE session_id = ${sessionId}
+    ORDER BY ordering_index ASC
+  `);
+
+  // drizzle `db.execute` returns raw rows; normalize to expected shape.
+  return rows.rows.map((r: any) => ({
+    orderingIndex: Number(r.ordering_index ?? r.orderingIndex),
+    stateJson: String(r.state_json ?? r.stateJson),
+    correlationId: r.correlation_id ?? null,
+    createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+  }));
+}
+
+export async function getLatestGameSessionSnapshot(sessionId: string, orderingIndexMax: number): Promise<{
+  orderingIndex: number;
+  stateJson: string;
+  correlationId: string | null;
+  createdAt: Date;
+} | null> {
+  const rows = await db.execute(sql`
+    SELECT ordering_index, state::text AS state_json, correlation_id, created_at
+    FROM game_session_snapshots
+    WHERE session_id = ${sessionId}
+      AND ordering_index <= ${orderingIndexMax}
+    ORDER BY ordering_index DESC
+    LIMIT 1
+  `);
+
+  const row = rows.rows[0] as any | undefined;
+  if (!row) return null;
+
+  return {
+    orderingIndex: Number(row.ordering_index ?? row.orderingIndex),
+    stateJson: String(row.state_json ?? row.stateJson),
+    correlationId: row.correlation_id ?? null,
+    createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+  };
+}

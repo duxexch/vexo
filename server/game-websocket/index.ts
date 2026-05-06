@@ -6,6 +6,7 @@ import { redisRateLimit } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { checkWsUpgradeRateLimit, isWsOriginAllowed, rejectWsUpgrade } from '../lib/ws-upgrade-guard';
 import type { AuthenticatedWebSocket } from './types';
+import { rooms } from './types';
 import { send, sendError } from './utils';
 import { handleAuthenticate, handleJoinGame, handleSpectate } from './auth-join';
 import { handleMakeMove } from './moves';
@@ -16,6 +17,8 @@ import { handleSetSpeedMode } from './speed-mode';
 import { createGameWsProtocolError, validateGameMessage, type ValidatedGameMessage } from './validation';
 import { wsEventLagMs, wsMoveRateLimitedTotal } from '../lib/prometheus-metrics';
 import { appendGameEvent, finalizeGameEvent } from '../lib/game-events';
+
+const MAX_GAME_WS_MESSAGE_BYTES = 60 * 1024; // structured rejection (ws maxPayload remains 64KB)
 
 export { rooms, userConnections } from './types';
 
@@ -83,20 +86,43 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
 
     ws.on('message', async (data) => {
       const startedAt = Date.now();
+
+      // Server-controlled correlation/attempt ids for *every* inbound message,
+      // including schema-validation failures (so rejected responses can always
+      // carry correlationId).
+      const attemptId = randomUUID();
+      ws.attemptId = attemptId;
+      ws.correlationId = attemptId;
+
+      // Enforce structured payload-size rejection for all message types.
+      const incomingBytes = typeof (data as { byteLength?: number }).byteLength === 'number'
+        ? (data as { byteLength: number }).byteLength
+        : typeof (data as { length?: number }).length === 'number'
+          ? (data as { length: number }).length
+          : 0;
+
+      if (incomingBytes > MAX_GAME_WS_MESSAGE_BYTES) {
+        sendError(
+          ws,
+          'Payload too large',
+          'payload_too_large',
+          { maxBytes: MAX_GAME_WS_MESSAGE_BYTES, receivedBytes: incomingBytes },
+        );
+        return;
+      }
+
       try {
         const rateLimitKey = ws.userId
           ? `ws:game:msg:user:${ws.userId}`
           : `ws:game:msg:ip:${clientIp}`;
         const wsRateLimit = await redisRateLimit(rateLimitKey, 120, 10_000);
         if (!wsRateLimit.allowed) {
-          send(ws, {
-            type: 'error',
-            payload: {
-              error: 'Too many websocket messages, slow down',
-              code: 'rate_limit',
-              retryAfterMs: wsRateLimit.retryAfterMs
-            }
-          });
+          sendError(
+            ws,
+            'Too many websocket messages, slow down',
+            'rate_limit',
+            { retryAfterMs: wsRateLimit.retryAfterMs },
+          );
           return;
         }
 
@@ -132,6 +158,18 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
 }
 
 async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameMessage) {
+  // If payload carries a sessionId, stamp room operation ids so broadcasts
+  // (which bypass `send()`) include correlationId/sessionId too.
+  const maybePayload = message.payload as unknown as { sessionId?: unknown };
+  const maybeSessionId = typeof maybePayload?.sessionId === 'string' ? maybePayload.sessionId : undefined;
+  if (maybeSessionId) {
+    const operationRoom = rooms.get(maybeSessionId);
+    if (operationRoom) {
+      operationRoom.operationCorrelationId = ws.correlationId;
+      operationRoom.operationAttemptId = ws.attemptId;
+    }
+  }
+
   switch (message.type) {
     case 'authenticate':
       await handleAuthenticate(ws, message.payload);
@@ -146,6 +184,21 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       await handleSpectate(ws, message.payload);
       break;
     case 'make_move': {
+      // SECURITY: correlationId must be server-controlled; reject client injection attempts.
+      const clientCorrelationId = (message.payload as { correlationId?: unknown }).correlationId;
+      if (typeof clientCorrelationId === 'string' && clientCorrelationId.trim().length > 0) {
+        logger.warn('[GameWS] correlationId injection attempt', {
+          sessionId: ws.sessionId,
+          userId: ws.userId,
+        });
+        sendError(
+          ws,
+          'correlationId is server-controlled',
+          'CORRELATION_ID_INJECTION',
+        );
+        return;
+      }
+
       if (!ws.userId || !ws.sessionId) {
         // If we don't have enough identity context, let move handler enforce session/auth.
         await handleMakeMove(ws, message.payload);
@@ -165,6 +218,17 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       const correlationId = normalizedIdempotencyKey
         ? `live_game_move_corr:${sessionId}:${userId}:${normalizedIdempotencyKey}`.slice(0, 128)
         : attemptId;
+
+      // Propagate server-controlled ids to every outgoing accepted/rejected message.
+      ws.attemptId = attemptId;
+      ws.correlationId = correlationId;
+
+      // Ensure room broadcasts (game_over, etc.) carry the same correlation/attempt.
+      const operationRoom = rooms.get(sessionId);
+      if (operationRoom) {
+        operationRoom.operationCorrelationId = correlationId;
+        operationRoom.operationAttemptId = attemptId;
+      }
 
       const logThrottledMove = async (scope: 'user' | 'session' | 'session_user', retryAfterMs: number | undefined) => {
         const eventId = randomUUID();
@@ -203,15 +267,12 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       if (!moveRL.allowed) {
         wsMoveRateLimitedTotal.inc({ scope: 'user' });
         await logThrottledMove('user', moveRL.retryAfterMs);
-        send(ws, {
-          type: 'error',
-          payload: {
-            error: 'Too many moves, slow down',
-            code: 'rate_limit',
-            retryAfterMs: moveRL.retryAfterMs,
-            correlationId,
-          },
-        });
+        sendError(
+          ws,
+          'Too many moves, slow down',
+          'rate_limit',
+          { retryAfterMs: moveRL.retryAfterMs },
+        );
         break;
       }
 
@@ -219,15 +280,12 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       if (!sessionRL.allowed) {
         wsMoveRateLimitedTotal.inc({ scope: 'session' });
         await logThrottledMove('session', sessionRL.retryAfterMs);
-        send(ws, {
-          type: 'error',
-          payload: {
-            error: 'Too many moves in this match, slow down',
-            code: 'rate_limit',
-            retryAfterMs: sessionRL.retryAfterMs,
-            correlationId,
-          },
-        });
+        sendError(
+          ws,
+          'Too many moves in this match, slow down',
+          'rate_limit',
+          { retryAfterMs: sessionRL.retryAfterMs },
+        );
         break;
       }
 
@@ -235,15 +293,12 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       if (!sessionUserRL.allowed) {
         wsMoveRateLimitedTotal.inc({ scope: 'session_user' });
         await logThrottledMove('session_user', sessionUserRL.retryAfterMs);
-        send(ws, {
-          type: 'error',
-          payload: {
-            error: 'Too many moves from this player in this match, slow down',
-            code: 'rate_limit',
-            retryAfterMs: sessionUserRL.retryAfterMs,
-            correlationId,
-          },
-        });
+        sendError(
+          ws,
+          'Too many moves from this player in this match, slow down',
+          'rate_limit',
+          { retryAfterMs: sessionUserRL.retryAfterMs },
+        );
         break;
       }
 
@@ -262,16 +317,29 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
     case 'get_state':
       await handleGetState(ws, message.payload);
       break;
-    case 'resign':
+    case 'resign': {
+      // Ensure room broadcasts carry correlation/attempt for this operation.
+      const operationRoom = rooms.get(message.payload.sessionId);
+      if (operationRoom) {
+        operationRoom.operationCorrelationId = ws.correlationId;
+        operationRoom.operationAttemptId = ws.attemptId;
+      }
+
       if (ws.userId) {
         const resignRL = resignRateLimiter.check(ws.userId);
         if (!resignRL.allowed) {
-          send(ws, { type: 'error', payload: { error: 'Please wait before resigning again', code: 'rate_limit' } });
+          sendError(
+            ws,
+            'Please wait before resigning again',
+            'rate_limit',
+            { retryAfterMs: resignRL.retryAfterMs },
+          );
           break;
         }
       }
       await handleResign(ws, message.payload);
       break;
+    }
     case 'offer_draw':
       await handleOfferDraw(ws, message.payload);
       break;
