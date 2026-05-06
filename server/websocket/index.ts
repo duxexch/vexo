@@ -185,11 +185,12 @@ export function setupWebSocket(server: Server) {
       // Clean up voice rooms on disconnect
       if (ws.userId) {
         voiceRooms.forEach((room, matchId) => {
-          const mappedSocket = room.get(ws.userId!);
-          if (mappedSocket && mappedSocket === ws) {
+          const mappedPeer = room.get(ws.userId!);
+          if (mappedPeer && mappedPeer.socket === ws) {
             room.delete(ws.userId!);
             // Notify remaining peers
-            room.forEach((socket) => {
+            room.forEach((peer) => {
+              const socket = peer.socket;
               if (socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({ type: "voice_peer_left", matchId, peerUserId: ws.userId }));
               }

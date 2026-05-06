@@ -38,8 +38,14 @@ export interface GameRoomState {
 /** Map of userId -> Set of authenticated WebSocket connections */
 export const clients = new Map<string, Set<AuthenticatedSocket>>();
 
-/** Voice chat rooms for WebRTC signaling: matchId -> Map of userId -> socket */
-export const voiceRooms = new Map<string, Map<string, AuthenticatedSocket>>();
+/** Voice chat rooms for WebRTC signaling.
+ * matchId -> Map of userId -> peer info (socket + role)
+ */
+export type VoicePeerRole = "player" | "spectator";
+export const voiceRooms = new Map<
+  string,
+  Map<string, { socket: AuthenticatedSocket; role: VoicePeerRole }>
+>();
 
 /** Challenge game rooms with cached state for late joiners */
 export const challengeGameRooms = new Map<string, {

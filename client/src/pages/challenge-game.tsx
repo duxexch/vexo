@@ -879,7 +879,9 @@ export default function ChallengeGamePage() {
       .includes(user.id),
   );
   const shouldRenderPlayerVoiceChat =
-    serverRole === "player" || (serverRole === null && isChallengeParticipant);
+    serverRole === "player"
+    || serverRole === "spectator"
+    || (serverRole === null && isChallengeParticipant);
   // Do not allow gameplay actions until the server explicitly assigns role.
   const canPlayActions = serverRole === "player";
   const myColor = challenge?.player1Id === user?.id ? "white" : "black";
@@ -3017,7 +3019,7 @@ export default function ChallengeGamePage() {
               onToggle={() => { }}
               isMicMuted={isVoiceMicMuted}
               onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
-              role="player"
+              role={serverRole === "spectator" ? "spectator" : "player"}
               showInlineControls={false}
               peerAudioMutedOverride={voicePeerMutedMap}
               onConnectedPeersChange={setConnectedVoicePeers}
@@ -3320,7 +3322,7 @@ export default function ChallengeGamePage() {
               <div className={`${boardShellWidthClass} mb-1`}>
                 <div className="grid min-h-[2.5rem] grid-cols-[auto,minmax(0,1fr),auto] items-center gap-2">
                   <div className="min-w-0">
-                    {shouldRenderPlayerVoiceChat && challengeVoiceTargets.length > 0 ? (
+                    {shouldRenderPlayerVoiceChat && (serverRole === "spectator" || challengeVoiceTargets.length > 0) ? (
                       <div className="flex max-w-full items-center gap-1 overflow-x-auto py-0.5">
                         <Button
                           type="button"

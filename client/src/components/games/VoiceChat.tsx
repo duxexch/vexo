@@ -508,10 +508,10 @@ export function VoiceChat({
         iceFailureNotifiedRef.current = true;
         console.warn(
           `[VoiceChat] ICE connectivity check failed for peer ${peerUserId}. `
-            + "This usually indicates the TURN server is unreachable or its "
-            + "credentials are invalid (PUBLIC_RTC_TURN_URLS / PUBLIC_RTC_TURN_USERNAME"
-            + " / PUBLIC_RTC_TURN_CREDENTIAL). Audio cannot flow without a working "
-            + "relay path on most mobile/cellular networks.",
+          + "This usually indicates the TURN server is unreachable or its "
+          + "credentials are invalid (PUBLIC_RTC_TURN_URLS / PUBLIC_RTC_TURN_USERNAME"
+          + " / PUBLIC_RTC_TURN_CREDENTIAL). Audio cannot flow without a working "
+          + "relay path on most mobile/cellular networks.",
         );
         toast({
           variant: "destructive",
@@ -534,7 +534,7 @@ export function VoiceChat({
           iceFailureNotifiedRef.current = true;
           console.warn(
             `[VoiceChat] Peer connection failed for ${peerUserId} `
-              + `(iceState=${pc.iceConnectionState}). Likely TURN/network issue.`,
+            + `(iceState=${pc.iceConnectionState}). Likely TURN/network issue.`,
           );
           toast({
             variant: "destructive",
@@ -742,7 +742,9 @@ export function VoiceChat({
                 continue;
               }
               upsertPeer(peer.userId, peer.role);
-              await initiateOfferToPeer(peer.userId);
+              if (!isSpectatorRole) {
+                await initiateOfferToPeer(peer.userId);
+              }
             }
             break;
 
@@ -753,7 +755,9 @@ export function VoiceChat({
             }
 
             upsertPeer(peerUserId);
-            await initiateOfferToPeer(peerUserId);
+            if (!isSpectatorRole) {
+              await initiateOfferToPeer(peerUserId);
+            }
             break;
           }
 
