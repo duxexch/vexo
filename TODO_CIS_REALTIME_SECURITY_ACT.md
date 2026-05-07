@@ -5,8 +5,8 @@
 - [x] Confirm Zod-based WS message validation exists (server/game-websocket/validation.ts)
 - [x] Confirm make_move path has ordering/idempotency/authority + replay shadow hooks (server/game-websocket/moves.ts)
 - [x] Confirm Prometheus metrics exist + event lag is observed in WS handler
-- [ ] Inventory RTC signaling implementation (control plane vs game plane) + existing rate limiting/validation endpoints
-- [ ] Inventory presence updates implementation + verify debounce and add rate-limit quotas (per-user/per-room)
+- [x] Inventory RTC signaling implementation (control plane vs game plane) + existing rate limiting/validation endpoints
+- [x] Inventory presence updates implementation + verify debounce and add rate-limit quotas (per-user/per-room)
 - [x] Inventory immutable logging/audit persistence implementation behind appendGameEvent/finalizeGameEvent (audit-grade write path)
 - [ ] evidence export path / retention & access controls documentation
 // Replay shadow:

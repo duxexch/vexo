@@ -275,6 +275,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
   const submissionAnomaly = evaluateAndRecordSubmission({
     sessionId,
     userId,
+    gameType: room.gameType,
     now: Date.now(),
   });
 
@@ -611,6 +612,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
       const invalidAnomaly = evaluateAndRecordInvalid({
         sessionId,
         userId,
+        gameType: room.gameType,
         now: Date.now(),
       });
 

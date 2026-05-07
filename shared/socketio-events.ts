@@ -311,13 +311,13 @@ export interface RtcClientToServerEvents {
 }
 
 export interface RtcServerToClientEvents {
-  "rtc:incoming": (p: RtcInvitePayload & { fromUserId: string; fromUsername: string }) => void;
-  "rtc:answered": (p: RtcAnswerPayload & { fromUserId: string }) => void;
-  "rtc:sdp": (p: { sessionId: string; fromUserId: string; sdp: RTCSessionDescriptionInit }) => void;
-  "rtc:ice": (p: { sessionId: string; fromUserId: string; candidate: RTCIceCandidateInit }) => void;
-  "rtc:ended": (p: RtcEndPayload & { fromUserId: string }) => void;
-  "rtc:tier": (p: RtcTierPayload & { fromUserId: string }) => void;
-  "rtc:error": (p: { code: string; message: string; sessionId?: string }) => void;
+  "rtc:incoming": (p: RtcInvitePayload & { fromUserId: string; fromUsername: string; correlationId: string; attemptId: string }) => void;
+  "rtc:answered": (p: RtcAnswerPayload & { fromUserId: string; correlationId: string; attemptId: string }) => void;
+  "rtc:sdp": (p: { sessionId: string; fromUserId: string; sdp: RTCSessionDescriptionInit; correlationId: string; attemptId: string }) => void;
+  "rtc:ice": (p: { sessionId: string; fromUserId: string; candidate: RTCIceCandidateInit; correlationId: string; attemptId: string }) => void;
+  "rtc:ended": (p: RtcEndPayload & { fromUserId: string; correlationId: string; attemptId: string }) => void;
+  "rtc:tier": (p: RtcTierPayload & { fromUserId: string; correlationId: string; attemptId: string }) => void;
+  "rtc:error": (p: { code: string; message: string; sessionId?: string; correlationId?: string; attemptId?: string }) => void;
 }
 
 /* ============================================================================

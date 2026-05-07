@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from "http";
 import type { IncomingMessage } from "http";
+import { randomUUID } from "node:crypto";
 import { Server as IOServer, type Socket } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { parse as parseCookie } from "cookie";
@@ -31,6 +32,7 @@ import { deliverRealtimeMatchChat } from "./match-chat-bridge";
 import { challengeGameRooms } from "../websocket/shared";
 import { getRedisClient } from "../lib/redis";
 import { insertMissedCallChatMessage } from "../lib/chat-call-event";
+import { appendGameEvent, finalizeGameEvent } from "../lib/game-events";
 
 interface AuthedSocketData {
   userId: string;
@@ -251,12 +253,25 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
   const chatNs: ChatNamespace = io.of(SOCKETIO_NS_CHAT) as unknown as ChatNamespace;
 
   // Presence fan-out control: viewer_list is best-effort and non-gating.
-  // Debounce per-room so join/leave churn doesn't create broadcast storms.
+  // Debounce per-room so join/leave churn doesn't create broadcast storms,
+  // plus a small per-user/per-room quota to avoid abusive join/leave loops.
   const viewerListDebounceMs = 200;
+  const viewerListUserQuotaMs = 1_500; // best-effort presence; keep conservative
   const pendingViewerListUpdates = new Map<string, NodeJS.Timeout>();
+  const viewerListUserLastTriggerAt = new Map<string, number>();
 
-  function scheduleViewerListUpdate(roomId: string): void {
+  function scheduleViewerListUpdate(roomId: string, userId?: string): void {
     if (pendingViewerListUpdates.has(roomId)) return;
+
+    if (typeof userId === "string" && userId) {
+      const key = `${roomId}:${userId}`;
+      const now = Date.now();
+      const last = viewerListUserLastTriggerAt.get(key);
+      if (typeof last === "number" && now - last < viewerListUserQuotaMs) {
+        return;
+      }
+      viewerListUserLastTriggerAt.set(key, now);
+    }
 
     const t = setTimeout(() => {
       pendingViewerListUpdates.delete(roomId);
@@ -374,7 +389,7 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       // joiner) sees the current "who's watching" set with their own
       // block-list filter applied. Failure is swallowed inside the
       // helper; the count broadcast above is unaffected.
-      void scheduleViewerListUpdate(roomId);
+      void scheduleViewerListUpdate(roomId, userId);
     });
 
     socket.on("chat:leave", async (payload) => {
@@ -395,7 +410,7 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         void broadcastChallengeViewerCount(chatNs, roomId);
         // Task #75: same lifecycle for the viewer-list broadcast so the
         // chat-header avatar stack drops the leaver instantly.
-        void scheduleViewerListUpdate(roomId);
+        void scheduleViewerListUpdate(roomId, userId);
       }
     });
 
@@ -594,7 +609,7 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
           void broadcastChallengeViewerCount(chatNs, roomId);
           // Task #75: refresh the per-recipient viewer list too so the
           // chat-header avatar stack drops the leaver instantly.
-          void scheduleViewerListUpdate(roomId);
+          void scheduleViewerListUpdate(roomId, userId);
         }
       });
     });
@@ -638,6 +653,21 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
      */
     const rtcSessionKey = (sessionId: string) => `rtc:session:${sessionId}`;
     const RTC_SESSION_TTL_SECONDS = 60 * 60; // 1h covers any plausible call.
+
+    // --- RTC payload hardening (CIS availability/abuse) ---
+    // Keep caps conservative: WebRTC blobs can be big; we only need
+    // to bound the worst abuse cases to prevent payload-amplification.
+    const RTC_SDP_MAX_CHARS = 200_000;
+    const RTC_ICE_CANDIDATE_MAX_CHARS = 4_000;
+
+    const rtcEndRateMax = 20; // per user / 60s
+    const rtcTierRateMax = 10; // per user / 60s
+
+    function emitRtcError(
+      errorPayload: RtcServerToClientEvents["rtc:error"] extends (p: infer P) => void ? P : never
+    ): void {
+      rtcNs.to(`u:${userId}`).emit("rtc:error", errorPayload as never);
+    }
 
     interface RtcSessionState {
       callerId: string;
@@ -777,6 +807,34 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         sessionId,
       );
 
+      const attemptId = randomUUID();
+      const correlationId = `rtc_invite:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+
+      // CIS audit-grade evidence for RTC signaling
+      try {
+        const eventId = randomUUID();
+        const idempotencyKey = `rtc_audit_invite:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+        const res = await appendGameEvent({
+          eventId,
+          idempotencyKey,
+          source: "socketio_rtc",
+          eventType: "rtc_invite",
+          actorId: userId,
+          actorType: "player",
+          payload: {
+            sessionId,
+            toUserId,
+            callType,
+            context: payload.context ?? null,
+            correlationId,
+            attemptId,
+          },
+        });
+        await finalizeGameEvent(res.recordId, "applied");
+      } catch {
+        // audit must never break signaling
+      }
+
       emitToUser(toUserId, "rtc:incoming", {
         sessionId,
         toUserId,
@@ -784,6 +842,8 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         context: payload.context,
         fromUserId: userId,
         fromUsername: username,
+        correlationId,
+        attemptId,
       });
       ack?.({ ok: true });
     });
@@ -793,6 +853,22 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       const toUserId = String(payload?.toUserId || "").slice(0, 64);
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       if (!toUserId || !sessionId || !payload?.sdp) return;
+
+      const attemptId = randomUUID();
+      const correlationId = `rtc_sdp:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+
+      const sdpText = typeof payload.sdp?.sdp === "string" ? payload.sdp.sdp : "";
+      if (sdpText.length > RTC_SDP_MAX_CHARS) {
+        emitRtcError({
+          code: "payload_too_large",
+          message: "SDP payload too large",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
       if (!(await rateLimitOk(`sio:rtc:sdp:${userId}`, 30, 60))) return;
       // Ensure both sides are in the call room (callee joins on first SDP)
       await socket.join(callRoom(sessionId));
@@ -803,52 +879,188 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       if (session && session.receiverId === userId && session.connected === 0) {
         await markRtcConnected(sessionId);
       }
-      emitToUser(toUserId, "rtc:sdp", { sessionId, fromUserId: userId, sdp: payload.sdp });
+
+      // CIS audit-grade evidence for RTC signaling
+      try {
+        const eventId = randomUUID();
+        const idempotencyKey = `rtc_audit_sdp:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+        const res = await appendGameEvent({
+          eventId,
+          idempotencyKey,
+          source: "socketio_rtc",
+          eventType: "rtc_sdp",
+          actorId: userId,
+          actorType: "player",
+          payload: {
+            sessionId,
+            toUserId,
+            correlationId,
+            attemptId,
+          },
+        });
+        await finalizeGameEvent(res.recordId, "applied");
+      } catch {
+        // audit must never break signaling
+      }
+
+      emitToUser(toUserId, "rtc:sdp", {
+        sessionId,
+        fromUserId: userId,
+        sdp: payload.sdp,
+        correlationId,
+        attemptId,
+      });
     });
 
     socket.on("rtc:ice", async (payload) => {
       const toUserId = String(payload?.toUserId || "").slice(0, 64);
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       if (!toUserId || !sessionId || !payload?.candidate) return;
+
+      const attemptId = randomUUID();
+      const correlationId = `rtc_ice:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+
+      const candidateText =
+        typeof payload.candidate?.candidate === "string" ? payload.candidate.candidate : "";
+      if (candidateText.length > RTC_ICE_CANDIDATE_MAX_CHARS) {
+        emitRtcError({
+          code: "payload_too_large",
+          message: "ICE candidate payload too large",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
       if (!(await rateLimitOk(`sio:rtc:ice:${userId}`, 200, 60))) return;
-      emitToUser(toUserId, "rtc:ice", { sessionId, fromUserId: userId, candidate: payload.candidate });
+
+      // CIS audit-grade evidence for RTC signaling
+      try {
+        const eventId = randomUUID();
+        const idempotencyKey = `rtc_audit_ice:${sessionId}:${userId}:${attemptId}`.slice(0, 128);
+        const res = await appendGameEvent({
+          eventId,
+          idempotencyKey,
+          source: "socketio_rtc",
+          eventType: "rtc_ice",
+          actorId: userId,
+          actorType: "player",
+          payload: {
+            sessionId,
+            toUserId,
+            correlationId,
+            attemptId,
+          },
+        });
+        await finalizeGameEvent(res.recordId, "applied");
+      } catch {
+        // audit must never break signaling
+      }
+
+      emitToUser(toUserId, "rtc:ice", {
+        sessionId,
+        fromUserId: userId,
+        candidate: payload.candidate,
+        correlationId,
+        attemptId,
+      });
     });
 
     socket.on("rtc:end", async (payload) => {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
-      if (!sessionId) return;
-      // Optional explicit recipient — needed when caller cancels BEFORE the
-      // callee has joined the per-call room (which only happens on first SDP).
-      const toUserId = payload?.toUserId
-        ? String(payload.toUserId).slice(0, 64)
-        : "";
+      const attemptId = randomUUID();
+      const correlationId = sessionId
+        ? `rtc_end:${sessionId}:${userId}:${attemptId}`.slice(0, 128)
+        : `rtc_end:invalid:${userId}:${attemptId}`.slice(0, 128);
+
+      if (!sessionId) {
+        emitRtcError({
+          code: "invalid",
+          message: "Missing sessionId",
+          sessionId: undefined,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      if (!(await rateLimitOk(`sio:rtc:end:${userId}`, rtcEndRateMax, 60))) {
+        emitRtcError({
+          code: "rate_limit",
+          message: "Too many rtc:end attempts",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const session = await loadRtcSession(sessionId);
+      if (!session) {
+        emitRtcError({
+          code: "invalid_session",
+          message: "Unknown or expired call session",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const isParticipant = userId === session.callerId || userId === session.receiverId;
+      if (!isParticipant) {
+        emitRtcError({
+          code: "forbidden",
+          message: "Only call participants may end a call",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const otherUserId = userId === session.callerId ? session.receiverId : session.callerId;
+
+      // Optional explicit recipient — only allowed when it matches the other participant.
+      const explicitToUserId =
+        payload?.toUserId ? String(payload.toUserId).slice(0, 64) : "";
+      if (explicitToUserId && explicitToUserId !== otherUserId) {
+        emitRtcError({
+          code: "invalid_recipient",
+          message: "Recipient does not match call participants",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const toUserId = explicitToUserId || otherUserId;
+      const reason = typeof payload?.reason === "string" ? payload.reason.slice(0, 64) : undefined;
+
       const endedPayload = {
         sessionId,
-        reason: payload?.reason,
+        reason,
         fromUserId: userId,
+        correlationId,
+        attemptId,
       };
-      // Notify everyone already in the call room (the common case)
+
+      // Notify everyone already in the call room (common case)
       rtcNs.to(callRoom(sessionId)).emit("rtc:ended", endedPayload);
-      // Also direct-notify the explicit peer if provided (covers pre-SDP cancel
-      // when the callee hasn't joined the call room yet).
+      // Direct-notify peer when needed (pre-SDP cancel cover)
       if (toUserId && toUserId !== userId) {
         emitToUser(toUserId, "rtc:ended", endedPayload);
       }
       // Vacate everyone from the room so it gets garbage-collected
       rtcNs.in(callRoom(sessionId)).socketsLeave(callRoom(sessionId));
 
-      // Task #55 — If the call ended without ever connecting, drop a
-      // "Missed call" entry into the DM thread for both participants. The
-      // helper dedupes on `sessionId`, so even if the caller and callee
-      // both fire rtc:end (which they often do) only one row is inserted.
-      const session = await loadRtcSession(sessionId);
-      if (session && session.connected === 0) {
-        // `media_denied` / `sdp_failed` are technical failures that aren't
-        // really "missed" from a human perspective — skip those so we don't
-        // pollute the chat with infrastructure noise.
-        const reason = typeof payload?.reason === "string" ? payload.reason : "";
+      // Task #55 — missed call evidence only when never connected.
+      if (session.connected === 0) {
         const skipReasons = new Set(["media_denied", "sdp_failed"]);
-        if (!skipReasons.has(reason)) {
+        const skipReason = typeof reason === "string" ? reason : "";
+        if (!skipReasons.has(skipReason)) {
           const outcome = userId === session.receiverId ? "declined" : "missed";
           await insertMissedCallChatMessage({
             callerId: session.callerId,
@@ -857,24 +1069,75 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
             outcome,
             sessionId,
           }).catch(() => {
-            // Helper already swallows storage errors; this catch keeps the
-            // signaling path resilient if the DB or Redis hiccups.
+            // Helper already swallows storage errors; keep signaling resilient.
           });
         }
       }
+
       await clearRtcSession(sessionId);
     });
 
     socket.on("rtc:tier", async (payload) => {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
-      if (!sessionId || !payload?.tier) return;
-      // A tier event is fired from inside an established call, so use it as
-      // a defensive secondary signal that the call connected (Task #55).
+      const attemptId = randomUUID();
+      const correlationId = sessionId
+        ? `rtc_tier:${sessionId}:${userId}:${attemptId}`.slice(0, 128)
+        : `rtc_tier:invalid:${userId}:${attemptId}`.slice(0, 128);
+
+      if (!sessionId || !payload?.tier) {
+        emitRtcError({
+          code: "invalid",
+          message: "Missing sessionId or tier",
+          sessionId: sessionId || undefined,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      if (!(await rateLimitOk(`sio:rtc:tier:${userId}`, rtcTierRateMax, 60))) {
+        emitRtcError({
+          code: "rate_limit",
+          message: "Too many rtc:tier attempts",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const session = await loadRtcSession(sessionId);
+      if (!session) {
+        emitRtcError({
+          code: "invalid_session",
+          message: "Unknown or expired call session",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
+      const isParticipant = userId === session.callerId || userId === session.receiverId;
+      if (!isParticipant) {
+        emitRtcError({
+          code: "forbidden",
+          message: "Only call participants may emit rtc:tier",
+          sessionId,
+          correlationId,
+          attemptId,
+        });
+        return;
+      }
+
       await markRtcConnected(sessionId);
+
       rtcNs.to(callRoom(sessionId)).emit("rtc:tier", {
         sessionId,
         tier: payload.tier,
         fromUserId: userId,
+        correlationId,
+        attemptId,
       });
     });
   });
