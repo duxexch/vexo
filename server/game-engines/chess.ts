@@ -320,16 +320,18 @@ export class ChessEngine implements GameEngine {
         (playerColor === 'b' && state.currentTurn === 'black')
         : false;
 
-      // Server contract: square-indexed valid move map
-      const validMoves = isMyTurn
-        ? chess.moves({ verbose: true }).reduce((acc, move) => {
+      // Client contract: `ChessBoard` expects `authoritativeValidMoves` to be an *array*.
+      // Each entry is either:
+      // - string like "e2e4" or "e7e8q"
+      // - or object with { from, to, promotion }
+      const validMoves: string[] = isMyTurn
+        ? chess.moves({ verbose: true }).map((move) => {
           const from = move.from;
-          const to = `${move.to}${move.promotion || ''}`;
-          if (!acc[from]) acc[from] = [];
-          acc[from].push(to);
-          return acc;
-        }, {} as Record<string, string[]>)
-        : {};
+          const to = move.to;
+          const promotion = move.promotion || '';
+          return `${from}${to}${promotion}`; // promotion is already q/r/b/n
+        })
+        : [];
 
       // Build moveHistory in the format the client expects
       const moveHistory = state.history.map((h, i) => ({
@@ -363,7 +365,7 @@ export class ChessEngine implements GameEngine {
         isStalemate: chess.isStalemate(),
         isDraw: chess.isDraw(),
         isGameOver: chess.isGameOver(),
-        validMoves: validMoves as unknown as MoveData[],
+        validMoves,
         lastMove: state.lastMove,
         lastUpdateAt: state.lastMoveTime,
         serverNow,
