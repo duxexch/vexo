@@ -61,16 +61,16 @@
 ## 4) Audit-grade Logging Contract (CIS Logging & Audit)
 - [ ] Define canonical immutable log schema (finalize in code comments + docs)
 - [ ] Ensure every event type produces an audit record:
-  - [ ] move accepted
-  - [ ] move rejected (with reason + errorKey)
+  - [x] move accepted
+  - [x] move rejected (with reason + errorKey)
   - [ ] join/spectate
   - [ ] reconnect attempts
-  - [ ] rtc signaling messages
+  - [x] rtc signaling messages
   - [ ] close session/forfeit/timeout
 - [ ] Ensure correlationId coverage:
-  - [ ] correlationId in all audit records AND in all client-facing accepted/rejected payloads
+  - [x] correlationId is present in move audit records and in move accepted/rejected client payloads
 - [ ] Ensure audit immutability/retention evidence exists:
-  - [ ] append-only store choice verified (DB table / external log)
+  - [x] append-only store choice verified (DB table / external log)
   - [ ] retention + access controls documented
 
 ## 5) Snapshots & Replay Verification (CIS Incident Response & Forensics)
@@ -114,7 +114,7 @@
 - [ ] Unit tests:
   - [ ] validateGameMessage edge cases (schema rejects)
   - [ ] idempotency strict/relaxed behavior
-  - [ ] turn mismatch/out-of-order behavior
+  - [x] turn mismatch/out-of-order behavior
   - [x] sessionMoveRateLimiter/sessionUserMoveRateLimiter quota behavior
   - [x] Level-1 anomaly detector rule tests
   - [x] snapshot serialization integrity
@@ -125,8 +125,8 @@
 - [ ] Load tests (targeted):
   - [ ] moves/sec flood to verify rate limits & backpressure work
   - [ ] presence flood to verify debounce + quotas
-- [ ] Run verification:
-  - [ ] tsc --noEmit
+- [x] Run verification:
+- [x] tsc --noEmit
 - [x] vitest (React Query “No QueryClient set” fixed via global test harness)
   - [ ] server smoke tests: WS move flow + reconnect + RTC signaling + presence
 
