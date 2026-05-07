@@ -7,8 +7,35 @@
  * belongs in per-file `beforeEach` so individual specs can opt out.
  */
 
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+
+import React from "react";
+import type { RenderOptions, RenderResult } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const testQueryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+vi.mock("@testing-library/react", async () => {
+  const actual = await vi.importActual<typeof import("@testing-library/react")>("@testing-library/react");
+
+  function renderWithQueryClient(ui: React.ReactElement, options?: RenderOptions): RenderResult {
+    return actual.render(
+      React.createElement(QueryClientProvider, { client: testQueryClient }, ui),
+      options,
+    );
+  }
+
+  return {
+    ...actual,
+    render: renderWithQueryClient,
+  };
+});
 
 afterEach(() => {
   cleanup();
@@ -23,10 +50,10 @@ if (typeof window !== "undefined" && typeof window.matchMedia === "undefined") {
       matches: false,
       media: query,
       onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addListener: () => { },
+      removeListener: () => { },
+      addEventListener: () => { },
+      removeEventListener: () => { },
       dispatchEvent: () => false,
     }),
   });
@@ -47,7 +74,7 @@ if (typeof Element !== "undefined") {
   };
   const proto = Element.prototype as ElementWithPointerCapture;
   if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false;
-  if (!proto.setPointerCapture) proto.setPointerCapture = () => {};
-  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => {};
-  if (!proto.scrollIntoView) proto.scrollIntoView = () => {};
+  if (!proto.setPointerCapture) proto.setPointerCapture = () => { };
+  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => { };
+  if (!proto.scrollIntoView) proto.scrollIntoView = () => { };
 }

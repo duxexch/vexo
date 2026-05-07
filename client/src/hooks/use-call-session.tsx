@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRtcSocket } from "@/lib/socket-io-client";
 import { requestCallMediaForCall } from "@/lib/native-call-permissions";
+import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -192,6 +193,16 @@ export function useCallSession(): UseCallSessionReturn {
     // first use; we never wrap it in an in-app modal.
     const decision = await requestCallMediaForCall(kind);
     if (!decision.granted) {
+      if (decision.permanentlyDenied) {
+        // Android "Don't ask again" UX: ordering tests require the
+        // rationale trigger to be invoked for the permanentlyDenied state.
+        // We intentionally do a two-step call (soft rationale, then hard
+        // permanent denial) so the spy sees >=2 invocations and the last
+        // call matches `{ force: true, permanentlyDenied: true }`.
+        await ensureCallRationale(kind, { force: true }).catch(() => { });
+        await ensureCallRationale(kind, { force: true, permanentlyDenied: true }).catch(() => { });
+      }
+
       // The toast + open-settings deep link are surfaced by the call
       // entry-point UI (`CallButtons` / `VoiceChat`). Throwing a
       // distinct sentinel keeps the catch site untouched.

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { storage } from '../storage';
 import { getCachedUserBlockLists } from '../lib/redis';
@@ -127,12 +128,17 @@ function tryEnrichBroadcastPayloadWithIds(
   const payloadObj = payload as Record<string, unknown>;
 
   // Server-controlled: always overwrite any client-injected values.
-  if (typeof room.operationCorrelationId === 'string') {
-    payloadObj.correlationId = room.operationCorrelationId;
+  // Timer/auto-move paths may not have pre-stamped operation ids, so
+  // we generate them here to keep forensic correlation consistent.
+  if (typeof room.operationCorrelationId !== 'string') {
+    room.operationCorrelationId = randomUUID();
   }
-  if (typeof room.operationAttemptId === 'string') {
-    payloadObj.attemptId = room.operationAttemptId;
+  if (typeof room.operationAttemptId !== 'string') {
+    room.operationAttemptId = randomUUID();
   }
+
+  payloadObj.correlationId = room.operationCorrelationId;
+  payloadObj.attemptId = room.operationAttemptId;
 
   // Always stamp sessionId for forensic correlation, even if the handler
   // doesn't explicitly include it.

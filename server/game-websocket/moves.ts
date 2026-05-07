@@ -25,6 +25,7 @@ import { runReplayShadowValidation, runSessionReplayValidation } from '../lib/ga
 import { evaluateAndRecordSubmission, evaluateAndRecordInvalid } from '../lib/game-level1-anomaly';
 import { gameLevel1AnomalyTotal, wsMoveTurnMismatchRejectedTotal } from '../lib/prometheus-metrics';
 import { persistGameSessionSnapshotIfDue } from '../lib/game-session-snapshots';
+import { sessionMoveInFlightLimiter } from './inflight-move-limiter';
 
 const GAME_EVENT_LOG_ENABLED = process.env.GAME_EVENT_LOG_ENABLED !== 'false';
 const GAME_MOVE_IDEMPOTENCY_STRICT = process.env.GAME_MOVE_IDEMPOTENCY_STRICT !== 'false';
@@ -85,6 +86,30 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
   const idempotencyReference = normalizedIdempotencyKey
     ? `live_game_move_idem:${sessionId}:${userId}:${normalizedIdempotencyKey}`
     : `live_game_move_evt:${sessionId}:${userId}:${eventId}`;
+
+  // In-flight backpressure: prevent concurrent make_move execution for the same session.
+  // This protects the server from load amplification when clients spam from multiple tabs.
+  const inFlightKey = `live_game_ws:inflight_move:${sessionId}`;
+  const inFlight = sessionMoveInFlightLimiter.tryAcquire(inFlightKey);
+  if (!inFlight.allowed) {
+    send(ws, {
+      type: 'move_rejected',
+      payload: {
+        event: 'in_flight_backpressure',
+        error: 'Move is being processed, retry soon',
+        errorKey: 'game.inFlightBackpressure',
+        code: 'in_flight_backpressure',
+        requiresSync: true,
+        retryAfterMs: inFlight.retryAfterMs ?? null,
+        correlationId,
+        attemptId,
+        sessionId,
+        userId,
+        status: 'rejected',
+      }
+    });
+    return;
+  }
 
   let isCanonicalSession = false;
   let moveEventRecordId: string | undefined;

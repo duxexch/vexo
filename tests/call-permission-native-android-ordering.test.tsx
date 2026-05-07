@@ -32,6 +32,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, waitFor } from "@testing-library/react";
 import * as React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 const hoisted = vi.hoisted(() => {
   const callOrder: string[] = [];
@@ -332,15 +344,13 @@ function CallSessionHarness({
 describe("useCallSession on native Android — call-permission ordering", () => {
   it("invokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia", async () => {
     let api: UseCallSessionReturn | null = null;
-    render(<CallSessionHarness onReady={(s) => { api = s; }} />);
+    renderWithQueryClient(<CallSessionHarness onReady={(s) => { api = s; }} />);
     await waitFor(() => expect(api).not.toBeNull());
 
     await act(async () => {
       await api!.startCall("peer-1", "voice");
     });
 
-    // Both must have run exactly once and the plugin must have come
-    // first — that is the entire fix from Task #124.
     expect(hoisted.requestCallMediaPermissions).toHaveBeenCalledTimes(1);
     expect(hoisted.getUserMedia).toHaveBeenCalledTimes(1);
     expect(hoisted.callOrder).toEqual([
@@ -360,20 +370,15 @@ describe("useCallSession on native Android — call-permission ordering", () => 
     });
 
     let api: UseCallSessionReturn | null = null;
-    render(<CallSessionHarness onReady={(s) => { api = s; }} />);
+    renderWithQueryClient(<CallSessionHarness onReady={(s) => { api = s; }} />);
     await waitFor(() => expect(api).not.toBeNull());
 
     await act(async () => {
       await expect(api!.startCall("peer-2", "voice")).rejects.toBeDefined();
     });
 
-    // getUserMedia must NEVER run when the plugin denied the
-    // permission — that's the whole point of the hard-gate.
     expect(hoisted.getUserMedia).not.toHaveBeenCalled();
 
-    // Two ensureCallRationale calls expected: the initial unforced
-    // one, then the forced+permanently-denied re-prompt that hides
-    // "Allow" in the modal.
     const calls = hoisted.ensureCallRationaleSpy.mock.calls;
     expect(calls.length).toBeGreaterThanOrEqual(2);
     const lastCall = calls[calls.length - 1];
@@ -390,7 +395,7 @@ describe("useCallSession on native Android — call-permission ordering", () => 
  * ──────────────────────────────────────────────────────────────────── */
 
 function renderVoiceChat() {
-  return render(
+  return renderWithQueryClient(
     <TooltipProvider>
       <VoiceChat
         challengeId="match-test"
@@ -407,9 +412,6 @@ describe("VoiceChat on native Android — call-permission ordering", () => {
   it("invokes the plugin's requestCallMediaPermissions BEFORE navigator.mediaDevices.getUserMedia when the in-match voice toggle goes live", async () => {
     renderVoiceChat();
 
-    // Mounting with isEnabled=true triggers the start-voice-chat
-    // useEffect, which awaits ensureLocalStream → ensureCallPermissions
-    // → getUserMedia. Wait until both spies have observed their calls.
     await waitFor(() => {
       expect(hoisted.requestCallMediaPermissions).toHaveBeenCalledTimes(1);
       expect(hoisted.getUserMedia).toHaveBeenCalledTimes(1);
@@ -433,8 +435,6 @@ describe("VoiceChat on native Android — call-permission ordering", () => {
 
     renderVoiceChat();
 
-    // Wait for the production code to reach (and act on) the forced
-    // rationale re-prompt — that's the second ensureCallRationale call.
     await waitFor(() => {
       expect(hoisted.ensureCallRationaleSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     });

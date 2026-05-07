@@ -30,6 +30,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCall } from "../client/src/components/calls/CallSessionProvider";
 import { CallSessionProvider } from "../client/src/components/calls/CallSessionProvider";
 import {
@@ -83,14 +84,14 @@ vi.mock("../client/src/lib/socket-io-client", () => ({
 
 vi.mock("../client/src/lib/call-ringtone", () => ({
   startCallRingtone: vi.fn(),
-  stopCallRingtone: vi.fn(async () => {}),
+  stopCallRingtone: vi.fn(async () => { }),
 }));
 
 vi.mock("../client/src/lib/native-call-ui", () => ({
-  presentIncomingCall: vi.fn(async () => {}),
-  reportOutgoingCall: vi.fn(async () => {}),
-  updateNativeCallState: vi.fn(async () => {}),
-  endNativeCall: vi.fn(async () => {}),
+  presentIncomingCall: vi.fn(async () => { }),
+  reportOutgoingCall: vi.fn(async () => { }),
+  updateNativeCallState: vi.fn(async () => { }),
+  endNativeCall: vi.fn(async () => { }),
 }));
 
 vi.mock("../client/src/lib/call-permission-rationale", () => ({
@@ -174,7 +175,7 @@ class FakeMediaStream {
   getVideoTracks() {
     return [] as Array<{ enabled: boolean }>;
   }
-  addTrack() {}
+  addTrack() { }
 }
 
 class FakePeerConnection {
@@ -187,17 +188,17 @@ class FakePeerConnection {
   ontrack: ((e: unknown) => void) | null = null;
   oniceconnectionstatechange: (() => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
-  addTrack() {}
+  addTrack() { }
   async createOffer() {
     return { type: "offer", sdp: "" };
   }
   async createAnswer() {
     return { type: "answer", sdp: "" };
   }
-  async setLocalDescription() {}
-  async setRemoteDescription() {}
-  async addIceCandidate() {}
-  close() {}
+  async setLocalDescription() { }
+  async setRemoteDescription() { }
+  async addIceCandidate() { }
+  close() { }
 }
 
 class FakeWebSocket {
@@ -221,7 +222,7 @@ class FakeWebSocket {
       this.onopen?.();
     });
   }
-  send() {}
+  send() { }
   close() {
     this.readyState = FakeWebSocket.CLOSED;
   }
@@ -335,10 +336,10 @@ beforeEach(() => {
   // Polyfill globals.
   (globalThis as { RTCPeerConnection?: unknown }).RTCPeerConnection = FakePeerConnection;
   (globalThis as { RTCSessionDescription?: unknown }).RTCSessionDescription = class {
-    constructor(public init: unknown) {}
+    constructor(public init: unknown) { }
   };
   (globalThis as { RTCIceCandidate?: unknown }).RTCIceCandidate = class {
-    constructor(public init: unknown) {}
+    constructor(public init: unknown) { }
   };
   (globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket;
   (globalThis as { MediaStream?: unknown }).MediaStream = FakeMediaStream;

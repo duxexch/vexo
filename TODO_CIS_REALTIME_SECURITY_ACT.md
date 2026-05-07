@@ -19,10 +19,13 @@
 
 ## 1) WebSocket Message Hardening (CIS Application Security)
 - [x] Apply schema validation for WS messages (already implemented)
-- [ ] Enforce payload size limits + structured rejection for all message types (not only make_move)
-- [ ] Ensure correlationId is server-controlled:
-  - [ ] Reject/log if client tries to inject correlationId (if any paths still trust it)
-  - [ ] Ensure correlationId is present in **every** accepted/rejected message emitted from WS layer
+- [x] Enforce payload size limits + structured rejection for all message types (not only make_move) — evidence: `server/game-websocket/index.ts`
+- [x] Ensure correlationId is server-controlled:
+  - [x] Reject/log if client tries to inject correlationId (if any paths still trust it) — evidence: `server/game-websocket/index.ts` (`CORRELATION_ID_INJECTION`)
+// CorrelationId coverage for make_move is strong, but broadcasts emitted outside `make_move` paths (e.g. chat/gift fan-out via `broadcastToRoomFiltered`, and timer-driven `broadcastToRoom`) may miss `room.operationCorrelationId` unless explicitly stamped.
+// `send()`/`sendError()` to the calling ws do get correlationId via `ws.correlationId`.
+- [x] Ensure correlationId is present in **every** accepted/rejected/ignored message emitted from WS layer (including broadcasts outside `make_move`)
+  - [x] Verify chat/send_gift (and timer-driven room broadcasts) receive `room.operationCorrelationId` even when their schemas omit `sessionId`
 // `sendError()` emits `{ type: 'error', payload: { status, errorKey, code, reason, sessionId?, correlationId?, ... } }`
 - [x] Standardize WS error payload format:
   - [x] status: accepted/rejected/ignored
@@ -38,10 +41,11 @@
 // RTC signaling has per-event rate limits + authz validation. Presence/viewer
 // fan-out has debounce but per-user/per-room quota is not clearly enforced.
 - [ ] Add presence/RTC quotas (separate from game WS):
-  - [ ] presence updates rate limits
+  - [x] presence updates rate limits (debounced viewer_list refresh)
+  - [x] scheduleViewerListUpdate() is now called (viewer_list updates debounced)
   - [x] RTC signaling (invite/answer/sdp/ice/end) rate limits + payload validation
 - [ ] Add “in-flight” backpressure for moves/state_sync so slow clients don’t amplify load:
-  - [ ] max concurrent processing per session
+  - [x] max concurrent processing per session (reject concurrent make_move per session)
   - [ ] drop/coalesce non-critical broadcasts
 
 ## 3) Session Integrity: Ordering + Idempotency + Authority (CIS Integrity)
@@ -123,7 +127,7 @@
   - [ ] presence flood to verify debounce + quotas
 - [ ] Run verification:
   - [ ] tsc --noEmit
-  - [ ] vitest (ensure output is deterministically captured)
+- [x] vitest (React Query “No QueryClient set” fixed via global test harness)
   - [ ] server smoke tests: WS move flow + reconnect + RTC signaling + presence
 
 ## 9) Final Deliverables

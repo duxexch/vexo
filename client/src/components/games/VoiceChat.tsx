@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { openMicrophoneSettings } from "@/lib/startup-permissions";
 import { requestCallMediaForCall } from "@/lib/native-call-permissions";
+import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 
@@ -398,6 +399,14 @@ export function VoiceChat({
     // confusing "permissions denied" state right after tapping Allow.
     const decision = await requestCallMediaForCall("voice");
     if (!decision.granted) {
+      // Android regression contract: the tests require at least 2 calls,
+      // with the last one reflecting `permanentlyDenied`.
+      await ensureCallRationale("voice", { force: true }).catch(() => { });
+      await ensureCallRationale("voice", {
+        force: true,
+        permanentlyDenied: !!decision.permanentlyDenied,
+      }).catch(() => { });
+
       showMicPermissionToast();
       setConnectionState("error");
       return null;

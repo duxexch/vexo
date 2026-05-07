@@ -305,12 +305,28 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       await handleMakeMove(ws, message.payload);
       break;
     }
-    case 'chat':
+    case 'chat': {
+      if (ws.sessionId) {
+        const operationRoom = rooms.get(ws.sessionId);
+        if (operationRoom) {
+          operationRoom.operationCorrelationId = ws.correlationId;
+          operationRoom.operationAttemptId = ws.attemptId;
+        }
+      }
       await handleChat(ws, message.payload);
       break;
-    case 'send_gift':
+    }
+    case 'send_gift': {
+      if (ws.sessionId) {
+        const operationRoom = rooms.get(ws.sessionId);
+        if (operationRoom) {
+          operationRoom.operationCorrelationId = ws.correlationId;
+          operationRoom.operationAttemptId = ws.attemptId;
+        }
+      }
       await handleSendGift(ws, message.payload);
       break;
+    }
     case 'leave_game':
       handleLeaveGame(ws);
       break;
