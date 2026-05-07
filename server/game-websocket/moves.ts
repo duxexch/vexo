@@ -335,6 +335,19 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
       const dbTurn = lockedSession.turnNumber || 0;
 
       if (payload.expectedTurn !== undefined && payload.expectedTurn !== dbTurn) {
+        // Explicit out-of-order / expectedTurn mismatch logging (no state leakage).
+        // orderingIndex == caller-provided expectedTurn.
+        logger.warn('[WS][TurnMismatch] expectedTurn mismatch', {
+          sessionId,
+          userId,
+          gameType: room.gameType,
+          correlationId,
+          attemptId,
+          orderingIndex: payload.expectedTurn,
+          receivedExpectedTurn: payload.expectedTurn,
+          dbTurn,
+        });
+
         const error = Object.assign(new Error('TURN_MISMATCH'), { dbState, dbTurn });
         throw error;
       }

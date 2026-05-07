@@ -1,0 +1,27 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90mC:/Users/cex/Desktop/vixo[39m
+
+ [32m✓[39m tests/game-session-snapshots.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+[90mstderr[2m | tests/game-websocket-make-move-security.test.ts[2m > [22m[2mgame-websocket make_move security invariants (unit)[2m > [22m[2mrejects a non-participant (session isolation invariant)
+[22m[39m[WS] Move transaction failed: Error: UNAUTHORIZED_PLAYER
+    at C:/Users/cex/Desktop/vixo/server/game-websocket/moves.ts:331:15
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+
+[90mstderr[2m | tests/game-websocket-make-move-security.test.ts[2m > [22m[2mgame-websocket make_move security invariants (unit)[2m > [22m[2mrejects turn mismatch without leaking preState/dbState in payload
+[22m[39m{"timestamp":"2026-05-07T14:08:56.708Z","level":"WARN","message":"[WS][TurnMismatch] expectedTurn mismatch","context":{"sessionId":"s-sec-1","userId":"p1","gameType":"chess","correlationId":"live_game_move_corr:s-sec-1:p1:idem-2","attemptId":"c078ec12-83a3-4dd5-8374-564ce56fbe69","orderingIndex":4,"receivedExpectedTurn":4,"dbTurn":5}}
+
+[90mstderr[2m | tests/game-websocket-make-move-security.test.ts[2m > [22m[2mgame-websocket make_move security invariants (unit)[2m > [22m[2mrejects turn mismatch without leaking preState/dbState in payload
+[22m[39m[WS] Move transaction failed: Error: TURN_MISMATCH
+    at C:/Users/cex/Desktop/vixo/server/game-websocket/moves.ts:351:37
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m {
+  dbState: [32m'{"g":1}'[39m,
+  dbTurn: [33m5[39m
+}
+
+ [32m✓[39m tests/game-websocket-make-move-security.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 17:08:54
+[2m   Duration [22m 2.53s[2m (transform 817ms, setup 417ms, import 1.82s, tests 27ms, environment 958ms)[22m
+

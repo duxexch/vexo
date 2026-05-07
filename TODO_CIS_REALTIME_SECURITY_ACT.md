@@ -40,7 +40,7 @@
   - [x] reject with retryAfterMs and logged reason
 // RTC signaling has per-event rate limits + authz validation. Presence/viewer
 // fan-out has debounce but per-user/per-room quota is not clearly enforced.
-- [ ] Add presence/RTC quotas (separate from game WS):
+- [x] Add presence/RTC quotas (separate from game WS):
   - [x] presence updates rate limits (debounced viewer_list refresh)
   - [x] scheduleViewerListUpdate() is now called (viewer_list updates debounced)
   - [x] RTC signaling (invite/answer/sdp/ice/end) rate limits + payload validation
@@ -51,12 +51,12 @@
 ## 3) Session Integrity: Ordering + Idempotency + Authority (CIS Integrity)
 - [x] Move ordering enforcement + turn mismatch rejection exists (db transaction + expectedTurn)
 - [x] IdempotencyKey strict mode exists + duplicate move retry/sync logic exists
-- [ ] Add explicit out-of-order detection logging:
-  - [ ] if expectedTurn mismatch: log orderingIndex + dbTurn + received expectedTurn
+- [x] Add explicit out-of-order detection logging:
+  - [x] if expectedTurn mismatch: log orderingIndex + dbTurn + received expectedTurn
 - [ ] Ensure duplicate/out-of-order rejections do not leak state:
-  - [ ] avoid returning sensitive preState in error responses
-- [ ] Add “session isolation invariants” tests:
-  - [ ] user cannot make_move in a session they aren’t a participant of
+- [x] avoid returning sensitive preState in error responses
+- [x] Add “session isolation invariants” tests:
+  - [x] user cannot make_move in a session they aren’t a participant of
 
 ## 4) Audit-grade Logging Contract (CIS Logging & Audit)
 - [ ] Define canonical immutable log schema (finalize in code comments + docs)
@@ -84,8 +84,8 @@
 - [x] Add replay verification pipeline:
   - [x] run replay verification on session close (game over)
   - [x] record verification result (pass/fail + drift reason) as `game_events` (`session_replay_verification`)
-- [ ] Add crash recovery test:
-  - [ ] simulate server crash and confirm state restoration via snapshots
+- [x] Add crash recovery test:
+  - [x] simulate server crash and confirm state restoration via snapshots
 
 ## 6) Anti-cheat Security Controls (CIS Abuse/Malicious Activity)
 - [x] Move-level server validation exists (engine.validateMove + applyMove)
@@ -117,7 +117,7 @@
   - [ ] turn mismatch/out-of-order behavior
   - [x] sessionMoveRateLimiter/sessionUserMoveRateLimiter quota behavior
   - [x] Level-1 anomaly detector rule tests
-  - [ ] snapshot serialization integrity
+  - [x] snapshot serialization integrity
 - [ ] Integration tests:
   - [ ] concurrent move submissions and duplicate handling
   - [ ] reconnect flow does not break session authority
