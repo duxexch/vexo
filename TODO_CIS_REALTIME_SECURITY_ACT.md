@@ -59,7 +59,7 @@
   - [x] user cannot make_move in a session they aren’t a participant of
 
 ## 4) Audit-grade Logging Contract (CIS Logging & Audit)
-- [ ] Define canonical immutable log schema (finalize in code comments + docs)
+- [x] Define canonical immutable log schema (finalize in code comments + docs)
 - [ ] Ensure every event type produces an audit record:
   - [x] move accepted
   - [x] move rejected (with reason + errorKey)
@@ -100,7 +100,7 @@
 - [ ] Add thresholds configuration + safe defaults + per-game override support
 
 ## 7) Operational Playbooks & Runbooks (CIS Operational Readiness)
-- [ ] Create playbooks docs with:
+- [x] Create playbooks docs with:
   - [ ] Session stuck: detection signals, mitigation, recovery steps, owners
   - [ ] Disconnect storm: detection, throttling actions, capacity guidance
   - [ ] RTC outage: degrade mode, reconnect voice-only flow, comms
