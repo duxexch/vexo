@@ -36,6 +36,13 @@ export const gameLevel1AnomalyTotal = new client.Counter({
     registers: [registry],
 });
 
+export const wsMoveTurnMismatchRejectedTotal = new client.Counter({
+    name: "ws_move_turn_mismatch_rejected_total",
+    help: "Total websocket move rejections due to turn/order mismatch and related stale move scenarios",
+    labelNames: ["reason"],
+    registers: [registry],
+});
+
 // -----------------------
 // Express /metrics handler
 // -----------------------

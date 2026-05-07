@@ -280,6 +280,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
   const moveType = typeof move?.type === "string" ? move.type : undefined;
 
   const moveRateLimitResult = moveRateLimiter.check(`challenge:${challengeId}:${userId}`);
+  // CIS: early reject must be a self-contained forensic artifact.
   if (!moveRateLimitResult.allowed) {
     logger.security("Challenge move rate limit", {
       userId,
@@ -287,6 +288,52 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       result: "blocked",
       reason: `rate_limit:${moveType || "unknown"}`,
     });
+
+    const rateLimitAttemptId = randomUUID();
+    const rateLimitNormalizedIdemKey =
+      typeof idempotencyKey === "string" ? idempotencyKey.trim().slice(0, 128) : "";
+    const rateLimitCorrelationId = rateLimitNormalizedIdemKey
+      ? `challenge_game_move_corr:${challengeId}:${userId}:${rateLimitNormalizedIdemKey}`.slice(0, 128)
+      : rateLimitAttemptId;
+
+    try {
+      const rateLimitEventId = `challenge_rl_reject:${challengeId}:${userId}:${rateLimitCorrelationId}`.slice(0, 128);
+      const rateLimitIdempotencyKey = `challenge_rl_reject_idem:${challengeId}:${userId}:${rateLimitCorrelationId}`.slice(0, 128);
+
+      const eventResult = await appendGameEvent({
+        eventId: rateLimitEventId,
+        idempotencyKey: rateLimitIdempotencyKey,
+        challengeId,
+        source: "challenge_ws",
+        eventType: "rate_limit_rejection",
+        actorId: userId,
+        actorType: "player",
+        moveType: typeof move?.type === "string" ? move.type : "move",
+        payload: {
+          event: "rate_limit_rejection",
+          status: "rejected",
+
+          challengeId,
+          sessionId: null,
+          userId,
+
+          correlationId: rateLimitCorrelationId,
+          attemptId: rateLimitAttemptId,
+
+          orderingIndex: null,
+          receivedExpectedTurn: null,
+          dbTurn: null,
+
+          retryAfterMs: moveRateLimitResult.retryAfterMs ?? null,
+        },
+      });
+
+      await finalizeGameEvent(eventResult.recordId, "rejected", "rate_limit");
+    } catch (e) {
+      logger.warn(
+        `[CIS Audit] Failed to append rate_limit rejection audit for challenge=${challengeId}: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
 
     ws.send(JSON.stringify({
       type: "move_error",
@@ -296,6 +343,9 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       retryAfterMs: moveRateLimitResult.retryAfterMs,
       challengeId,
       moveType,
+      correlationId: rateLimitCorrelationId,
+      attemptId: rateLimitAttemptId,
+      status: "rejected",
     }));
     return;
   }
@@ -331,6 +381,12 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
     ? `challenge_game_move_idem:${challengeId}:${userId}:${normalizedIdempotencyKey}`
     : `challenge_game_move_evt:${challengeId}:${userId}:${eventId}`;
 
+  const attemptId = randomUUID();
+  // Server-controlled forensic correlation id for this move attempt.
+  const correlationId = normalizedIdempotencyKey
+    ? `challenge_game_move_corr:${challengeId}:${userId}:${normalizedIdempotencyKey}`.slice(0, 128)
+    : attemptId;
+
   let isCanonicalSession = false;
   let moveEventRecordId: string | undefined;
   let appendFailed = false;
@@ -361,7 +417,22 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         actorType: "player",
         moveType: typeof move?.type === "string" ? move.type : "move",
         payload: {
+          // Original data (validated/used by engine)
           move: move as Record<string, unknown>,
+
+          // CIS: self-contained forensic artifact
+          correlationId,
+          attemptId,
+
+          // orderingIndex/sessionId are not known at this pre-transaction append.
+          // Keep keys present for strict forensic self-containment.
+          orderingIndex: null,
+          sessionId: null,
+
+          // Actor identity (always present)
+          userId,
+          challengeId,
+          status: "recorded",
         },
       });
 

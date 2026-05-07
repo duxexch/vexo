@@ -9,7 +9,13 @@
 - [ ] Inventory presence updates implementation + verify debounce and add rate-limit quotas (per-user/per-room)
 - [x] Inventory immutable logging/audit persistence implementation behind appendGameEvent/finalizeGameEvent (audit-grade write path)
 - [ ] evidence export path / retention & access controls documentation
-- [ ] Inventory replay shadow implementation details + how results are stored/verified (pass/fail + evidence)
+// Replay shadow:
+// - Per-move: `runReplayShadowValidation()` in `server/game-websocket/moves.ts`
+//   validates preState+move, compares committed vs replayed state (hash) and logs drift
+//   via `server/lib/game-replay-shadow.ts` / `trackReplayShadowCheck()`.
+// - Session-level: on game over, `runSessionReplayValidation()` runs over the
+//   persisted move sequence and persists pass/fail evidence as a `session_replay_verification`
+//   audit event via `appendGameEvent()` in `moves.ts`.
 
 ## 1) WebSocket Message Hardening (CIS Application Security)
 - [x] Apply schema validation for WS messages (already implemented)
@@ -17,10 +23,11 @@
 - [ ] Ensure correlationId is server-controlled:
   - [ ] Reject/log if client tries to inject correlationId (if any paths still trust it)
   - [ ] Ensure correlationId is present in **every** accepted/rejected message emitted from WS layer
-- [ ] Standardize WS error payload format:
-  - [ ] status: accepted/rejected/ignored
-  - [ ] errorKey + code + reason
-  - [ ] always include sessionId (where applicable) + correlationId
+// `sendError()` emits `{ type: 'error', payload: { status, errorKey, code, reason, sessionId?, correlationId?, ... } }`
+- [x] Standardize WS error payload format:
+  - [x] status: accepted/rejected/ignored
+  - [x] errorKey + code + reason
+  - [x] always include sessionId (where applicable) + correlationId
 
 ## 2) Rate Limiting, Backpressure, and Flood Control (CIS Availability/Abuse)
 - [x] Global WS message rate limiting exists in WS handler
@@ -28,9 +35,11 @@
 - [x] Add per-sessionId quotas for make_move:
   - [x] moves/sec per sessionId + per userId
   - [x] reject with retryAfterMs and logged reason
+// RTC signaling has per-event rate limits + authz validation. Presence/viewer
+// fan-out has debounce but per-user/per-room quota is not clearly enforced.
 - [ ] Add presence/RTC quotas (separate from game WS):
   - [ ] presence updates rate limits
-  - [ ] RTC signaling (invite/answer/sdp/ice/end) rate limits + payload validation
+  - [x] RTC signaling (invite/answer/sdp/ice/end) rate limits + payload validation
 - [ ] Add “in-flight” backpressure for moves/state_sync so slow clients don’t amplify load:
   - [ ] max concurrent processing per session
   - [ ] drop/coalesce non-critical broadcasts
@@ -61,10 +70,10 @@
   - [ ] retention + access controls documented
 
 ## 5) Snapshots & Replay Verification (CIS Incident Response & Forensics)
-- [ ] Implement periodic snapshot persistence (missing per current status):
-  - [ ] snapshot cadence (e.g., every N moves or every T seconds)
-  - [ ] snapshot metadata: sessionId, turnNumber/orderingIndex, timestamp, correlationId
-  - [ ] persistence schema + storage implementation
+- [x] Implement periodic snapshot persistence (missing per current status):
+  - [x] snapshot cadence (e.g., every N moves or every T seconds) — env-driven in `server/lib/game-session-snapshots.ts`
+  - [x] snapshot metadata: sessionId, turnNumber/orderingIndex, timestamp, correlationId — stored via ordering_index, created_at, correlation_id in `server/storage/live-games/sessions.ts`
+  - [x] persistence schema + storage implementation — `upsertGameSessionSnapshot()` / `getLatestGameSessionSnapshot()` in `server/storage/live-games/sessions.ts`
 - [x] Implement replayable match baseline:
   - [x] initial state derived from stored per-move `previousState`
   - [x] move sequence persisted with orderingIndex (`move_number`)

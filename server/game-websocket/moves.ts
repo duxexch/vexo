@@ -23,7 +23,7 @@ import { processAdaptiveAiTurns } from './ai-turns';
 import { appendGameEvent, finalizeGameEvent } from '../lib/game-events';
 import { runReplayShadowValidation, runSessionReplayValidation } from '../lib/game-replay-shadow';
 import { evaluateAndRecordSubmission, evaluateAndRecordInvalid } from '../lib/game-level1-anomaly';
-import { gameLevel1AnomalyTotal } from '../lib/prometheus-metrics';
+import { gameLevel1AnomalyTotal, wsMoveTurnMismatchRejectedTotal } from '../lib/prometheus-metrics';
 import { persistGameSessionSnapshotIfDue } from '../lib/game-session-snapshots';
 
 const GAME_EVENT_LOG_ENABLED = process.env.GAME_EVENT_LOG_ENABLED !== 'false';
@@ -117,9 +117,17 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
         moveType: typeof payload.move?.type === 'string' ? payload.move.type : 'move',
         payload: {
           move: payload.move as unknown as Record<string, unknown>,
-          expectedTurn: payload.expectedTurn ?? null,
+          // Evidence-critical: keep audit records self-contained.
+          sessionId,
+          userId,
           correlationId,
           attemptId,
+          // For moves, orderingIndex is the caller-provided expectedTurn when
+          // present; otherwise we still provide the field for forensic
+          // consistency.
+          orderingIndex: payload.expectedTurn ?? null,
+          receivedExpectedTurn: payload.expectedTurn ?? null,
+          expectedTurn: payload.expectedTurn ?? null,
         },
       });
 
@@ -156,14 +164,58 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
           });
         } else {
           // Fallback: if we can't load session state, keep backward-compatible rejection.
+          // CIS: rejected events must be self-contained forensic artifacts.
+          wsMoveTurnMismatchRejectedTotal.inc({ reason: 'duplicate_event_no_state' });
+
+          const duplicateAuditEventId = randomUUID();
+          const duplicateIdempotencyKey = `live_game_duplicate_reject:${sessionId}:${userId}:${correlationId}`.slice(0, 128);
+
+          let duplicateAuditRecordId: string | undefined;
+
+          try {
+            const eventResult = await appendGameEvent({
+              eventId: duplicateAuditEventId,
+              idempotencyKey: duplicateIdempotencyKey,
+              sessionId,
+              source: 'live_game_ws',
+              eventType: 'duplicate_move_rejection',
+              actorId: userId,
+              actorType: 'player',
+              moveType: typeof payload.move?.type === 'string' ? payload.move.type : 'move',
+              payload: {
+                event: 'duplicate_move',
+                status: 'rejected',
+                sessionId,
+                userId,
+                correlationId,
+                attemptId,
+                orderingIndex: payload.expectedTurn ?? null,
+                receivedExpectedTurn: payload.expectedTurn ?? null,
+                dbTurn: null,
+              },
+            });
+
+            duplicateAuditRecordId = eventResult.recordId;
+            await finalizeGameEvent(duplicateAuditRecordId, 'rejected', 'duplicate_event');
+          } catch (e) {
+            logger.warn(`[CIS Audit] Failed to append duplicate-move rejection audit for session=${sessionId}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+
           send(ws, {
             type: 'move_rejected',
             payload: {
+              event: 'duplicate_move',
               error: 'Duplicate move request ignored',
               errorKey: 'game.duplicateMove',
               code: 'duplicate_event',
               requiresSync: true,
               correlationId,
+              attemptId,
+              sessionId,
+              userId,
+              orderingIndex: payload.expectedTurn ?? null,
+              receivedExpectedTurn: payload.expectedTurn ?? null,
+              status: 'rejected',
             }
           });
         }
@@ -471,7 +523,13 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
               actorType: 'system',
               moveType: 'replay',
               payload: {
+                // CIS forensic: self-contained audit artifact
                 correlationId: replayCorrelationId,
+                attemptId: replayEventId,
+                orderingIndex: result.turnNumber,
+                sessionId,
+                userId,
+
                 drift: replayResult.drift,
                 reason: replayResult.reason,
                 expectedHash: replayResult.expectedHash ?? null,
@@ -569,13 +627,66 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: Handle
       sendError(ws, 'Not authorized to play in this session', 'UNAUTHORIZED');
       await syncRoom();
     } else if (errorMessage === 'TURN_MISMATCH') {
+      const receivedExpectedTurn = payload.expectedTurn ?? null;
+
+      // Prometheus metric
+      wsMoveTurnMismatchRejectedTotal.inc({ reason: 'turn_mismatch' });
+
+      // CIS: audit-grade forensic, self-contained rejection + structured rejection
+      const turnMismatchAuditEventId = randomUUID();
+      const turnMismatchIdempotencyKey = `live_game_turn_mismatch:${sessionId}:${userId}:${turnMismatchAuditEventId}`.slice(0, 128);
+
+      try {
+        const dbTurn = (error as Error & { dbTurn?: unknown }).dbTurn ?? null;
+
+        const eventResult = await appendGameEvent({
+          eventId: turnMismatchAuditEventId,
+          idempotencyKey: turnMismatchIdempotencyKey,
+          sessionId,
+          source: 'live_game_ws',
+          eventType: 'turn_mismatch',
+          actorId: userId,
+          actorType: 'player',
+          moveType: typeof payload.move?.type === 'string' ? payload.move.type : 'move',
+          payload: {
+            event: 'turn_mismatch',
+            status: 'rejected',
+            sessionId,
+            userId,
+            correlationId,
+            attemptId,
+            orderingIndex: receivedExpectedTurn,
+            receivedExpectedTurn,
+            dbTurn,
+          },
+        });
+
+        await finalizeGameEvent(eventResult.recordId, 'rejected', 'turn_mismatch');
+      } catch (e) {
+        logger.warn(
+          `[CIS Audit] Failed to append turn_mismatch audit for session=${sessionId}: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+
       send(ws, {
         type: 'move_rejected',
         payload: {
+          // Backward-compatible keys
           error: 'Game state has changed. Syncing...',
           errorKey: 'game.turnMismatch',
           requiresSync: true,
           correlationId,
+
+          // CIS forensic extras
+          event: 'turn_mismatch',
+          status: 'rejected',
+          attemptId,
+          sessionId,
+          userId,
+          orderingIndex: receivedExpectedTurn,
+          receivedExpectedTurn,
+          dbTurn: (error as Error & { dbTurn?: unknown }).dbTurn ?? null,
+          reason: 'turn_mismatch',
         }
       });
       await syncRoom();
